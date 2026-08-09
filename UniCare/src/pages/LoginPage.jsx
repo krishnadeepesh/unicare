@@ -79,7 +79,6 @@ export default function LoginPage({ setView, onLogin }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder={role === 'hospital' ? 'admin@hospital.org' : 'patient@example.com'} 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required 
@@ -95,7 +94,6 @@ export default function LoginPage({ setView, onLogin }) {
                       <input 
                         type="password" 
                         className="form-control" 
-                        placeholder="••••••••" 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required 

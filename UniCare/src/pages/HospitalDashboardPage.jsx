@@ -223,7 +223,6 @@ export default function HospitalDashboardPage({ hospitalInfo }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder={modalRole === 'doctor' ? 'doc.smith@unicare.com' : modalRole === 'admin' ? 'admin.jones@unicare.com' : 'reception.mary@unicare.com'}
                         value={roleUsername}
                         onChange={(e) => setRoleUsername(e.target.value)}
                         required 
@@ -234,7 +233,6 @@ export default function HospitalDashboardPage({ hospitalInfo }) {
                       <input 
                         type="password" 
                         className="form-control" 
-                        placeholder="••••••••" 
                         value={rolePassword}
                         onChange={(e) => setRolePassword(e.target.value)}
                         required 

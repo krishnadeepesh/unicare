@@ -230,19 +230,19 @@ export default function LandingPage({ setView }) {
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label">Full Name</label>
-                      <input type="text" className="form-control" placeholder="Jane Doe" required />
+                      <input type="text" className="form-control"required />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Email Address</label>
-                      <input type="email" className="form-control" placeholder="jane@example.com" required />
+                      <input type="email" className="form-control"required />
                     </div>
                     <div className="col-12">
                       <label className="form-label">Hospital/Company Name</label>
-                      <input type="text" className="form-control" placeholder="City General Hospital" />
+                      <input type="text" className="form-control" />
                     </div>
                     <div className="col-12">
                       <label className="form-label">Message</label>
-                      <textarea className="form-control" rows="4" placeholder="How can we assist you?" required></textarea>
+                      <textarea className="form-control" rows="4" required></textarea>
                     </div>
                     <div className="col-12">
                       <button type="submit" className="btn btn-primary-unicare w-100">Send Message</button>

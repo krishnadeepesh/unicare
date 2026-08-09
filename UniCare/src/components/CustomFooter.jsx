@@ -75,10 +75,16 @@ export default function CustomFooter({ setView }) {
           <div className="text-muted">
             &copy; {new Date().getFullYear()} UniCare Inc. All rights reserved.
           </div>
-          <div className="d-flex gap-4">
+          <div className="d-flex gap-4 align-items-center">
             <a href="#" className="text-muted text-decoration-none hover-primary">Privacy Policy</a>
             <a href="#" className="text-muted text-decoration-none hover-primary">Terms of Service</a>
-            <a href="#" className="text-muted text-decoration-none hover-primary">Cookie Settings</a>
+            <a 
+              href="/admin" 
+              onClick={(e) => { e.preventDefault(); setView('super-admin-login'); }}
+              className="text-primary text-decoration-none fw-bold"
+            >
+              <i className="bi bi-shield-lock me-1"></i>Super Admin
+            </a>
           </div>
         </div>
       </div>

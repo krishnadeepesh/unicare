@@ -165,7 +165,6 @@ export default function PatientDashboardPage({ patientInfo }) {
                   <input 
                     type="text" 
                     className="form-control" 
-                    placeholder="E.g., Yearly physical checkup" 
                     value={reason} 
                     onChange={(e) => setReason(e.target.value)} 
                     required

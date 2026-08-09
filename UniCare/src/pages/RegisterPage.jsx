@@ -86,7 +86,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="City General Hospital" 
                         value={hospitalName}
                         onChange={(e) => setHospitalName(e.target.value)}
                         required 
@@ -97,7 +96,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="HOSP-990-MN" 
                         value={regNumber}
                         onChange={(e) => setRegNumber(e.target.value)}
                         required 
@@ -108,7 +106,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="email" 
                         className="form-control" 
-                        placeholder="info@hospital.org" 
                         value={hospitalEmail}
                         onChange={(e) => setHospitalEmail(e.target.value)}
                         required 
@@ -119,7 +116,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="tel" 
                         className="form-control" 
-                        placeholder="+1 (555) 019-2834" 
                         value={contactNumber}
                         onChange={(e) => setContactNumber(e.target.value)}
                         required 
@@ -130,7 +126,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="100 Medical Parkway, Sector 4, Tech City" 
                         value={hospitalAddress}
                         onChange={(e) => setHospitalAddress(e.target.value)}
                         required 
@@ -146,7 +141,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="Dr. Sarah Jenkins" 
                         value={adminName}
                         onChange={(e) => setAdminName(e.target.value)}
                         required 
@@ -157,7 +151,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="tel" 
                         className="form-control" 
-                        placeholder="+1 (555) 723-9012" 
                         value={adminPhone}
                         onChange={(e) => setAdminPhone(e.target.value)}
                         required 
@@ -168,7 +161,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="email" 
                         className="form-control" 
-                        placeholder="s.jenkins@hospital.org" 
                         value={adminEmail}
                         onChange={(e) => setAdminEmail(e.target.value)}
                         required 
@@ -179,7 +171,6 @@ export default function RegisterPage({ setView }) {
                       <input 
                         type="password" 
                         className="form-control" 
-                        placeholder="••••••••" 
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
                         required 
