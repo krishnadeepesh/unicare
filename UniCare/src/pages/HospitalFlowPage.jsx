@@ -315,7 +315,7 @@ Your hospital registration request has been sent and is currently pending admini
                         </div>
 
                         <button type="submit" className="btn btn-primary w-100 py-3 fs-6 fw-bold rounded-3" disabled={loading}>
-                          {loading ? 'Checking status...' : 'Login / Check Status'}
+                          {loading ? 'Checking status...' : 'Login '}
                         </button>
                       </form>
                     </div>

@@ -100,10 +100,6 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
                 </div>
               </div>
               <div className="col-md-6">
-                <div className="p-3 bg-light rounded-3 border">
-                  <span className="text-muted small d-block">Login Password</span>
-                  <span className="font-monospace fw-bold text-primary">{activeDoctorUser.doc_uid} (Doctor ID)</span>
-                </div>
               </div>
             </div>
           </div>
@@ -235,10 +231,6 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
               </div>
               <form onSubmit={handleDoctorLogin}>
                 <div className="modal-body p-4">
-                  <div className="alert alert-info py-2 px-3 small mb-4">
-                    <i className="bi bi-info-circle-fill me-2"></i>
-                    Your assigned <strong>Doctor ID</strong> (e.g. <code>DOC-1001</code>) serves as your login password.
-                  </div>
 
                   {docLoginError && (
                     <div className="alert alert-danger py-2 px-3 small mb-3">
@@ -265,7 +257,7 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
                   </div>
 
                   <div className="mb-4">
-                    <label className="form-label fw-semibold small">Password (Same as Doctor ID) <span className="text-danger">*</span></label>
+                    <label className="form-label fw-semibold small">Password<span className="text-danger">*</span></label>
                     <div className="input-group">
                       <span className="input-group-text bg-light"><i className="bi bi-lock"></i></span>
                       <input 
