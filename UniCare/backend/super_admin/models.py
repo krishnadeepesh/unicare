@@ -5,7 +5,7 @@ class SuperAdmin(models.Model):
     admin_name = models.CharField(max_length=100)
     admin_email = models.CharField(max_length=100, unique=True)
     admin_phone = models.CharField(max_length=15, null=True, blank=True)
-    password = models.CharField(max_length=128)
+    admin_password = models.CharField(max_length=128, db_column='admin_password')
     admin_is_active = models.BooleanField(default=True)
     admin_created_at = models.DateTimeField(auto_now_add=True)
     admin_updated_at = models.DateTimeField(auto_now=True)

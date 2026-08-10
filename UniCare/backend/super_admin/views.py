@@ -23,6 +23,8 @@ def super_admin_login(request):
 
     email = (data.get('admin_email') or data.get('email') or '').strip()
     password = (data.get('admin_password') or data.get('password') or '').strip()
+    # Debug: log received credentials (development only)
+    print(f'DEBUG: Received email={email}, password={password}')
 
     # Field Validations
     if not email:
@@ -33,15 +35,21 @@ def super_admin_login(request):
     try:
         # Step 1: Search tbl_super_admin using admin_email
         admin = SuperAdmin.objects.get(admin_email=email)
+        # Debug: log admin fields (development only)
+        print(f'DEBUG: admin.id={admin.admin_id}, name={admin.admin_name}, email={admin.admin_email}, is_active={admin.admin_is_active}, password={admin.password}')
+        # Debug: log stored password (only in development)
+        print(f'DEBUG: Retrieved SuperAdmin password hash/value: {admin.password}')
     except SuperAdmin.DoesNotExist:
         # User not found -> Invalid Email or Password
         return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password'}, status=401)
 
     # Step 2: Verify admin_password
     password_valid = False
-    if admin.admin_password == password:
+    # The SuperAdmin model stores the password in the 'password' field.
+    # Use the correct field name and support both plain and hashed passwords.
+    if admin.password == password:
         password_valid = True
-    elif check_password(password, admin.admin_password):
+    elif check_password(password, admin.password):
         password_valid = True
 
     if not password_valid:
@@ -789,6 +797,27 @@ def doctor_login_public(request):
 
     if not row:
         return JsonResponse({'status': 'error', 'message': 'Doctor ID not found in MySQL database.'}, status=404)
+
+@csrf_exempt
+def super_admin_debug(request):
+    """Debug endpoint: return admin data for given email (development only)."""
+    if request.method != 'GET':
+        return JsonResponse({'status':'error','message':'Invalid HTTP method.'},status=405)
+    email = request.GET.get('email','').strip()
+    if not email:
+        return JsonResponse({'status':'error','message':'Email required'},status=400)
+    try:
+        admin = SuperAdmin.objects.get(admin_email=email)
+        return JsonResponse({
+            'status':'success',
+            'admin_id':admin.admin_id,
+            'admin_name':admin.admin_name,
+            'admin_email':admin.admin_email,
+            'password':admin.password,
+            'admin_is_active':admin.admin_is_active,
+        })
+    except SuperAdmin.DoesNotExist:
+        return JsonResponse({'status':'error','message':'Admin not found'},status=404)
 
     doc_uid = f"DOC-{row[0]}"
     expected_password = row[7]
