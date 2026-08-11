@@ -33,24 +33,28 @@ def super_admin_login(request):
         return JsonResponse({'status': 'error', 'message': 'Password Required'}, status=400)
 
     try:
-        # Step 1: Search tbl_super_admin using admin_email
-        admin = SuperAdmin.objects.get(admin_email=email)
+        # Step 1: Search tbl_super_admin using admin_email (case-insensitive)
+        admin_qs = SuperAdmin.objects.filter(admin_email__iexact=email)
+        if not admin_qs.exists():
+            # User not found → Invalid Email or Password
+            return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password'}, status=401)
+        admin = admin_qs.first()
         # Debug: log admin fields (development only)
-        print(f'DEBUG: admin.id={admin.admin_id}, name={admin.admin_name}, email={admin.admin_email}, is_active={admin.admin_is_active}, password={admin.password}')
+        print(f'DEBUG: admin.id={admin.admin_id}, name={admin.admin_name}, email={admin.admin_email}, is_active={admin.admin_is_active}, password={admin.admin_password}')
         # Debug: log stored password (only in development)
-        print(f'DEBUG: Retrieved SuperAdmin password hash/value: {admin.password}')
+        print(f'DEBUG: Retrieved SuperAdmin password hash/value: {admin.admin_password}')
     except SuperAdmin.DoesNotExist:
         # User not found -> Invalid Email or Password
         return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password'}, status=401)
 
-    # Step 2: Verify admin_password
-    password_valid = False
-    # The SuperAdmin model stores the password in the 'password' field.
-    # Use the correct field name and support both plain and hashed passwords.
-    if admin.password == password:
+    # Step 2: Verify admin_password using Django's password hasher
+    stored_pass = admin.admin_password.strip()
+    password_valid = check_password(password, stored_pass)
+    # Fallback to plain comparison if hashing fails
+    if not password_valid and stored_pass == password:
         password_valid = True
-    elif check_password(password, admin.password):
-        password_valid = True
+    # Debug: print verification result
+    print(f'DEBUG: password_valid={password_valid}, provided={password}, stored={stored_pass}')
 
     if not password_valid:
         return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password'}, status=401)
