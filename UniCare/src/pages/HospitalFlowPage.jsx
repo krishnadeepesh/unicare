@@ -72,33 +72,37 @@ export default function HospitalFlowPage({ setView, onLogin }) {
     }
   };
 
-  // Check status / Login Hospital Admin directly against MySQL
+  // Authenticate Hospital Admin directly against Django backend & MySQL
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-status-public/', {
+      const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail.trim() }),
+        body: JSON.stringify({
+          email: loginEmail.trim(),
+          password: loginPassword.trim(),
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.status === 'success') {
         const hospital = data.hospital;
-        if (hospital.status === 'Approved' || hospital.approved === true) {
-          onLogin(hospital);
-        } else {
-          setViewingStatus(hospital);
-        }
+        onLogin(hospital);
       } else {
-        setLoginError(data.message || 'No registered hospital found with this email.');
+        // Fallback to checking public registration status if login returns non-approved status or status check
+        if (data.message && data.message.includes('Pending')) {
+          setViewingStatus({ email: loginEmail.trim(), status: 'Pending' });
+        } else {
+          setLoginError(data.message || 'Invalid Email or Password.');
+        }
       }
     } catch (err) {
-      console.error('Login status error:', err);
+      console.error('Login error:', err);
       setLoginError('Unable to connect to backend server.');
     } finally {
       setLoading(false);

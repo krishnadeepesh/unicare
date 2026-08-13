@@ -152,29 +152,7 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
             </div>
           </div>
 
-          {/* Card 2: Login as Hospital Admin */}
-          <div className="col-md-4">
-            <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all overflow-hidden border-top border-4 border-success">
-              <div className="card-body p-4 text-center d-flex flex-column justify-content-between">
-                <div>
-                  <div className="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-4" style={{ width: '76px', height: '76px' }}>
-                    <i className="bi bi-shield-lock-fill fs-1"></i>
-                  </div>
-                  <h4 className="fw-bold text-dark mb-2">Hospital Admin</h4>
-                  <p className="text-muted small mb-4">
-                    Manage hospital staff, doctor registrations, departments, and hospital configurations.
-                  </p>
-                </div>
-                <button
-                  onClick={() => onSelectRole('hospital-admin')}
-                  className="btn btn-success w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
-                >
-                  <span>Login as Hospital Admin</span>
-                  <i className="bi bi-arrow-right"></i>
-                </button>
-              </div>
-            </div>
-          </div>
+
 
           {/* Card 3: Login as Receptionist */}
           <div className="col-md-4">

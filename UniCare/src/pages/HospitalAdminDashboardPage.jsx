@@ -3,9 +3,14 @@ import React, { useState, useEffect } from 'react';
 const API_BASE_URL = 'http://localhost:8000/api/super-admin';
 
 function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout }) {
-  const hospitalName = hospitalInfo?.name || hospitalInfo?.hospital_name || 'Hospital Admin';
-  const hospitalId = hospitalInfo?.hospital_id || hospitalInfo?.id;
+  const initialHospitalName = hospitalInfo?.name || hospitalInfo?.hospital_name || 'Hospital Admin';
+  const initialHospitalId = hospitalInfo?.hospital_id || hospitalInfo?.id;
   
+  // Dashboard & Profile State
+  const [hospitalData, setHospitalData] = useState(hospitalInfo || null);
+  const [statsData, setStatsData] = useState(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+
   // Navigation States inside Hospital Admin
   const [activeSection, setActiveSection] = useState('home'); // 'home' | 'doctors' | 'departments' | 'receptionists'
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
@@ -28,11 +33,36 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     setTimeout(() => setToastMessage(null), 5000);
   };
 
+  // Fetch Hospital Details & Hospital-Specific Dashboard Stats from MySQL
+  const fetchDashboardData = async () => {
+    setLoadingDashboard(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/hospital-admin/dashboard-data/?hospital_id=${encodeURIComponent(initialHospitalId || '')}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        if (data.hospital_info) {
+          setHospitalData(data.hospital_info);
+        }
+        if (data.stats) {
+          setStatsData(data.stats);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching hospital admin dashboard data:', err);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
   // Fetch Doctors directly from MySQL
   const fetchDoctors = async () => {
     setLoadingDoctors(true);
+    const targetHId = hospitalData?.hospital_id || initialHospitalId;
     try {
-      const response = await fetch(`${API_BASE_URL}/doctors/?hospital_id=${encodeURIComponent(hospitalId || '')}`, {
+      const response = await fetch(`${API_BASE_URL}/doctors/?hospital_id=${encodeURIComponent(targetHId || '')}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -48,8 +78,13 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   };
 
   useEffect(() => {
+    fetchDashboardData();
     fetchDoctors();
   }, []);
+
+  const currentHospitalName = hospitalData?.name || hospitalData?.hospital_name || initialHospitalName;
+  const currentHospitalUid = hospitalData?.hospital_uid || hospitalData?.id || initialHospitalId || 'HSP0001';
+  const currentHospitalId = hospitalData?.hospital_id || initialHospitalId;
 
   // Handle Add Doctor directly into MySQL
   const handleAddDoctor = async (e) => {
@@ -58,7 +93,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
     setSubmitting(true);
     const payload = {
-      hospital_id: hospitalId,
+      hospital_id: currentHospitalId,
       name: docName.trim(),
       email: docEmail.trim(),
       phone: docPhone.trim(),
@@ -79,6 +114,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       if (response.ok && data.status === 'success') {
         showToast(`Doctor registered successfully! Doctor ID & Login Password: ${data.doctor?.doc_uid || data.doctor?.id}`, 'success');
         fetchDoctors();
+        fetchDashboardData();
         // Reset Form
         setDocName('');
         setDocEmail('');
@@ -112,6 +148,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       if (response.ok && data.status === 'success') {
         showToast('Doctor record removed', 'warning');
         fetchDoctors();
+        fetchDashboardData();
       } else {
         showToast(data.message || 'Failed to delete doctor', 'danger');
       }
@@ -141,8 +178,8 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             <i className="bi bi-shield-lock-fill fs-4"></i>
           </div>
           <div>
-            <h5 className="fw-bold mb-0 text-dark">{hospitalName}</h5>
-            <small className="text-muted fw-semibold">Hospital Admin Dashboard</small>
+            <h5 className="fw-bold mb-0 text-dark">{currentHospitalName}</h5>
+            <small className="text-muted fw-semibold">Hospital ID: <code className="text-primary fw-bold">{currentHospitalUid}</code></small>
           </div>
         </div>
 
@@ -152,7 +189,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             className="btn btn-outline-secondary btn-sm rounded-pill px-3"
           >
             <i className="bi bi-arrow-left me-1"></i> Switch Role
-          </button>
+          </button> 
           <button 
             onClick={onLogout}
             className="btn btn-outline-danger btn-sm rounded-pill px-3"
@@ -168,119 +205,206 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         {/* Navigation Header */}
         <div className="d-flex align-items-center justify-content-between mb-4">
           <div>
-            <h3 className="fw-bold text-dark mb-1">
-              {activeSection === 'home' && 'Control Panel'}
-              {activeSection === 'doctors' && 'Doctor Management'}
-              {activeSection === 'departments' && 'Department Management'}
-              {activeSection === 'receptionists' && 'Receptionist Management'}
-            </h3>
+            <span className="badge bg-success bg-opacity-10 text-success px-3 py-1 rounded-pill fw-semibold mb-2">
+              <i className="bi bi-building me-1"></i> {currentHospitalName}
+            </span>
+            <h2 className="fw-bold text-dark mb-1">
+              Welcome to <span className="text-success">{currentHospitalName}</span>
+            </h2>
             <p className="text-muted small mb-0">
-              {activeSection === 'home' && 'Select a management section to operate'}
-              {activeSection === 'doctors' && 'Register and manage medical doctors for your hospital'}
+              Hospital ID: <code className="fw-bold text-primary">{currentHospitalUid}</code> &bull; Hospital Administrator Control Panel
             </p>
           </div>
 
-          {activeSection !== 'home' && (
-            <button 
-              onClick={() => setActiveSection('home')}
-              className="btn btn-secondary btn-sm rounded-3"
-            >
-              <i className="bi bi-grid me-1"></i> Back to Control Panel
-            </button>
-          )}
+
         </div>
 
-        {/* SECTION 1: DASHBOARD BUTTON CARDS (Home) */}
+        {/* SECTION 1: DASHBOARD HOME (PROFILE & STATS & CARDS) */}
         {activeSection === 'home' && (
-          <div className="row g-4">
+          <div>
             
-            {/* CARD 1: DOCTOR MANAGEMENT (Prominently Featured) */}
-            <div className="col-md-6 col-lg-4">
-              <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-primary">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
-                  <div>
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-3">
-                        <i className="bi bi-person-badge-fill fs-2"></i>
-                      </div>
-                      <span className="badge bg-primary-subtle text-primary rounded-pill px-3 py-1">
-                        {doctorsList.length} Registered
-                      </span>
-                    </div>
-                    <h4 className="fw-bold text-dark mb-2">Doctor Management</h4>
-                    <p className="text-muted small mb-4">
-                      Add new doctors, view doctor credentials, and assign Doctor ID passwords.
-                    </p>
+            {/* DYNAMIC HOSPITAL PROFILE / DETAILS CARD */}
+            <div className="card border-0 rounded-4 shadow-sm bg-white p-4 mb-4">
+              <div className="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-circle d-flex align-items-center justify-content-center" style={{ width: '54px', height: '54px' }}>
+                    <i className="bi bi-hospital fs-3"></i>
                   </div>
-                  <button 
-                    onClick={() => setActiveSection('doctors')}
-                    className="btn btn-primary w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
-                  >
-                    <span>Manage Doctors</span>
-                    <i className="bi bi-arrow-right"></i>
-                  </button>
+                  <div>
+                    <h4 className="fw-bold text-dark mb-0">Hospital Information</h4>
+                  </div>
+                </div>
+                <span className={`badge px-3 py-2 rounded-pill fs-6 ${
+                  (hospitalData?.is_active ?? hospitalData?.hospital_is_active ?? true) ? 'bg-success text-white' : 'bg-secondary text-white'
+                }`}>
+                  Status: {(hospitalData?.is_active ?? hospitalData?.hospital_is_active ?? true) ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Hospital Name</span>
+                    <span className="fw-bold text-dark fs-6">{currentHospitalName}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Hospital ID</span>
+                    <code className="fw-bold text-primary fs-6">{currentHospitalUid}</code>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Registration Number</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.hospital_registration_number || currentHospitalUid}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Email</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.email || hospitalData?.hospital_email || 'admin@hospital.com'}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Contact Number</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.phone || hospitalData?.hospital_contact_number || hospitalData?.hospital_phone || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Address</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.address || hospitalData?.hospital_address || 'N/A'}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* CARD 2: RECEPTIONIST MANAGEMENT */}
-            <div className="col-md-6 col-lg-4">
-              <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-warning">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
-                  <div>
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="bg-warning bg-opacity-10 text-warning p-3 rounded-3">
-                        <i className="bi bi-person-workspace fs-2"></i>
-                      </div>
-                      <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3 py-1">
-                        Receptionists
-                      </span>
-                    </div>
-                    <h4 className="fw-bold text-dark mb-2">Receptionist Management</h4>
-                    <p className="text-muted small mb-4">
-                      Create receptionist accounts, grant desk permissions, and monitor check-in activities.
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => setActiveSection('receptionists')}
-                    className="btn btn-warning text-dark w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
-                  >
-                    <span>Manage Receptionists</span>
-                    <i className="bi bi-arrow-right"></i>
-                  </button>
+            {/* HOSPITAL-SPECIFIC SUMMARY STATISTICS */}
+            <div className="row g-3 mb-4">
+              <div className="col-6 col-md-4 col-lg">
+                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-primary">
+                  <span className="text-muted small d-block mb-1">Total Doctors</span>
+                  <span className="fs-3 fw-bold text-primary">{statsData?.total_doctors ?? doctorsList.length}</span>
+                </div>
+              </div>
+              <div className="col-6 col-md-4 col-lg">
+                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-warning">
+                  <span className="text-muted small d-block mb-1">Total Receptionists</span>
+                  <span className="fs-3 fw-bold text-warning-emphasis">{statsData?.total_receptionists ?? 0}</span>
+                </div>
+              </div>
+              <div className="col-6 col-md-4 col-lg">
+                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-info">
+                  <span className="text-muted small d-block mb-1">Total Patients</span>
+                  <span className="fs-3 fw-bold text-info-emphasis">{statsData?.total_patients ?? 0}</span>
+                </div>
+              </div>
+              <div className="col-6 col-md-4 col-lg">
+                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-danger">
+                  <span className="text-muted small d-block mb-1">Today's Appointments</span>
+                  <span className="fs-3 fw-bold text-danger">{statsData?.today_appointments ?? 0}</span>
+                </div>
+              </div>
+              <div className="col-6 col-md-4 col-lg">
+                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-success">
+                  <span className="text-muted small d-block mb-1">Departments</span>
+                  <span className="fs-3 fw-bold text-success">{statsData?.total_departments ?? 0}</span>
                 </div>
               </div>
             </div>
 
-            {/* CARD 3: DEPARTMENT MANAGEMENT */}
-            <div className="col-md-6 col-lg-4">
-              <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-success">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
-                  <div>
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="bg-success bg-opacity-10 text-success p-3 rounded-3">
-                        <i className="bi bi-diagram-3-fill fs-2"></i>
+            {/* DASHBOARD MANAGEMENT SECTIONS */}
+            <div className="row g-4">
+              
+              {/* CARD 1: DOCTOR MANAGEMENT */}
+              <div className="col-md-6 col-lg-4">
+                <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-primary">
+                  <div className="card-body p-4 d-flex flex-column justify-content-between">
+                    <div>
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-3">
+                          <i className="bi bi-person-badge-fill fs-2"></i>
+                        </div>
+                        <span className="badge bg-primary-subtle text-primary rounded-pill px-3 py-1">
+                          {doctorsList.length} Registered
+                        </span>
                       </div>
-                      <span className="badge bg-success-subtle text-success rounded-pill px-3 py-1">
-                        Departments
-                      </span>
+                      <h4 className="fw-bold text-dark mb-2">Doctor Management</h4>
+                      <p className="text-muted small mb-4">
+                        Add new doctors, view doctor credentials, and assign Doctor ID passwords.
+                      </p>
                     </div>
-                    <h4 className="fw-bold text-dark mb-2">Department Management</h4>
-                    <p className="text-muted small mb-4">
-                      Define clinical departments (Cardiology, Pediatrics, OPD) and assign department heads.
-                    </p>
+                    <button 
+                      onClick={() => setActiveSection('doctors')}
+                      className="btn btn-primary w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
+                    >
+                      <span>Manage Doctors</span>
+                      <i className="bi bi-arrow-right"></i>
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setActiveSection('departments')}
-                    className="btn btn-success w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
-                  >
-                    <span>Manage Departments</span>
-                    <i className="bi bi-arrow-right"></i>
-                  </button>
                 </div>
               </div>
-            </div>
 
+              {/* CARD 2: RECEPTIONIST MANAGEMENT */}
+              <div className="col-md-6 col-lg-4">
+                <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-warning">
+                  <div className="card-body p-4 d-flex flex-column justify-content-between">
+                    <div>
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div className="bg-warning bg-opacity-10 text-warning p-3 rounded-3">
+                          <i className="bi bi-person-workspace fs-2"></i>
+                        </div>
+                        <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3 py-1">
+                          Receptionists
+                        </span>
+                      </div>
+                      <h4 className="fw-bold text-dark mb-2">Receptionist Management</h4>
+                      <p className="text-muted small mb-4">
+                        Create receptionist accounts, grant desk permissions, and monitor check-in activities.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveSection('receptionists')}
+                      className="btn btn-warning text-dark w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
+                    >
+                      <span>Manage Receptionists</span>
+                      <i className="bi bi-arrow-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: DEPARTMENT MANAGEMENT */}
+              <div className="col-md-6 col-lg-4">
+                <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all border-start border-5 border-success">
+                  <div className="card-body p-4 d-flex flex-column justify-content-between">
+                    <div>
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div className="bg-success bg-opacity-10 text-success p-3 rounded-3">
+                          <i className="bi bi-diagram-3-fill fs-2"></i>
+                        </div>
+                        <span className="badge bg-success-subtle text-success rounded-pill px-3 py-1">
+                          Departments
+                        </span>
+                      </div>
+                      <h4 className="fw-bold text-dark mb-2">Department Management</h4>
+                      <p className="text-muted small mb-4">
+                        Define clinical departments (Cardiology, Pediatrics, OPD) and assign department heads.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveSection('departments')}
+                      className="btn btn-success w-100 py-2.5 rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2"
+                    >
+                      <span>Manage Departments</span>
+                      <i className="bi bi-arrow-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 

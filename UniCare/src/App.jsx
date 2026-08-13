@@ -70,7 +70,9 @@ function App() {
   const handleLogin = (user) => {
     setCurrentUser(user);
     localStorage.setItem('unicare_active_user', JSON.stringify(user));
-    setCurrentView('hospital-role-select');
+    // Directly navigate Hospital Admin to its dashboard after login
+    setCurrentView('hospital-admin-dashboard');
+    sessionStorage.setItem('unicare_current_view', 'hospital-admin-dashboard');
   };
 
   const handleLogout = () => {

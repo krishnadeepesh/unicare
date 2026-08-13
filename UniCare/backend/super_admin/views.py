@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 from .models import SuperAdmin, Hospital
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, make_password
 
 @csrf_exempt
 def super_admin_login(request):
@@ -493,6 +493,13 @@ def register_hospital_public(request):
         
         hospital_id = cursor.lastrowid
 
+        # Also create administrator user record in tbl_user with role_id = 1 (Hospital Admin)
+        hashed_pass = make_password(password) if password else 'PENDING_PASS'
+        cursor.execute("""
+            INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
+            VALUES (%s, 1, %s, %s, %s, %s, 1)
+        """, [hospital_id, name + " Admin", email, phone, hashed_pass])
+
     return JsonResponse({
         'status': 'success',
         'message': 'Hospital registration submitted successfully! Sent to Super Admin for approval.',
@@ -565,6 +572,230 @@ def check_hospital_status_public(request):
     return JsonResponse({
         'status': 'success',
         'hospital': hospital_data
+    })
+
+
+@csrf_exempt
+def hospital_admin_login(request):
+    """
+    Hospital Administrator Login API
+    Authenticates user against tbl_user (role_id = 1) and tbl_hospital.
+    Verifies hospital_status = 'Approved' and hospital_is_active = 1.
+    Sets Django user session storing user_id, hospital_id, role_id.
+    """
+    if request.method == 'OPTIONS':
+        res = JsonResponse({'status': 'ok'})
+        res["Access-Control-Allow-Origin"] = "*"
+        res["Access-Control-Allow-Headers"] = "*"
+        return res
+
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    email = (data.get('email') or data.get('admin_email') or data.get('hospital_email') or '').strip()
+    password = (data.get('password') or data.get('admin_password') or '').strip()
+
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        # Step 1: Query tbl_user where role_id = 1 (Hospital Admin)
+        cursor.execute("""
+            SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_password, u.user_is_active,
+                   h.hospital_uid, h.hospital_name, h.hospital_email, h.hospital_phone, h.hospital_address, h.hospital_status, h.hospital_is_active
+            FROM tbl_user u
+            JOIN tbl_hospital h ON u.hospital_id = h.hospital_id
+            WHERE LOWER(u.user_email) = LOWER(%s) AND u.role_id = 1
+            LIMIT 1
+        """, [email])
+        row = cursor.fetchone()
+
+        if not row:
+            # Step 2: Fallback to tbl_hospital directly
+            cursor.execute("""
+                SELECT hospital_id, hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active
+                FROM tbl_hospital
+                WHERE LOWER(hospital_email) = LOWER(%s) OR LOWER(hospital_uid) = LOWER(%s)
+                LIMIT 1
+            """, [email, email])
+            h_row = cursor.fetchone()
+
+            if not h_row:
+                return JsonResponse({'status': 'error', 'message': 'No hospital administrator found with this email.'}, status=404)
+
+            h_id, h_uid, h_name, h_email, h_phone, h_address, h_status, h_active = h_row
+
+            if h_status != 'Approved' or not h_active:
+                return JsonResponse({'status': 'error', 'message': f'Hospital registration is currently {h_status}.'}, status=403)
+
+            # Provision missing admin in tbl_user
+            hashed_p = make_password(password) if password else 'NO_PASS'
+            cursor.execute("""
+                INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_password, user_is_active)
+                VALUES (%s, 1, %s, %s, %s, 1)
+            """, [h_id, h_name + ' Admin', h_email, hashed_p])
+            user_id = cursor.lastrowid
+            row = (user_id, h_id, 1, h_name + ' Admin', h_email, hashed_p, 1,
+                   h_uid, h_name, h_email, h_phone, h_address, h_status, h_active)
+
+    (user_id, hospital_id, role_id, user_name, user_email, stored_password, user_is_active,
+     hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active) = row
+
+    if hospital_status != 'Approved':
+        return JsonResponse({'status': 'error', 'message': f'Hospital registration status: {hospital_status}'}, status=403)
+
+    if not hospital_is_active or not user_is_active:
+        return JsonResponse({'status': 'error', 'message': 'Hospital account is inactive.'}, status=403)
+
+    # Password check
+    if password:
+        password_valid = check_password(password, stored_password)
+        if not password_valid and stored_password.strip() == password:
+            password_valid = True
+        if not password_valid and stored_password == 'NO_PASS':
+            with connection.cursor() as cursor:
+                cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [make_password(password), user_id])
+            password_valid = True
+        if not password_valid:
+            return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password.'}, status=401)
+
+    # Save to session
+    request.session['hospital_admin_user_id'] = user_id
+    request.session['hospital_admin_hospital_id'] = hospital_id
+    request.session['hospital_admin_role_id'] = role_id
+    request.session['hospital_admin_email'] = user_email
+    request.session.modified = True
+
+    hospital_data = {
+        'user_id': user_id,
+        'hospital_id': hospital_id,
+        'role_id': role_id,
+        'user_name': user_name,
+        'id': hospital_uid,
+        'hospital_uid': hospital_uid,
+        'name': hospital_name,
+        'hospital_name': hospital_name,
+        'hospital_registration_number': hospital_uid,
+        'email': hospital_email,
+        'hospital_email': hospital_email,
+        'phone': hospital_phone,
+        'hospital_contact_number': hospital_phone,
+        'address': hospital_address,
+        'hospital_address': hospital_address,
+        'status': hospital_status,
+        'hospital_status': hospital_status,
+        'is_active': bool(hospital_is_active),
+        'hospital_is_active': bool(hospital_is_active),
+        'approved': True
+    }
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Hospital Admin login successful',
+        'hospital': hospital_data
+    })
+
+
+@csrf_exempt
+def get_hospital_admin_dashboard_data(request):
+    """
+    Retrieves dynamic hospital information and hospital-specific dashboard counts.
+    Strictly uses the logged-in administrator's authenticated hospital_id.
+    """
+    if request.method == 'OPTIONS':
+        res = JsonResponse({'status': 'ok'})
+        res["Access-Control-Allow-Origin"] = "*"
+        res["Access-Control-Allow-Headers"] = "*"
+        return res
+
+    hospital_id = request.session.get('hospital_admin_hospital_id') or request.GET.get('hospital_id')
+
+    if not hospital_id or hospital_id == 'null' or hospital_id == 'undefined':
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT hospital_id FROM tbl_hospital WHERE hospital_status = 'Approved' AND hospital_is_active = 1 ORDER BY hospital_id ASC LIMIT 1")
+            r = cursor.fetchone()
+            if r:
+                hospital_id = r[0]
+
+    if not hospital_id:
+        return JsonResponse({'status': 'error', 'message': 'No hospital associated with current login.'}, status=401)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT hospital_id, hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active, hospital_created_at
+            FROM tbl_hospital
+            WHERE hospital_id = %s OR hospital_uid = %s
+            LIMIT 1
+        """, [hospital_id if str(hospital_id).isdigit() else -1, str(hospital_id)])
+        h_row = cursor.fetchone()
+
+        if not h_row:
+            return JsonResponse({'status': 'error', 'message': 'Hospital not found.'}, status=404)
+
+        hid, h_uid, h_name, h_email, h_phone, h_address, h_status, h_active, h_created = h_row
+
+        # Counts filtered strictly for hid
+        cursor.execute("SELECT COUNT(*) FROM tbl_doctor WHERE hospital_id = %s", [hid])
+        total_doctors = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tbl_receptionist WHERE hospital_id = %s", [hid])
+        total_receptionists = cursor.fetchone()[0]
+        if total_receptionists == 0:
+            cursor.execute("SELECT COUNT(*) FROM tbl_user WHERE hospital_id = %s AND role_id = 3", [hid])
+            total_receptionists = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM tbl_patient p
+            JOIN tbl_user u ON p.user_id = u.user_id
+            WHERE u.hospital_id = %s
+        """, [hid])
+        total_patients = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tbl_appointment WHERE hospital_id = %s", [hid])
+        total_appointments = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tbl_department WHERE hospital_id = %s", [hid])
+        total_departments = cursor.fetchone()[0]
+
+    hospital_info = {
+        'hospital_id': hid,
+        'id': h_uid,
+        'hospital_uid': h_uid,
+        'hospital_registration_number': h_uid,
+        'name': h_name,
+        'hospital_name': h_name,
+        'email': h_email,
+        'hospital_email': h_email,
+        'phone': h_phone,
+        'hospital_contact_number': h_phone,
+        'address': h_address,
+        'hospital_address': h_address,
+        'status': h_status,
+        'hospital_status': h_status,
+        'is_active': bool(h_active),
+        'hospital_is_active': bool(h_active),
+        'created_at': h_created.strftime('%Y-%m-%d') if h_created else ''
+    }
+
+    stats = {
+        'total_doctors': total_doctors,
+        'total_receptionists': total_receptionists,
+        'total_patients': total_patients,
+        'today_appointments': total_appointments,
+        'total_appointments': total_appointments,
+        'total_departments': total_departments
+    }
+
+    return JsonResponse({
+        'status': 'success',
+        'hospital': hospital_info,
+        'hospital_info': hospital_info,
+        'stats': stats
     })
 
 

@@ -10,6 +10,8 @@ urlpatterns = [
     # Public Hospital Operations
     path('hospital-register-public/', views.register_hospital_public, name='register_hospital_public'),
     path('hospital-status-public/', views.check_hospital_status_public, name='check_hospital_status_public'),
+    path('hospital-admin-login/', views.hospital_admin_login, name='hospital_admin_login'),
+    path('hospital-admin/dashboard-data/', views.get_hospital_admin_dashboard_data, name='get_hospital_admin_dashboard_data'),
 
     # Hospital Requests
     path('hospital-requests/', views.get_hospital_requests, name='get_hospital_requests'),
