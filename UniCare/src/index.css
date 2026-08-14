@@ -85,17 +85,27 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Careplus Rounded Hero Container Style */
 .hero-careplus-container {
-  position: relative;
-  border-radius: 32px;
+  position: relative; 
+  /* 1. FLUSH TOP & BOTTOM EDGES */
+  border-radius: 0; /* Changed from 32px to 0 so it flush-connects edge to edge */
+  width: 100vw;
+  margin-left: calc(-50vw + 50%); /* Pulls full viewport width */
+  margin-top: -3rem;   /* PULLS THE CARD UP TO TOUCH THE NAVBAR/HEADER */
+  margin-bottom: -3rem;/* EXPANDS IT DOWNWARDS AT THE BOTTOM */
   overflow: hidden;
-  background-image: url('/heart-stethoscope-bg.png');
+  background-image: url('/stethoscope1-bg.jpg');
   background-size: cover;
   background-position: center right;
-  min-height: 520px;
+  /* 2. INCREASE TALLNESS / HEIGHT */
+  min-height: 85vh; /* Takes up 85% of the total screen height */
   box-shadow: 0 20px 45px rgba(13, 148, 136, 0.14);
   display: flex;
   align-items: center;
-  padding: 4rem 3.5rem;
+  /* 3. INNER PADDING */
+  padding-top: 8rem;
+  padding-bottom: 8rem;
+  padding-left: 3.5rem;
+  padding-right: 3.5rem;
 }
 
 .hero-careplus-overlay {
