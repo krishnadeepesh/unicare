@@ -24,7 +24,7 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
           onClick={(e) => { e.preventDefault(); setView('landing'); }}
           style={{ textDecoration: 'none' }}
         >
-          <i className="bi bi-shield-plus text-primary fs-3"></i>
+          <i className="bi bi-shield-plus fs-3" style={{ color: '#0d9488' }}></i>
           <span>UniCare</span>
         </a>
 
@@ -88,7 +88,7 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
             {currentUser ? (
               <>
                 <button 
-                  className="btn btn-outline-primary px-3 py-2 fs-7 d-flex align-items-center gap-1"
+                  className="btn btn-outline-teal px-3 py-2 fs-7 d-flex align-items-center gap-1"
                   onClick={() => setView(currentUser.type === 'hospital' ? 'hospital-dashboard' : 'patient-dashboard')}
                 >
                   <i className={`bi ${currentUser.type === 'hospital' ? 'bi-hospital' : 'bi-person-circle'}`}></i>
@@ -106,14 +106,16 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
             ) : (
               <>
                 <button 
-                  className={`btn btn-outline-unicare px-3 py-2 ${currentView === 'auth-select' || currentView === 'login' ? 'active' : ''}`} 
+                  className={`btn btn-outline-dark px-3 py-2 rounded-pill ${currentView === 'auth-select' || currentView === 'login' ? 'active' : ''}`} 
                   onClick={() => setView('auth-select')}
+                  style={{ borderRadius: '50px' }}
                 >
                   Portal Select
                 </button>
                 <button 
-                  className={`btn btn-primary-unicare px-3 py-2 ${currentView === 'hospital-flow' || currentView === 'patient-flow' ? 'active' : ''}`} 
+                  className="btn btn-teal-pill px-4 py-2" 
                   onClick={() => setView('auth-select')}
+                  style={{ fontSize: '0.875rem' }}
                 >
                   Get Started
                 </button>

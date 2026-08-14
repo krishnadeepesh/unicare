@@ -59,92 +59,67 @@ export default function LandingPage({ setView }) {
 
   return (
     <div className="bg-dot-grid">
-      {/* Hero Section */}
-      <section className="py-5 py-lg-6 my-lg-4" id="home">
+      {/* Hero Section - Careplus Card Container with Red Heart Stethoscope Background */}
+      <section className="py-4 py-lg-5" id="home">
         <div className="container">
-          <div className="row align-items-center g-5">
-            {/* Left Content */}
-            <div className="col-lg-6 animate-slide-up text-center text-lg-start">
-              <span className="badge badge-blue px-3 py-2 rounded-pill mb-3">
-                <i className="bi bi-stars me-1 text-primary"></i> Next-Gen Healthcare Platform
+          <div className="hero-careplus-container animate-fade-in">
+            <div className="hero-careplus-overlay"></div>
+            
+            {/* Content Overlay */}
+            <div className="hero-careplus-content animate-slide-up">
+              <span className="badge px-3 py-2 rounded-pill mb-3" style={{ background: 'rgba(13, 148, 136, 0.12)', color: '#0d9488', border: '1px solid rgba(13, 148, 136, 0.3)', fontWeight: 600, fontSize: '0.85rem' }}>
+                <i className="bi bi-shield-check me-1"></i> Next-Gen Healthcare Platform
               </span>
-              <h1 className="display-4 fw-extrabold mb-3 text-slate-900" style={{ letterSpacing: '-1px', lineHeight: '1.15' }}>
-                Unified Healthcare Management for <span className="text-primary">Connected Hospitals</span>
+              <h1 className="display-4 fw-extrabold mb-3 text-slate-900" style={{ letterSpacing: '-1px', lineHeight: '1.15', color: '#0f172a' }}>
+                Smarter Healthcare Starts With <span style={{ color: '#0d9488' }}>UniCare.</span>
               </h1>
-              <p className="lead text-muted mb-4" style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>
-                UniCare is a secure healthcare management platform that helps hospitals manage their operations, patients, doctors, and medical records efficiently through a centralized system.
+              <p className="lead mb-4 text-slate-700" style={{ fontSize: '1.15rem', lineHeight: '1.6', color: '#334155' }}>
+                UniCare is a secure healthcare management platform that helps hospitals manage operations, patients, doctors, and medical records efficiently through a centralized system.
               </p>
-              <div className="d-flex flex-column flex-sm-row justify-content-center justify-content-lg-start gap-3">
+              <div className="d-flex flex-wrap gap-3">
                 <button 
-                  className="btn btn-primary-unicare px-4 py-3 fs-6 d-flex align-items-center justify-content-center gap-2"
-                  onClick={() => setView('register')}
+                  className="btn btn-teal-pill"
+                  onClick={() => setView('auth-select')}
                 >
-                  <span>Get Started Now</span>
+                  <span>Get Started</span>
                   <i className="bi bi-arrow-right"></i>
                 </button>
                 <a 
                   href="#features" 
-                  className="btn btn-outline-unicare px-4 py-3 fs-6 d-flex align-items-center justify-content-center gap-2"
+                  className="btn btn-teal-outline"
                   onClick={(e) => {
                     e.preventDefault();
                     document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
                   }}
                 >
                   <span>Explore Features</span>
+                  <i className="bi bi-arrow-up-right"></i>
                 </a>
-              </div>
-            </div>
-
-            {/* Right Illustration */}
-            <div className="col-lg-6 animate-fade-in">
-              <div className="healthcare-illustration-container">
-                <img 
-                  src="/hero-illustration.png" 
-                  alt="UniCare Healthcare Management Illustration" 
-                  className="illustration-img img-fluid animate-float"
-                  style={{ width: '85%', filter: 'drop-shadow(0 25px 35px rgba(37,99,235,0.08))' }}
-                />
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-5 border-top bg-white" id="features">
+      {/* Features Section - Teal & White Soft Cards */}
+      <section className="py-5 bg-white border-top border-bottom" id="features">
         <div className="container py-lg-4">
           <div className="text-center max-w-2xl mx-auto mb-5">
-            <span className="badge badge-teal px-3 py-2 rounded-pill mb-2">Features</span>
-            <h2 className="display-6 fw-bold">Comprehensive Tools for Healthcare Teams</h2>
+            <span className="badge px-3 py-2 rounded-pill mb-2" style={{ background: 'rgba(13, 148, 136, 0.1)', color: '#0d9488', fontWeight: 600 }}>Features & Tools</span>
+            <h2 className="display-6 fw-bold text-slate-900">Comprehensive Tools for Healthcare Teams</h2>
             <p className="text-muted" style={{ maxWidth: '600px', margin: '0 auto' }}>
               UniCare offers a unified workflow with specialized systems tailored to ensure clinical efficiency and secure record compliance.
             </p>
           </div>
 
           <div className="row g-4 justify-content-center">
-            {/* Displaying first 3 features */}
-            {features.slice(0, 3).map((feat, idx) => (
+            {features.map((feat, idx) => (
               <div className="col-lg-4 col-md-6" key={idx}>
-                <div className="unicare-card">
-                  <div className={feat.color === 'primary' ? 'icon-box' : 'icon-box-teal'}>
+                <div className="careplus-card animate-slide-up">
+                  <div className="careplus-icon-box">
                     <i className={`bi ${feat.icon}`}></i>
                   </div>
-                  <h3 className="h4 fw-bold mb-3">{feat.title}</h3>
-                  <p className="text-muted mb-0" style={{ fontSize: '0.925rem', lineHeight: '1.6' }}>
-                    {feat.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {/* Displaying next 2 features centered */}
-            {features.slice(3).map((feat, idx) => (
-              <div className="col-lg-4 col-md-6" key={idx + 3}>
-                <div className="unicare-card">
-                  <div className={feat.color === 'primary' ? 'icon-box' : 'icon-box-teal'}>
-                    <i className={`bi ${feat.icon}`}></i>
-                  </div>
-                  <h3 className="h4 fw-bold mb-3">{feat.title}</h3>
+                  <h3 className="h4 fw-bold mb-3 text-slate-900">{feat.title}</h3>
                   <p className="text-muted mb-0" style={{ fontSize: '0.925rem', lineHeight: '1.6' }}>
                     {feat.description}
                   </p>
@@ -156,10 +131,10 @@ export default function LandingPage({ setView }) {
       </section>
 
       {/* How UniCare Works Section */}
-      <section className="py-5 border-top bg-light" id="about">
+      <section className="py-5 bg-light" id="about">
         <div className="container py-lg-4">
           <div className="text-center mb-5">
-            <span className="badge badge-blue px-3 py-2 rounded-pill mb-2">Workflow</span>
+            <span className="badge px-3 py-2 rounded-pill mb-2" style={{ background: 'rgba(13, 148, 136, 0.1)', color: '#0d9488', fontWeight: 600 }}>Workflow</span>
             <h2 className="display-6 fw-bold">How UniCare Works</h2>
             <p className="text-muted" style={{ maxWidth: '600px', margin: '0 auto' }}>
               Enrolling your hospital and patient registry is quick, secure, and fully guided.
@@ -169,16 +144,16 @@ export default function LandingPage({ setView }) {
           <div className="row g-4">
             {steps.map((step, idx) => (
               <div className="col-lg-3 col-md-6" key={idx}>
-                <div className="p-4 bg-white border rounded shadow-sm text-center h-100 position-relative">
+                <div className="p-4 bg-white border-0 shadow-sm text-center h-100 position-relative" style={{ borderRadius: '24px' }}>
                   <div className="d-flex justify-content-center">
-                    <div className="step-circle">{step.num}</div>
+                    <div className="step-circle" style={{ background: 'linear-gradient(135deg, #0d9488, #00bba7)' }}>{step.num}</div>
                   </div>
                   <h3 className="h5 fw-bold mb-2">{step.title}</h3>
                   <p className="text-muted mb-0" style={{ fontSize: '0.875rem', lineHeight: '1.5' }}>
                     {step.description}
                   </p>
                   {idx < steps.length - 1 && (
-                    <div className="d-none d-lg-block position-absolute" style={{ top: '48px', right: '-15%', width: '30%', height: '2px', borderTop: '2px dashed var(--border-light)', zIndex: 1 }}></div>
+                    <div className="d-none d-lg-block position-absolute" style={{ top: '48px', right: '-15%', width: '30%', height: '2px', borderTop: '2px dashed #99f6e4', zIndex: 1 }}></div>
                   )}
                 </div>
               </div>
