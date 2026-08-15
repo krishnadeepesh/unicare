@@ -82,9 +82,11 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     fetchDoctors();
   }, []);
 
-  const currentHospitalName = hospitalData?.name || hospitalData?.hospital_name || initialHospitalName;
+  const currentHospitalName = hospitalData?.name || hospitalData?.hospital_name || hospitalInfo?.name || hospitalInfo?.hospital_name || 'City General Hospital';
   const currentHospitalUid = hospitalData?.hospital_uid || hospitalData?.id || initialHospitalId || 'HSP0001';
   const currentHospitalId = hospitalData?.hospital_id || initialHospitalId;
+  const userRole = hospitalData?.role || hospitalInfo?.role || 'Hospital Administrator';
+  const username = hospitalData?.username || hospitalData?.user_name || hospitalInfo?.username || hospitalInfo?.user_name || hospitalInfo?.adminEmail || hospitalInfo?.email || 'admin';
 
   // Handle Add Doctor directly into MySQL
   const handleAddDoctor = async (e) => {
@@ -171,28 +173,32 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         </div>
       )}
 
-      {/* Header Bar */}
+      {/* Header Bar displaying Hospital Name, Role, and Username */}
       <header className="bg-white border-bottom shadow-sm py-3 px-4 d-flex align-items-center justify-content-between">
         <div className="d-flex align-items-center gap-3">
-          <div className="bg-success text-white rounded-3 p-2 d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px' }}>
-            <i className="bi bi-shield-lock-fill fs-4"></i>
+          <div className="text-white rounded-3 p-2 d-flex align-items-center justify-content-center shadow-sm" style={{ width: '45px', height: '45px', backgroundColor: '#0d9488' }}>
+            <i className="bi bi-hospital fs-4"></i>
           </div>
           <div>
-            <h5 className="fw-bold mb-0 text-dark">{currentHospitalName}</h5>
-            <small className="text-muted fw-semibold">Hospital ID: <code className="text-primary fw-bold">{currentHospitalUid}</code></small>
+            <h5 className="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+              <span>{currentHospitalName}</span>
+              <small className="text-muted fw-normal fs-7">({currentHospitalUid})</small>
+            </h5>
+            <div className="d-flex align-items-center gap-2 mt-1" style={{ fontSize: '0.875rem' }}>
+              <span className="badge border px-2 py-1 rounded-pill fw-semibold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                <i className="bi bi-person-badge me-1"></i>Role: {userRole}
+              </span>
+              <span className="text-secondary fw-semibold ms-1">
+                <i className="bi bi-person-circle me-1 text-teal"></i>Username: <code className="text-dark fw-bold bg-light px-2 py-0.5 rounded border">{username}</code>
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="d-flex align-items-center gap-2">
           <button 
-            onClick={onBackToRoleSelect}
-            className="btn btn-outline-secondary btn-sm rounded-pill px-3"
-          >
-            <i className="bi bi-arrow-left me-1"></i> Switch Role
-          </button> 
-          <button 
             onClick={onLogout}
-            className="btn btn-outline-danger btn-sm rounded-pill px-3"
+            className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5"
           >
             <i className="bi bi-box-arrow-right me-1"></i> Logout
           </button>

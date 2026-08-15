@@ -471,7 +471,9 @@ def register_hospital_public(request):
         data = request.POST
 
     name = (data.get('hospital_name') or data.get('name') or '').strip()
-    email = (data.get('adminEmail') or data.get('admin_email') or data.get('hospital_email') or data.get('email') or '').strip()
+    admin_name = (data.get('adminName') or data.get('fullName') or data.get('name') or '').strip()
+    username = (data.get('username') or data.get('user_name') or '').strip()
+    email = (data.get('adminEmail') or data.get('email') or data.get('admin_email') or data.get('hospital_email') or '').strip()
     phone = (data.get('contactNumber') or data.get('hospital_phone') or data.get('phone') or data.get('contact') or data.get('adminPhone') or '').strip()
     address = (data.get('hospital_address') or data.get('address') or '').strip()
     password = (data.get('adminPassword') or data.get('password') or '').strip()
@@ -479,7 +481,11 @@ def register_hospital_public(request):
     if not name:
         return JsonResponse({'status': 'error', 'message': 'Hospital Name is required'}, status=400)
     if not email:
-        return JsonResponse({'status': 'error', 'message': 'Admin Email is required'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'Email Address is required'}, status=400)
+    if not username:
+        return JsonResponse({'status': 'error', 'message': 'Username is required'}, status=400)
+    if not password:
+        return JsonResponse({'status': 'error', 'message': 'Password is required'}, status=400)
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
@@ -493,12 +499,13 @@ def register_hospital_public(request):
         
         hospital_id = cursor.lastrowid
 
-        # Also create administrator user record in tbl_user with role_id = 1 (Hospital Admin)
-        hashed_pass = make_password(password) if password else 'PENDING_PASS'
+        # Always store ENCRYPTED / HASHED password in tbl_user
+        hashed_pass = make_password(password)
+        display_username = username or admin_name or email
         cursor.execute("""
             INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
             VALUES (%s, 1, %s, %s, %s, %s, 1)
-        """, [hospital_id, name + " Admin", email, phone, hashed_pass])
+        """, [hospital_id, display_username, email, phone, hashed_pass])
 
     return JsonResponse({
         'status': 'success',
@@ -509,9 +516,11 @@ def register_hospital_public(request):
             'hospital_uid': new_uid,
             'name': name,
             'hospital_name': name,
+            'adminName': admin_name or display_username,
+            'username': display_username,
+            'user_name': display_username,
             'adminEmail': email,
             'email': email,
-            'password': password,
             'phone': phone,
             'address': address,
             'status': 'Pending',
@@ -597,22 +606,22 @@ def hospital_admin_login(request):
     except Exception:
         data = request.POST
 
-    email = (data.get('email') or data.get('admin_email') or data.get('hospital_email') or '').strip()
+    identifier = (data.get('email') or data.get('username') or data.get('admin_email') or data.get('hospital_email') or '').strip()
     password = (data.get('password') or data.get('admin_password') or '').strip()
 
-    if not email:
-        return JsonResponse({'status': 'error', 'message': 'Email is required.'}, status=400)
+    if not identifier:
+        return JsonResponse({'status': 'error', 'message': 'Email or Username is required.'}, status=400)
 
     with connection.cursor() as cursor:
-        # Step 1: Query tbl_user where role_id = 1 (Hospital Admin)
+        # Step 1: Query tbl_user where role_id = 1 by matching user_email OR user_name (username)
         cursor.execute("""
             SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_password, u.user_is_active,
                    h.hospital_uid, h.hospital_name, h.hospital_email, h.hospital_phone, h.hospital_address, h.hospital_status, h.hospital_is_active
             FROM tbl_user u
             JOIN tbl_hospital h ON u.hospital_id = h.hospital_id
-            WHERE LOWER(u.user_email) = LOWER(%s) AND u.role_id = 1
+            WHERE (LOWER(u.user_email) = LOWER(%s) OR LOWER(u.user_name) = LOWER(%s)) AND u.role_id = 1
             LIMIT 1
-        """, [email])
+        """, [identifier, identifier])
         row = cursor.fetchone()
 
         if not row:
@@ -622,25 +631,25 @@ def hospital_admin_login(request):
                 FROM tbl_hospital
                 WHERE LOWER(hospital_email) = LOWER(%s) OR LOWER(hospital_uid) = LOWER(%s)
                 LIMIT 1
-            """, [email, email])
+            """, [identifier, identifier])
             h_row = cursor.fetchone()
 
             if not h_row:
-                return JsonResponse({'status': 'error', 'message': 'No hospital administrator found with this email.'}, status=404)
+                return JsonResponse({'status': 'error', 'message': 'Invalid Email/Username or Password.'}, status=404)
 
             h_id, h_uid, h_name, h_email, h_phone, h_address, h_status, h_active = h_row
 
             if h_status != 'Approved' or not h_active:
                 return JsonResponse({'status': 'error', 'message': f'Hospital registration is currently {h_status}.'}, status=403)
 
-            # Provision missing admin in tbl_user
-            hashed_p = make_password(password) if password else 'NO_PASS'
+            # Provision missing admin in tbl_user with encrypted password
+            hashed_p = make_password(password) if password else make_password('NO_PASS')
             cursor.execute("""
                 INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_password, user_is_active)
                 VALUES (%s, 1, %s, %s, %s, 1)
-            """, [h_id, h_name + ' Admin', h_email, hashed_p])
+            """, [h_id, identifier or (h_name + ' Admin'), h_email, hashed_p])
             user_id = cursor.lastrowid
-            row = (user_id, h_id, 1, h_name + ' Admin', h_email, hashed_p, 1,
+            row = (user_id, h_id, 1, identifier or (h_name + ' Admin'), h_email, hashed_p, 1,
                    h_uid, h_name, h_email, h_phone, h_address, h_status, h_active)
 
     (user_id, hospital_id, role_id, user_name, user_email, stored_password, user_is_active,
@@ -656,32 +665,40 @@ def hospital_admin_login(request):
     if password:
         password_valid = check_password(password, stored_password)
         if not password_valid and stored_password.strip() == password:
+            # Re-hash plain text password into database for security
+            with connection.cursor() as cursor:
+                cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [make_password(password), user_id])
             password_valid = True
-        if not password_valid and stored_password == 'NO_PASS':
+        if not password_valid and (stored_password == 'NO_PASS' or 'NO_PASS' in stored_password):
             with connection.cursor() as cursor:
                 cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [make_password(password), user_id])
             password_valid = True
         if not password_valid:
-            return JsonResponse({'status': 'error', 'message': 'Invalid Email or Password.'}, status=401)
+            return JsonResponse({'status': 'error', 'message': 'Invalid Email/Username or Password.'}, status=401)
 
     # Save to session
     request.session['hospital_admin_user_id'] = user_id
     request.session['hospital_admin_hospital_id'] = hospital_id
     request.session['hospital_admin_role_id'] = role_id
     request.session['hospital_admin_email'] = user_email
+    request.session['hospital_admin_username'] = user_name
     request.session.modified = True
 
     hospital_data = {
         'user_id': user_id,
         'hospital_id': hospital_id,
         'role_id': role_id,
+        'role': 'Hospital Administrator',
+        'role_name': 'Hospital Administrator',
         'user_name': user_name,
+        'username': user_name,
         'id': hospital_uid,
         'hospital_uid': hospital_uid,
         'name': hospital_name,
         'hospital_name': hospital_name,
         'hospital_registration_number': hospital_uid,
         'email': hospital_email,
+        'user_email': user_email,
         'hospital_email': hospital_email,
         'phone': hospital_phone,
         'hospital_contact_number': hospital_phone,
@@ -925,9 +942,9 @@ def add_doctor(request):
         """, [user_id, valid_hospital_id or 1, dept_id, license_no, specialization])
         doctor_id = cursor.lastrowid
 
-        # Step 3: Set doctor's ID as the password for doctor login (e.g. DOC-1001)
+        # Step 3: Set doctor's ID as the encrypted password for doctor login (e.g. DOC-1001)
         doc_uid = f"DOC-{doctor_id}"
-        cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [doc_uid, user_id])
+        cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [make_password(doc_uid), user_id])
 
     return JsonResponse({
         'status': 'success',

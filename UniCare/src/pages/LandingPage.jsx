@@ -79,7 +79,7 @@ export default function LandingPage({ setView }) {
               <div className="d-flex flex-wrap gap-3">
                 <button 
                   className="btn btn-teal-pill"
-                  onClick={() => setView('auth-select')}
+                  onClick={() => setView('login')}
                 >
                   <span>Get Started</span>
                   <i className="bi bi-arrow-right"></i>

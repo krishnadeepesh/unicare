@@ -23,13 +23,13 @@ function App() {
     const savedUser = localStorage.getItem('unicare_active_user');
     const savedView = sessionStorage.getItem('unicare_current_view');
 
-    if (savedUser && savedView && ['hospital-role-select', 'hospital-admin-dashboard'].includes(savedView)) {
+    if (savedUser && savedView && ['hospital-admin-dashboard'].includes(savedView)) {
       return savedView;
     }
     if (savedUser) {
-      return 'hospital-role-select';
+      return 'hospital-admin-dashboard';
     }
-    return savedView || 'landing';
+    return (savedView && savedView !== 'auth-select') ? savedView : 'landing';
   };
 
   const [currentView, setCurrentView] = useState(getInitialView);

@@ -104,22 +104,13 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
                 </button>
               </>
             ) : (
-              <>
-                <button 
-                  className={`btn btn-outline-dark px-3 py-2 rounded-pill ${currentView === 'auth-select' || currentView === 'login' ? 'active' : ''}`} 
-                  onClick={() => setView('auth-select')}
-                  style={{ borderRadius: '50px' }}
-                >
-                  Portal Select
-                </button>
-                <button 
-                  className="btn btn-teal-pill px-4 py-2" 
-                  onClick={() => setView('auth-select')}
-                  style={{ fontSize: '0.875rem' }}
-                >
-                  Get Started
-                </button>
-              </>
+              <button 
+                className={`btn btn-teal-pill px-4 py-2 ${currentView === 'login' ? 'active' : ''}`} 
+                onClick={() => setView('login')}
+                style={{ fontSize: '0.875rem' }}
+              >
+                <i className="bi bi-box-arrow-in-right me-1"></i> Login
+              </button>
             )}
           </div>
         </div>
