@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function CustomNavbar({ currentView, setView, currentUser, onLogout }) {
+export default function CustomNavbar({ currentView, setView, currentUser, onLogout, onOpenAuth }) {
   const scrollToSection = (id) => {
     if (currentView !== 'landing') {
       setView('landing');
@@ -106,7 +106,7 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
             ) : (
               <button 
                 className={`btn btn-teal-pill px-4 py-2 ${currentView === 'login' ? 'active' : ''}`} 
-                onClick={() => setView('login')}
+                onClick={() => onOpenAuth ? onOpenAuth('login') : setView('login')}
                 style={{ fontSize: '0.875rem' }}
               >
                 <i className="bi bi-box-arrow-in-right me-1"></i> Login

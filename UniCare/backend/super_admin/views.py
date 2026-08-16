@@ -1,9 +1,11 @@
 import json
+import secrets
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 from .models import SuperAdmin, Hospital
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.mail import send_mail
 
 @csrf_exempt
 def super_admin_login(request):
@@ -84,6 +86,58 @@ def super_admin_logout(request):
     """
     request.session.flush()
     return JsonResponse({'status': 'success', 'message': 'Session destroyed successfully.'})
+
+
+@csrf_exempt
+def request_password_reset(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    email = (data.get('email') or '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_user WHERE LOWER(user_email)=LOWER(%s) LIMIT 1", [email])
+        user_exists = cursor.fetchone() is not None
+    admin_exists = SuperAdmin.objects.filter(admin_email__iexact=email).exists()
+    if not user_exists and not admin_exists:
+        return JsonResponse({'status': 'success', 'message': 'If the address is registered, a verification code has been sent.'})
+    code = f'{secrets.randbelow(1000000):06d}'
+    request.session['password_reset_email'] = email
+    request.session['password_reset_code'] = code
+    request.session.set_expiry(15 * 60)
+    try:
+        send_mail('UniCare password reset code', f'Your UniCare password reset code is: {code}. It expires in 15 minutes.', None, [email], fail_silently=False)
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Unable to send reset email. Please contact the system administrator.'}, status=503)
+    return JsonResponse({'status': 'success', 'message': 'Verification code sent to your email.'})
+
+
+@csrf_exempt
+def confirm_password_reset(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    email = (data.get('email') or '').strip().lower()
+    code = (data.get('code') or '').strip()
+    password = (data.get('password') or '').strip()
+    if not email or not code or len(password) < 5:
+        return JsonResponse({'status': 'error', 'message': 'Email, verification code, and a 5-character password are required.'}, status=400)
+    if request.session.get('password_reset_email') != email or request.session.get('password_reset_code') != code:
+        return JsonResponse({'status': 'error', 'message': 'Invalid or expired verification code.'}, status=400)
+    hashed_password = make_password(password)
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE tbl_user SET user_password=%s WHERE LOWER(user_email)=LOWER(%s)", [hashed_password, email])
+    SuperAdmin.objects.filter(admin_email__iexact=email).update(admin_password=hashed_password)
+    request.session.pop('password_reset_email', None)
+    request.session.pop('password_reset_code', None)
+    return JsonResponse({'status': 'success', 'message': 'Password updated successfully. You can now log in.'})
 
 
 @csrf_exempt
@@ -453,8 +507,7 @@ def analytics_data(request):
 @csrf_exempt
 def register_hospital_public(request):
     """
-    Public hospital registration endpoint.
-    Inserts hospital into tbl_hospital with hospital_status='Pending' and hospital_is_active=0.
+    Creates a hospital administrator draft account. Hospital registration is submitted later from the dashboard.
     """
     if request.method == 'OPTIONS':
         res = JsonResponse({'status': 'ok'})
@@ -470,38 +523,41 @@ def register_hospital_public(request):
     except Exception:
         data = request.POST
 
-    name = (data.get('hospital_name') or data.get('name') or '').strip()
-    admin_name = (data.get('adminName') or data.get('fullName') or data.get('name') or '').strip()
-    username = (data.get('username') or data.get('user_name') or '').strip()
+    admin_name = (data.get('adminName') or data.get('fullName') or '').strip()
     email = (data.get('adminEmail') or data.get('email') or data.get('admin_email') or data.get('hospital_email') or '').strip()
     phone = (data.get('contactNumber') or data.get('hospital_phone') or data.get('phone') or data.get('contact') or data.get('adminPhone') or '').strip()
-    address = (data.get('hospital_address') or data.get('address') or '').strip()
     password = (data.get('adminPassword') or data.get('password') or '').strip()
+    name = (data.get('hospital_name') or data.get('name') or f"{admin_name}'s Hospital").strip()
+    address = (data.get('hospital_address') or data.get('address') or '').strip()
 
-    if not name:
-        return JsonResponse({'status': 'error', 'message': 'Hospital Name is required'}, status=400)
+    if not admin_name:
+        return JsonResponse({'status': 'error', 'message': 'Full Name is required'}, status=400)
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email Address is required'}, status=400)
-    if not username:
-        return JsonResponse({'status': 'error', 'message': 'Username is required'}, status=400)
+    if not phone:
+        return JsonResponse({'status': 'error', 'message': 'Phone Number is required'}, status=400)
     if not password:
         return JsonResponse({'status': 'error', 'message': 'Password is required'}, status=400)
 
     with connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email) = LOWER(%s) LIMIT 1", [email])
+        if cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': 'An account with this email already exists.'}, status=409)
+
         cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
         max_id = cursor.fetchone()[0]
         new_uid = f"HOSP-{max_id + 1}"
 
         cursor.execute("""
             INSERT INTO tbl_hospital (hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active)
-            VALUES (%s, %s, %s, %s, %s, 'Pending', 0)
+            VALUES (%s, %s, %s, %s, %s, 'Draft', 0)
         """, [new_uid, name, email, phone, address])
         
         hospital_id = cursor.lastrowid
 
         # Always store ENCRYPTED / HASHED password in tbl_user
         hashed_pass = make_password(password)
-        display_username = username or admin_name or email
+        display_username = admin_name
         cursor.execute("""
             INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
             VALUES (%s, 1, %s, %s, %s, %s, 1)
@@ -509,7 +565,7 @@ def register_hospital_public(request):
 
     return JsonResponse({
         'status': 'success',
-        'message': 'Hospital registration submitted successfully! Sent to Super Admin for approval.',
+        'message': 'Administrator account created successfully.',
         'hospital': {
             'id': new_uid,
             'hospital_id': hospital_id,
@@ -523,7 +579,7 @@ def register_hospital_public(request):
             'email': email,
             'phone': phone,
             'address': address,
-            'status': 'Pending',
+            'status': 'Draft',
             'approved': False
         }
     })
@@ -589,7 +645,7 @@ def hospital_admin_login(request):
     """
     Hospital Administrator Login API
     Authenticates user against tbl_user (role_id = 1) and tbl_hospital.
-    Verifies hospital_status = 'Approved' and hospital_is_active = 1.
+    Draft, pending, approved, and rejected administrators can sign in to view their registration status.
     Sets Django user session storing user_id, hospital_id, role_id.
     """
     if request.method == 'OPTIONS':
@@ -655,11 +711,8 @@ def hospital_admin_login(request):
     (user_id, hospital_id, role_id, user_name, user_email, stored_password, user_is_active,
      hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active) = row
 
-    if hospital_status != 'Approved':
-        return JsonResponse({'status': 'error', 'message': f'Hospital registration status: {hospital_status}'}, status=403)
-
-    if not hospital_is_active or not user_is_active:
-        return JsonResponse({'status': 'error', 'message': 'Hospital account is inactive.'}, status=403)
+    if not user_is_active:
+        return JsonResponse({'status': 'error', 'message': 'Administrator account is inactive.'}, status=403)
 
     # Password check
     if password:
@@ -708,7 +761,7 @@ def hospital_admin_login(request):
         'hospital_status': hospital_status,
         'is_active': bool(hospital_is_active),
         'hospital_is_active': bool(hospital_is_active),
-        'approved': True
+        'approved': hospital_status == 'Approved'
     }
 
     return JsonResponse({
@@ -716,6 +769,30 @@ def hospital_admin_login(request):
         'message': 'Hospital Admin login successful',
         'hospital': hospital_data
     })
+
+
+@csrf_exempt
+def submit_hospital_registration(request):
+    """Sends hospital details from the admin dashboard for Super Admin approval."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id = data.get('hospital_id')
+    name = (data.get('hospital_name') or '').strip()
+    email = (data.get('hospital_email') or '').strip()
+    phone = (data.get('hospital_phone') or '').strip()
+    address = (data.get('hospital_address') or '').strip()
+    if not hospital_id or not name or not email or not phone:
+        return JsonResponse({'status': 'error', 'message': 'Hospital name, email, and phone are required.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("""UPDATE tbl_hospital SET hospital_name=%s, hospital_email=%s, hospital_phone=%s,
+            hospital_address=%s, hospital_status='Pending', hospital_is_active=0 WHERE hospital_id=%s""", [name, email, phone, address, hospital_id])
+        if cursor.rowcount == 0:
+            return JsonResponse({'status': 'error', 'message': 'Hospital account was not found.'}, status=404)
+    return JsonResponse({'status': 'success', 'message': 'Hospital registration sent to Super Admin for approval.', 'status': 'Pending'})
 
 
 @csrf_exempt
@@ -896,9 +973,10 @@ def add_doctor(request):
     phone = (data.get('phone') or data.get('docPhone') or '').strip()
     specialization = (data.get('specialization') or data.get('department') or 'General Medicine').strip()
     license_no = (data.get('license') or data.get('license_no') or '').strip()
+    password = (data.get('password') or '').strip()
 
-    if not name or not email:
-        return JsonResponse({'status': 'error', 'message': 'Doctor Name and Email are required'}, status=400)
+    if not name or not email or len(password) < 8:
+        return JsonResponse({'status': 'error', 'message': 'Doctor name, email, and an 8-character password are required'}, status=400)
 
     if not license_no:
         license_no = f"LIC-{name[:3].upper()}-001"
@@ -926,8 +1004,8 @@ def add_doctor(request):
         # Step 1: Create user record in tbl_user
         cursor.execute("""
             INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
-            VALUES (%s, 2, %s, %s, %s, 'PENDING_DOC_ID', 1)
-        """, [valid_hospital_id, name, email, phone])
+            VALUES (%s, 2, %s, %s, %s, %s, 1)
+        """, [valid_hospital_id, name, email, phone, make_password(password)])
         user_id = cursor.lastrowid
 
         # Step 2: Create doctor record in tbl_doctor
@@ -942,13 +1020,11 @@ def add_doctor(request):
         """, [user_id, valid_hospital_id or 1, dept_id, license_no, specialization])
         doctor_id = cursor.lastrowid
 
-        # Step 3: Set doctor's ID as the encrypted password for doctor login (e.g. DOC-1001)
         doc_uid = f"DOC-{doctor_id}"
-        cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [make_password(doc_uid), user_id])
 
     return JsonResponse({
         'status': 'success',
-        'message': f'Doctor registered in MySQL! Doctor ID & Password: {doc_uid}',
+        'message': 'Doctor registered successfully.',
         'doctor': {
             'doctor_id': doctor_id,
             'id': doc_uid,
@@ -959,7 +1035,7 @@ def add_doctor(request):
             'department': specialization,
             'specialization': specialization,
             'license': license_no,
-            'password': doc_uid
+            'password': None
         }
     })
 
@@ -1003,6 +1079,184 @@ def delete_doctor(request):
         'status': 'success',
         'message': 'Doctor deleted successfully from MySQL.'
     })
+
+
+@csrf_exempt
+def update_doctor(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    doctor_id = data.get('doctor_id')
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    specialization = (data.get('specialization') or data.get('department') or 'General Medicine').strip()
+    license_no = (data.get('license') or '').strip()
+    if not doctor_id or not name or not email:
+        return JsonResponse({'status': 'error', 'message': 'Doctor ID, name and email are required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_doctor WHERE doctor_id = %s", [doctor_id])
+        row = cursor.fetchone()
+        if not row:
+            return JsonResponse({'status': 'error', 'message': 'Doctor not found.'}, status=404)
+        cursor.execute("UPDATE tbl_user SET user_name=%s, user_email=%s, user_phone=%s WHERE user_id=%s", [name, email, phone, row[0]])
+        cursor.execute("UPDATE tbl_doctor SET doctor_license_no=%s, specialization=%s WHERE doctor_id=%s", [license_no, specialization, doctor_id])
+    return JsonResponse({'status': 'success', 'message': 'Doctor updated successfully.'})
+
+
+@csrf_exempt
+def get_receptionists(request):
+    if request.method != 'GET':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    hospital_id = request.GET.get('hospital_id')
+    sql = """
+        SELECT r.receptionist_id, r.hospital_id, r.receptionist_is_active,
+               u.user_name, u.user_email, u.user_phone, r.receptionist_created_at
+        FROM tbl_receptionist r JOIN tbl_user u ON r.user_id = u.user_id
+    """
+    params = []
+    if hospital_id:
+        sql += " WHERE r.hospital_id = %s"
+        params.append(hospital_id)
+    sql += " ORDER BY r.receptionist_id DESC"
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+    return JsonResponse({'status': 'success', 'receptionists': [
+        {'receptionist_id': row[0], 'rec_uid': f'REC-{row[0]}', 'hospital_id': row[1], 'is_active': bool(row[2]), 'name': row[3], 'email': row[4], 'phone': row[5], 'created_at': row[6].strftime('%Y-%m-%d') if row[6] else ''}
+        for row in rows
+    ]})
+
+
+@csrf_exempt
+def add_receptionist(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id, name, email = data.get('hospital_id'), (data.get('name') or '').strip(), (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    password = (data.get('password') or '').strip()
+    if not hospital_id or not name or not email or len(password) < 8:
+        return JsonResponse({'status': 'error', 'message': 'Name, email, and an 8-character password are required.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active) VALUES (%s, 3, %s, %s, %s, %s, 1)", [hospital_id, name, email, phone, make_password(password)])
+        user_id = cursor.lastrowid
+        cursor.execute("INSERT INTO tbl_receptionist (user_id, hospital_id, receptionist_is_active) VALUES (%s, %s, 1)", [user_id, hospital_id])
+        receptionist_id = cursor.lastrowid
+    return JsonResponse({'status': 'success', 'message': 'Receptionist added successfully.', 'receptionist': {'receptionist_id': receptionist_id, 'rec_uid': f'REC-{receptionist_id}'}})
+
+
+@csrf_exempt
+def update_receptionist(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    receptionist_id, name, email = data.get('receptionist_id'), (data.get('name') or '').strip(), (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    if not receptionist_id or not name or not email:
+        return JsonResponse({'status': 'error', 'message': 'Receptionist ID, name and email are required.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_receptionist WHERE receptionist_id=%s", [receptionist_id])
+        row = cursor.fetchone()
+        if not row:
+            return JsonResponse({'status': 'error', 'message': 'Receptionist not found.'}, status=404)
+        cursor.execute("UPDATE tbl_user SET user_name=%s, user_email=%s, user_phone=%s WHERE user_id=%s", [name, email, phone, row[0]])
+    return JsonResponse({'status': 'success', 'message': 'Receptionist updated successfully.'})
+
+
+@csrf_exempt
+def delete_receptionist(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    receptionist_id = data.get('receptionist_id')
+    if not receptionist_id:
+        return JsonResponse({'status': 'error', 'message': 'Receptionist ID is required.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_receptionist WHERE receptionist_id=%s", [receptionist_id])
+        row = cursor.fetchone()
+        cursor.execute("DELETE FROM tbl_receptionist WHERE receptionist_id=%s", [receptionist_id])
+        if row:
+            cursor.execute("DELETE FROM tbl_user WHERE user_id=%s", [row[0]])
+    return JsonResponse({'status': 'success', 'message': 'Receptionist deleted successfully.'})
+
+
+@csrf_exempt
+def get_departments(request):
+    if request.method != 'GET':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    hospital_id = request.GET.get('hospital_id')
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT department_id, hospital_id, department_name, department_description, department_is_active FROM tbl_department WHERE hospital_id=%s ORDER BY department_id DESC", [hospital_id])
+        rows = cursor.fetchall()
+    return JsonResponse({'status': 'success', 'departments': [{'department_id': r[0], 'hospital_id': r[1], 'name': r[2], 'description': r[3] or '', 'is_active': bool(r[4])} for r in rows]})
+
+
+@csrf_exempt
+def save_department(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    department_id, hospital_id = data.get('department_id'), data.get('hospital_id')
+    name, description = (data.get('name') or '').strip(), (data.get('description') or '').strip()
+    if not hospital_id or not name:
+        return JsonResponse({'status': 'error', 'message': 'Department name is required.'}, status=400)
+    with connection.cursor() as cursor:
+        if department_id:
+            cursor.execute("UPDATE tbl_department SET department_name=%s, department_description=%s WHERE department_id=%s AND hospital_id=%s", [name, description, department_id, hospital_id])
+        else:
+            cursor.execute("INSERT INTO tbl_department (hospital_id, department_name, department_description, department_is_active) VALUES (%s, %s, %s, 1)", [hospital_id, name, description])
+    return JsonResponse({'status': 'success', 'message': 'Department saved successfully.'})
+
+
+@csrf_exempt
+def delete_department(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM tbl_department WHERE department_id=%s AND hospital_id=%s", [data.get('department_id'), data.get('hospital_id')])
+    return JsonResponse({'status': 'success', 'message': 'Department deleted successfully.'})
+
+
+@csrf_exempt
+def request_unicare_access(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id, message = data.get('hospital_id'), (data.get('message') or '').strip()
+    if not hospital_id or not message:
+        return JsonResponse({'status': 'error', 'message': 'Please enter a request message.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_unicare_access_request (
+            request_id INT AUTO_INCREMENT PRIMARY KEY, hospital_id INT NOT NULL, request_message TEXT NOT NULL,
+            request_status VARCHAR(20) NOT NULL DEFAULT 'Pending', requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cursor.execute("INSERT INTO tbl_unicare_access_request (hospital_id, request_message) VALUES (%s, %s)", [hospital_id, message])
+    return JsonResponse({'status': 'success', 'message': 'Your UniCare access request was sent to the Super Admin.'})
 
 
 @csrf_exempt
@@ -1074,8 +1328,8 @@ def super_admin_debug(request):
     doc_uid = f"DOC-{row[0]}"
     expected_password = row[7]
 
-    if password_input != doc_uid and password_input != expected_password and password_input != str(row[0]):
-        return JsonResponse({'status': 'error', 'message': 'Invalid Password. Use your Doctor ID as your password.'}, status=401)
+    if not check_password(password_input, expected_password):
+        return JsonResponse({'status': 'error', 'message': 'Invalid password.'}, status=401)
 
     return JsonResponse({
         'status': 'success',
@@ -1092,4 +1346,19 @@ def super_admin_debug(request):
     })
 
 
-
+@csrf_exempt
+def staff_login(request):
+    """Authenticates doctors and receptionists with the email/password set by their hospital admin."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    identifier, password = (data.get('identifier') or data.get('email') or '').strip(), (data.get('password') or '').strip()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id, hospital_id, role_id, user_name, user_email, user_password FROM tbl_user WHERE (LOWER(user_email)=LOWER(%s) OR LOWER(user_name)=LOWER(%s)) AND role_id IN (2,3) AND user_is_active=1 LIMIT 1", [identifier, identifier])
+        row = cursor.fetchone()
+    if not row or not check_password(password, row[5]):
+        return JsonResponse({'status': 'error', 'message': 'Invalid email/username or password.'}, status=401)
+    return JsonResponse({'status': 'success', 'staff': {'user_id': row[0], 'hospital_id': row[1], 'role_id': row[2], 'name': row[3], 'email': row[4], 'role': 'Doctor' if row[2] == 2 else 'Receptionist'}})

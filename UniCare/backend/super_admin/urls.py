@@ -4,11 +4,14 @@ from . import views
 urlpatterns = [
     path('login/', views.super_admin_login, name='super_admin_login'),
     path('logout/', views.super_admin_logout, name='super_admin_logout'),
+    path('password-reset/request/', views.request_password_reset, name='request_password_reset'),
+    path('password-reset/confirm/', views.confirm_password_reset, name='confirm_password_reset'),
     path('check-session/', views.check_session, name='check_session'),
     path('dashboard-stats/', views.dashboard_stats, name='dashboard_stats'),
     
     # Public Hospital Operations
     path('hospital-register-public/', views.register_hospital_public, name='register_hospital_public'),
+    path('hospital-registration/submit/', views.submit_hospital_registration, name='submit_hospital_registration'),
     path('hospital-status-public/', views.check_hospital_status_public, name='check_hospital_status_public'),
     path('hospital-admin-login/', views.hospital_admin_login, name='hospital_admin_login'),
     path('hospital-admin/dashboard-data/', views.get_hospital_admin_dashboard_data, name='get_hospital_admin_dashboard_data'),
@@ -27,8 +30,18 @@ urlpatterns = [
     # Doctor Management CRUD & Doctor Login
     path('doctors/', views.get_doctors, name='get_doctors'),
     path('doctors/add/', views.add_doctor, name='add_doctor'),
+    path('doctors/update/', views.update_doctor, name='update_doctor'),
     path('doctors/delete/', views.delete_doctor, name='delete_doctor'),
+    path('receptionists/', views.get_receptionists, name='get_receptionists'),
+    path('receptionists/add/', views.add_receptionist, name='add_receptionist'),
+    path('receptionists/update/', views.update_receptionist, name='update_receptionist'),
+    path('receptionists/delete/', views.delete_receptionist, name='delete_receptionist'),
+    path('departments/', views.get_departments, name='get_departments'),
+    path('departments/save/', views.save_department, name='save_department'),
+    path('departments/delete/', views.delete_department, name='delete_department'),
+    path('unicare-access-requests/', views.request_unicare_access, name='request_unicare_access'),
     path('doctor-login-public/', views.doctor_login_public, name='doctor_login_public'),
+    path('staff-login/', views.staff_login, name='staff_login'),
 
     # Analytics
     path('analytics/', views.analytics_data, name='analytics_data'),

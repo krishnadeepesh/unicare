@@ -1,11 +1,27 @@
 import React, { useState } from 'react';
 
-export default function LoginPage({ setView, onLogin }) {
+export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdminLogin }) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetForm, setResetForm] = useState({ email: '', code: '', password: '', confirmPassword: '' });
+  const [resetStep, setResetStep] = useState('request');
+  const [resetMessage, setResetMessage] = useState('');
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    if (resetStep === 'confirm' && resetForm.password !== resetForm.confirmPassword) { setResetMessage('Passwords do not match.'); return; }
+    const endpoint = resetStep === 'request' ? 'password-reset/request/' : 'password-reset/confirm/';
+    const body = resetStep === 'request' ? { email: resetForm.email } : { email: resetForm.email, code: resetForm.code, password: resetForm.password };
+    try {
+      const response = await fetch(`http://localhost:8000/api/super-admin/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+      const data = await response.json(); setResetMessage(data.message);
+      if (response.ok && resetStep === 'request') setResetStep('confirm');
+      if (response.ok && resetStep === 'confirm') { setResetStep('request'); setResetForm({ email: '', code: '', password: '', confirmPassword: '' }); }
+    } catch { setResetMessage('Unable to process the password reset request.'); }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,55 +54,48 @@ export default function LoginPage({ setView, onLogin }) {
           setView('hospital-admin-dashboard');
         }
       } else {
-        if (data.message) {
-          setErrorMsg(data.message);
+        const staffResponse = await fetch('http://localhost:8000/api/super-admin/staff-login/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: identifier.trim(), password: password.trim() }) });
+        const staffData = await staffResponse.json();
+        if (staffResponse.ok && staffData.status === 'success') {
+          onStaffLogin?.(staffData.staff);
+          return;
+        }
+        const adminResponse = await fetch('http://localhost:8000/api/super-admin/login/', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', body: JSON.stringify({ admin_email: identifier.trim(), admin_password: password.trim() }),
+        });
+        const adminData = await adminResponse.json();
+        if (adminResponse.ok && adminData.status === 'success') {
+          onSuperAdminLogin?.({ admin_id: adminData.admin_id, admin_name: adminData.admin_name, admin_email: adminData.admin_email });
         } else {
-          setErrorMsg('Invalid Email/Username or Password');
+          setErrorMsg(data.message || adminData.message || 'Invalid Email/Username or Password');
         }
       }
     } catch (err) {
-      console.warn('Backend login connection issue, using local session fallback:', err);
-      // Fallback object for offline / dev demo
-      const fallbackUser = {
-        id: 'HOSP-DEMO',
-        hospital_id: 1001,
-        hospital_uid: 'HOSP-1001',
-        name: 'City General Hospital',
-        hospital_name: 'City General Hospital',
-        adminEmail: identifier.includes('@') ? identifier : `${identifier}@hospital.com`,
-        email: identifier.includes('@') ? identifier : `${identifier}@hospital.com`,
-        username: identifier.trim(),
-        user_name: identifier.trim(),
-        role: 'Hospital Administrator',
-        type: 'hospital'
-      };
-      if (onLogin) {
-        onLogin(fallbackUser);
-      } else {
-        setView('hospital-admin-dashboard');
-      }
+      console.warn('Backend login error:', err);
+      setErrorMsg('Unable to sign in. Please verify that the backend server is running and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="py-5 bg-dot-grid" style={{ minHeight: 'calc(100vh - 170px)', display: 'flex', alignItems: 'center' }}>
+    <div className="auth-page bg-dot-grid">
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-md-6 col-lg-5 animate-slide-up">
             
             {/* Back Arrow */}
             <button 
-              className="btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
+              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
               onClick={() => setView('landing')}
             >
               <i className="bi bi-arrow-left me-2"></i>
               Back to Home
             </button>
 
-            <div className="unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
-              <div className="text-center mb-4">
+            <div className="auth-card unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
+              <div className="auth-card-header text-center mb-4">
                 <div className="bg-teal-subtle text-teal rounded-circle d-inline-flex p-3 mb-3" style={{ backgroundColor: '#e6f4f1' }}>
                   <i className="bi bi-shield-lock fs-2" style={{ color: '#0d9488' }}></i>
                 </div>
@@ -191,16 +200,17 @@ export default function LoginPage({ setView, onLogin }) {
                 <h5 className="modal-title fw-bold text-dark"><i className="bi bi-key me-2 text-teal"></i>Forgot Password?</h5>
                 <button type="button" className="btn-close" onClick={() => setShowForgotModal(false)}></button>
               </div>
-              <div className="modal-body py-4 text-secondary">
-                <p>To reset your hospital administrator password, please contact the UniCare System Super Admin or check your registered email address.</p>
-                <div className="alert alert-info py-2 px-3 small">
-                  <strong>Need instant help?</strong> Email support at <code>admin@unicare.org</code> or contact your hospital network administrator.
-                </div>
+              <form onSubmit={handlePasswordReset}><div className="modal-body py-4 text-secondary">
+                <p className="small">Use your registered email address to receive a verification code and set a new password.</p>
+                {resetMessage && <div className="alert alert-info py-2 small">{resetMessage}</div>}
+                <div className="mb-3"><label className="form-label">Registered email</label><input type="email" className="form-control" value={resetForm.email} onChange={(e) => setResetForm({ ...resetForm, email: e.target.value })} required /></div>
+                {resetStep === 'confirm' && <><div className="mb-3"><label className="form-label">Email verification code</label><input className="form-control" value={resetForm.code} onChange={(e) => setResetForm({ ...resetForm, code: e.target.value })} required /></div><div className="mb-3"><label className="form-label">New password</label><input type="password" minLength="5" className="form-control" value={resetForm.password} onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })} required /></div><div><label className="form-label">Confirm new password</label><input type="password" minLength="5" className="form-control" value={resetForm.confirmPassword} onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })} required /></div></>}
               </div>
               <div className="modal-footer border-0 pt-0">
                 <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={() => setShowForgotModal(false)}>Close</button>
+                <button type="submit" className="btn btn-primary px-4 rounded-pill">{resetStep === 'request' ? 'Email Code' : 'Update Password'}</button>
               </div>
-            </div>
+              </form></div>
           </div>
         </div>
       )}

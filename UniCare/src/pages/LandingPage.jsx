@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function LandingPage({ setView }) {
+export default function LandingPage({ setView, onOpenAuth }) {
   const features = [
     {
       title: 'Hospital Management',
@@ -79,7 +79,7 @@ export default function LandingPage({ setView }) {
               <div className="d-flex flex-wrap gap-3">
                 <button 
                   className="btn btn-teal-pill"
-                  onClick={() => setView('login')}
+                  onClick={() => onOpenAuth ? onOpenAuth('login') : setView('login')}
                 >
                   <span>Get Started</span>
                   <i className="bi bi-arrow-right"></i>
@@ -240,19 +240,10 @@ export default function LandingPage({ setView }) {
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <button 
               className="btn btn-light px-4 py-3 fw-bold text-primary shadow" 
-              onClick={() => setView('register')}
+              onClick={() => onOpenAuth ? onOpenAuth('register') : setView('register')}
               style={{ borderRadius: '8px' }}
             >
               Get Started Now
-            </button>
-            <button 
-              className="btn btn-outline-light px-4 py-3 fw-bold" 
-              onClick={() => {
-                document.getElementById('footer-contact')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              style={{ borderRadius: '8px' }}
-            >
-              Contact Sales
             </button>
           </div>
         </div>

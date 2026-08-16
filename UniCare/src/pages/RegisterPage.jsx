@@ -5,62 +5,39 @@ export default function RegisterPage({ setView }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Hospital Details
-  const [hospitalName, setHospitalName] = useState('');
-  const [hospitalAddress, setHospitalAddress] = useState('');
-  const [regNumber, setRegNumber] = useState('');
 
   // Form State
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Real-time Password Security Checks
-  const isMinLength = password.length >= 5;
-  const isMatch = password.length > 0 && password === confirmPassword;
-  const isPasswordSecure = isMinLength && isMatch;
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!isMinLength) {
-      setErrorMsg('Password must be at least 5 characters long.');
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
+      setErrorMsg('Password must be at least 8 characters and include a letter and number.');
       return;
     }
 
-    if (!isMatch) {
+    if (!/^[0-9+()\-\s]{7,20}$/.test(phone.trim())) { setErrorMsg('Enter a valid phone number.'); return; }
+
+    if (password !== confirmPassword) {
       setErrorMsg('Passwords do not match.');
-      return;
-    }
-
-    if (!username.trim()) {
-      setErrorMsg('Username is required.');
       return;
     }
 
     setLoading(true);
 
     const payload = {
-      hospital_name: hospitalName.trim() || `${fullName}'s Hospital`,
-      hospital_address: hospitalAddress.trim(),
-      hospital_phone: phone.trim(),
-      hospital_email: email.trim(),
-      adminEmail: email.trim(),
-      email: email.trim(),
-      adminName: fullName.trim(),
       fullName: fullName.trim(),
-      username: username.trim(),
-      adminPassword: password.trim(),
-      password: password.trim(),
-      adminPhone: phone.trim(),
-      contactNumber: phone.trim(),
-      regNumber: regNumber.trim()
+      email: email.trim(),
+      phone: phone.trim(),
+      password,
     };
 
     try {
@@ -70,7 +47,13 @@ export default function RegisterPage({ setView }) {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Registration service returned HTTP ${response.status}. Check the Django server console for details.`);
+      }
 
       if (response.ok && data.status === 'success') {
         setSuccessMsg('Registration successful! Directing you to login...');
@@ -81,33 +64,30 @@ export default function RegisterPage({ setView }) {
         setErrorMsg(data.message || 'Registration failed.');
       }
     } catch (err) {
-      console.warn('Backend registration connection issue, directing to login:', err);
-      setSuccessMsg('Registration submitted! Directing to login...');
-      setTimeout(() => {
-        setView('login');
-      }, 1200);
+      console.warn('Backend registration error:', err);
+      setErrorMsg(err.message || 'Unable to submit registration. Please check the server connection and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="py-5 bg-dot-grid" style={{ minHeight: 'calc(100vh - 170px)', display: 'flex', alignItems: 'center' }}>
+    <div className="auth-page bg-dot-grid">
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-lg-8 animate-slide-up">
             
             {/* Back Arrow */}
             <button 
-              className="btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
+              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
               onClick={() => setView('landing')}
             >
               <i className="bi bi-arrow-left me-2"></i>
               Back to Home
             </button>
 
-            <div className="unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
-              <div className="text-center mb-4">
+            <div className="auth-card unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
+              <div className="auth-card-header text-center mb-4">
                 <span className="badge px-3 py-2 rounded-pill mb-2" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
                   UniCare Network Registration
                 </span>
@@ -149,126 +129,54 @@ export default function RegisterPage({ setView }) {
                     />
                   </div>
 
-                  {/* Email Address * */}
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700">Email Address *</label>
-                    <input 
-                      type="email" 
-                      className="form-control" 
-                      placeholder="admin@hospital.com"
+                    <input
+                      type="email"
+                      className="form-control"
+                      placeholder="admin@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      required 
+                      required
                     />
                   </div>
 
-                  {/* Phone Number * */}
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700">Phone Number *</label>
-                    <input 
-                      type="tel" 
-                      className="form-control" 
-                      placeholder="+1 (555) 019-2834"
+                    <input
+                      type="tel"
+                      className="form-control"
+                      placeholder="+91 98765 43210"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      required 
+                      pattern="[0-9+()\-\s]{7,20}"
+                      required
                     />
                   </div>
 
-                  {/* Username * */}
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Username *</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="e.g. hospitaladmin1"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      required 
-                    />
-                  </div>
-
-                  {/* Password * */}
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700">Password *</label>
-                    <input 
-                      type="password" 
-                      className={`form-control ${password ? (isMinLength ? 'is-valid' : 'is-invalid') : ''}`}
-                      placeholder="Min 5 characters"
+                    <input
+                      type="password"
+                      className="form-control"
+                      placeholder="At least 8 characters, letters and numbers"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      required 
+                      minLength="8"
+                      required
                     />
                   </div>
 
-                  {/* Confirm Password * */}
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700">Confirm Password *</label>
-                    <input 
-                      type="password" 
-                      className={`form-control ${confirmPassword ? (isMatch ? 'is-valid' : 'is-invalid') : ''}`}
-                      placeholder="Re-enter password"
+                    <input
+                      type="password"
+                      className="form-control"
+                      placeholder="Re-enter your password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      required 
-                    />
-                  </div>
-                </div>
-
-                {/* Real-time Password Security Feedback Box */}
-                {password.length > 0 && (
-                  <div className="p-3 mb-4 rounded-3 bg-light border">
-                    <div className="fw-semibold small mb-2 text-dark">Password Security Check:</div>
-                    <div className="d-flex flex-wrap gap-3 small">
-                      <span className={isMinLength ? 'text-success fw-semibold' : 'text-danger'}>
-                        <i className={`bi ${isMinLength ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} me-1`}></i>
-                        At least 5 characters ({password.length}/5)
-                      </span>
-                      <span className={isMatch ? 'text-success fw-semibold' : 'text-danger'}>
-                        <i className={`bi ${isMatch ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} me-1`}></i>
-                        Passwords match
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 2: Hospital Details */}
-                <h3 className="h6 fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
-                  <i className="bi bi-hospital me-2"></i>Hospital Information
-                </h3>
-
-                <div className="row g-3 mb-4">
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Hospital Name *</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="e.g. St. Jude Healthcare Center"
-                      value={hospitalName}
-                      onChange={(e) => setHospitalName(e.target.value)}
-                      required 
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Registration / License Number</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="e.g. REG-884920"
-                      value={regNumber}
-                      onChange={(e) => setRegNumber(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="col-12">
-                    <label className="form-label fw-semibold text-slate-700">Hospital Address</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="123 Medical Plaza, City, State"
-                      value={hospitalAddress}
-                      onChange={(e) => setHospitalAddress(e.target.value)}
+                      minLength="8"
+                      required
                     />
                   </div>
                 </div>
@@ -276,7 +184,7 @@ export default function RegisterPage({ setView }) {
                 <button 
                   type="submit" 
                   className="btn btn-primary-unicare w-100 py-3 fs-6 rounded-3 shadow-sm"
-                  disabled={loading || (password.length > 0 && !isPasswordSecure)}
+                  disabled={loading}
                 >
                   {loading ? (
                     <>
