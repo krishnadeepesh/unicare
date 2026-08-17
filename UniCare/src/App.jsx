@@ -10,15 +10,19 @@ import PatientFlowPage from './pages/PatientFlowPage';
 import HospitalRoleSelectorPage from './pages/HospitalRoleSelectorPage';
 import HospitalAdminDashboardPage from './pages/HospitalAdminDashboardPage';
 import SuperAdminDashboardPage from './pages/SuperAdminDashboardPage';
+import StaffDashboardPage from './pages/StaffDashboardPage';
+import PatientPortalPage from './pages/PatientPortalPage';
 
 function App() {
   const getInitialView = () => {
     const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/admin') || path.startsWith('/super-admin')) return 'landing';
     const savedUser = localStorage.getItem('unicare_active_user');
+    let parsedUser = null;
     if (savedUser) {
       try {
-        if (JSON.parse(savedUser)?.id === 'HOSP-DEMO') {
+        parsedUser = JSON.parse(savedUser);
+        if (parsedUser?.id === 'HOSP-DEMO') {
           localStorage.removeItem('unicare_active_user');
           sessionStorage.removeItem('unicare_current_view');
           return 'landing';
@@ -29,9 +33,12 @@ function App() {
     }
     const savedView = sessionStorage.getItem('unicare_current_view');
 
-    if (savedUser && savedView && ['hospital-admin-dashboard'].includes(savedView)) {
+    if (savedUser && savedView && ['hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard'].includes(savedView)) {
       return savedView;
     }
+    if (parsedUser?.role === 'doctor') return 'doctor-dashboard';
+    if (parsedUser?.role === 'receptionist') return 'receptionist-dashboard';
+    if (parsedUser?.role === 'patient') return 'patient-dashboard';
     if (savedUser) {
       return 'hospital-admin-dashboard';
     }
@@ -95,6 +102,15 @@ function App() {
     setCurrentView('hospital-role-select');
   };
 
+  const handleRoleLogin = (user) => {
+    setAuthModal(null);
+    setCurrentUser(user);
+    localStorage.setItem('unicare_active_user', JSON.stringify(user));
+    const view = user.role === 'doctor' ? 'doctor-dashboard' : user.role === 'receptionist' ? 'receptionist-dashboard' : 'patient-dashboard';
+    setCurrentView(view);
+    sessionStorage.setItem('unicare_current_view', view);
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveRole(null);
@@ -134,7 +150,7 @@ function App() {
   };
 
   const isSuperAdminView = currentView === 'super-admin-dashboard';
-  const isIsolatedDashboard = currentView === 'hospital-role-select' || currentView === 'hospital-admin-dashboard';
+  const isIsolatedDashboard = ['hospital-role-select', 'hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard'].includes(currentView);
   const isAuthView = currentView === 'login' || currentView === 'register';
 
   const renderView = () => {
@@ -144,7 +160,7 @@ function App() {
       case 'auth-select':
         return <AuthSelectorPage setView={setCurrentView} />;
       case 'login':
-        return <LoginPage setView={setCurrentView} onLogin={handleLogin} onStaffLogin={handleStaffLogin} onSuperAdminLogin={handleSuperAdminLoginSuccess} />;
+        return <LoginPage setView={setCurrentView} onLogin={handleLogin} onStaffLogin={handleStaffLogin} onSuperAdminLogin={handleSuperAdminLoginSuccess} onRoleLogin={handleRoleLogin} />;
       case 'register':
         return <RegisterPage setView={setCurrentView} />;
       case 'hospital-flow':
@@ -174,6 +190,11 @@ function App() {
             onLogout={handleSuperAdminLogout} 
           />
         );
+      case 'doctor-dashboard':
+      case 'receptionist-dashboard':
+        return <StaffDashboardPage user={currentUser} onLogout={handleLogout} />;
+      case 'patient-dashboard':
+        return <PatientPortalPage user={currentUser} onLogout={handleLogout} />;
       default:
         return <LandingPage setView={setCurrentView} />;
     }
@@ -211,6 +232,7 @@ function App() {
               onLogin={handleLogin}
               onStaffLogin={handleStaffLogin}
               onSuperAdminLogin={handleSuperAdminLoginSuccess}
+              onRoleLogin={handleRoleLogin}
             />
           ) : (
             <RegisterPage setView={(view) => view === 'login' ? setAuthModal('login') : closeAuthModal()} />

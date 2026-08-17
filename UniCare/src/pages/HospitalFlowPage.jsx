@@ -82,6 +82,7 @@ export default function HospitalFlowPage({ setView, onLogin }) {
       const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: loginEmail.trim(),
           password: loginPassword.trim(),
@@ -122,9 +123,6 @@ export default function HospitalFlowPage({ setView, onLogin }) {
       const data = await response.json();
       if (response.ok && data.status === 'success') {
         setViewingStatus(data.hospital);
-        if (data.hospital.status === 'Approved' || data.hospital.approved) {
-          onLogin(data.hospital);
-        }
       }
     } catch (e) {
       console.error(e);

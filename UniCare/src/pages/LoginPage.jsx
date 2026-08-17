@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdminLogin }) {
+export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdminLogin, onRoleLogin }) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,9 +29,21 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
     setLoading(true);
 
     try {
+      // One identifier field; the backend resolves the account role from email/phone.
+      const roleResponse = await fetch('http://localhost:8000/api/super-admin/auth/login/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ identifier: identifier.trim(), password: password.trim() }),
+      });
+      const roleData = await roleResponse.json();
+      if (roleResponse.ok && roleData.status === 'success') {
+        if (roleData.user.role === 'doctor' || roleData.user.role === 'receptionist' || roleData.user.role === 'patient') {
+          onRoleLogin?.(roleData.user); return;
+        }
+      }
       const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: identifier.trim(),
           username: identifier.trim(),
@@ -100,7 +112,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                   <i className="bi bi-shield-lock fs-2" style={{ color: '#0d9488' }}></i>
                 </div>
                 <h2 className="fw-bold text-slate-800">UniCare Login</h2>
-                <p className="text-muted" style={{ fontSize: '0.875rem' }}>Enter your credentials to access your hospital dashboard.</p>
+                <p className="text-muted" style={{ fontSize: '0.875rem' }}>Use your registered email address or phone number to access your portal.</p>
               </div>
 
               {errorMsg && (
@@ -113,13 +125,12 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
               <form onSubmit={handleSubmit}>
                 {/* Email / Username Field */}
                 <div className="mb-3">
-                  <label className="form-label fw-semibold text-slate-700">Email / Username</label>
+                  <label className="form-label fw-semibold text-slate-700">Email or Phone Number</label>
                   <div className="input-group">
                     <span className="input-group-text bg-light text-muted border-end-0"><i className="bi bi-person"></i></span>
                     <input 
                       type="text" 
                       className="form-control border-start-0 ps-0" 
-                      placeholder="Enter Email or Username"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required 
@@ -144,7 +155,6 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                     <input 
                       type="password" 
                       className="form-control border-start-0 ps-0" 
-                      placeholder="Enter Password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required 

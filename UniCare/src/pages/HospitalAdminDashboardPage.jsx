@@ -34,8 +34,9 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const [docName, setDocName] = useState('');
   const [docEmail, setDocEmail] = useState('');
   const [docPhone, setDocPhone] = useState('');
-  const [docDept, setDocDept] = useState('General Medicine');
+  const [docDept, setDocDept] = useState('');
   const [docLicense, setDocLicense] = useState('');
+  const [docExperience, setDocExperience] = useState('');
   const [docPassword, setDocPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,11 +52,18 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       const response = await fetch(`${API_BASE_URL}/hospital-admin/dashboard-data/?hospital_id=${encodeURIComponent(initialHospitalId || '')}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
       const data = await response.json();
       if (response.ok && data.status === 'success') {
         if (data.hospital_info) {
           setHospitalData(data.hospital_info);
+          setHospitalRegistration({
+            name: data.hospital_info.hospital_name || data.hospital_info.name || '',
+            email: data.hospital_info.hospital_email || data.hospital_info.email || '',
+            phone: data.hospital_info.hospital_phone || data.hospital_info.phone || '',
+            address: data.hospital_info.hospital_address || data.hospital_info.address || '',
+          });
         }
         if (data.stats) {
           setStatsData(data.stats);
@@ -76,6 +84,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       const response = await fetch(`${API_BASE_URL}/doctors/?hospital_id=${encodeURIComponent(targetHId || '')}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
       const data = await response.json();
       if (response.ok && data.status === 'success') {
@@ -93,8 +102,8 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     if (!targetHId) return;
     try {
       const [receptionistsResponse, departmentsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/receptionists/?hospital_id=${encodeURIComponent(targetHId)}`),
-        fetch(`${API_BASE_URL}/departments/?hospital_id=${encodeURIComponent(targetHId)}`),
+        fetch(`${API_BASE_URL}/receptionists/?hospital_id=${encodeURIComponent(targetHId)}`, { credentials: 'include' }),
+        fetch(`${API_BASE_URL}/departments/?hospital_id=${encodeURIComponent(targetHId)}`, { credentials: 'include' }),
       ]);
       const [receptionistsData, departmentsData] = await Promise.all([receptionistsResponse.json(), departmentsResponse.json()]);
       if (receptionistsResponse.ok) setReceptionistsList(receptionistsData.receptionists || []);
@@ -107,8 +116,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   useEffect(() => {
     fetchDashboardData();
     fetchDoctors();
-    fetchManagementData();
   }, []);
+
+  // Re-fetch management data (departments, receptionists) once hospitalData is resolved
+  useEffect(() => {
+    if (hospitalData?.hospital_id || initialHospitalId) {
+      fetchManagementData();
+    }
+  }, [hospitalData?.hospital_id]);
 
   const currentHospitalName = hospitalData?.name || hospitalData?.hospital_name || hospitalInfo?.name || hospitalInfo?.hospital_name || 'City General Hospital';
   const currentHospitalUid = hospitalData?.hospital_uid || hospitalData?.id || initialHospitalId || 'HSP0001';
@@ -132,6 +147,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       department: docDept,
       specialization: docDept,
       license: docLicense.trim(),
+      experience: docExperience.trim(),
       password: docPassword,
     };
 
@@ -139,6 +155,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       const response = await fetch(`${API_BASE_URL}/doctors/${editingDoctor ? 'update' : 'add'}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(editingDoctor ? { ...payload, doctor_id: editingDoctor.doctor_id } : payload),
       });
 
@@ -152,8 +169,9 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         setDocName('');
         setDocEmail('');
         setDocPhone('');
-        setDocDept('General Medicine');
+        setDocDept(departmentsList[0]?.name || '');
         setDocLicense('');
+        setDocExperience('');
         setDocPassword('');
         setEditingDoctor(null);
         setShowAddDoctorModal(false);
@@ -171,7 +189,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const openDoctorModal = (doctor = null) => {
     setEditingDoctor(doctor);
     setDocName(doctor?.name || ''); setDocEmail(doctor?.email || ''); setDocPhone(doctor?.phone || '');
-    setDocDept(doctor?.department || doctor?.specialization || 'General Medicine'); setDocLicense(doctor?.license || '');
+    setDocDept(doctor?.department || doctor?.specialization || departmentsList[0]?.name || ''); setDocLicense(doctor?.license || ''); setDocExperience(doctor?.experience || '');
     setDocPassword('');
     setShowAddDoctorModal(true);
   };
@@ -179,7 +197,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const saveReceptionist = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/receptionists/${editingReceptionist ? 'update' : 'add'}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hospital_id: currentHospitalId, ...receptionistForm, ...(editingReceptionist ? { receptionist_id: editingReceptionist.receptionist_id } : {}) }) });
+      const response = await fetch(`${API_BASE_URL}/receptionists/${editingReceptionist ? 'update' : 'add'}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ hospital_id: currentHospitalId, ...receptionistForm, ...(editingReceptionist ? { receptionist_id: editingReceptionist.receptionist_id } : {}) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message);
       showToast(data.message); setShowReceptionistModal(false); setEditingReceptionist(null); setReceptionistForm({ name: '', email: '', phone: '' }); fetchManagementData(); fetchDashboardData();
@@ -188,14 +206,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const deleteReceptionist = async (item) => {
     if (!window.confirm(`Delete ${item.name}?`)) return;
-    const response = await fetch(`${API_BASE_URL}/receptionists/delete/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receptionist_id: item.receptionist_id }) });
+    const response = await fetch(`${API_BASE_URL}/receptionists/delete/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ receptionist_id: item.receptionist_id }) });
     const data = await response.json(); showToast(data.message, response.ok ? 'warning' : 'danger'); if (response.ok) { fetchManagementData(); fetchDashboardData(); }
   };
 
   const saveDepartment = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/departments/save/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hospital_id: currentHospitalId, ...departmentForm, ...(editingDepartment ? { department_id: editingDepartment.department_id } : {}) }) });
+      const response = await fetch(`${API_BASE_URL}/departments/save/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ hospital_id: currentHospitalId, ...departmentForm, ...(editingDepartment ? { department_id: editingDepartment.department_id } : {}) }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.message);
       showToast(data.message); setShowDepartmentModal(false); setEditingDepartment(null); setDepartmentForm({ name: '', description: '' }); fetchManagementData(); fetchDashboardData();
     } catch (err) { showToast(err.message || 'Could not save department.', 'danger'); }
@@ -203,7 +221,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const deleteDepartment = async (item) => {
     if (!window.confirm(`Delete ${item.name}?`)) return;
-    const response = await fetch(`${API_BASE_URL}/departments/delete/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hospital_id: currentHospitalId, department_id: item.department_id }) });
+    const response = await fetch(`${API_BASE_URL}/departments/delete/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ hospital_id: currentHospitalId, department_id: item.department_id }) });
     const data = await response.json(); showToast(data.message, response.ok ? 'warning' : 'danger'); if (response.ok) { fetchManagementData(); fetchDashboardData(); }
   };
 
@@ -212,6 +230,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     try {
       const response = await fetch(`${API_BASE_URL}/hospital-registration/submit/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ hospital_id: currentHospitalId, hospital_name: hospitalRegistration.name, hospital_email: hospitalRegistration.email, hospital_phone: hospitalRegistration.phone, hospital_address: hospitalRegistration.address }),
       });
       const data = await response.json();
@@ -229,6 +248,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       const response = await fetch(`${API_BASE_URL}/doctors/delete/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ doctor_id: docId }),
       });
 
@@ -429,7 +449,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             <div className="d-flex align-items-center justify-content-between mb-4">
               <div>
                 <h5 className="fw-bold text-dark mb-1">Doctor Directory & Registration</h5>
-                <p className="text-muted small mb-0">Doctor records directory and login management. Doctor ID is set as the login password.</p>
+                <p className="text-muted small mb-0">Doctor records directory and login management. </p>
               </div>
               <button 
                 onClick={() => openDoctorModal()}
@@ -466,7 +486,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       <th>Email</th>
                       <th>Phone</th>
                       <th>Department</th>
-                      <th>Login Password</th>
                       <th className="text-end">Actions</th>
                     </tr>
                   </thead>
@@ -478,7 +497,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         <td>{doc.email}</td>
                         <td>{doc.phone || 'N/A'}</td>
                         <td><span className="badge bg-info-subtle text-info-emphasis">{doc.department || doc.specialization}</span></td>
-                        <td><span className="badge bg-light text-dark border font-monospace">{doc.password || doc.doc_uid || doc.id}</span></td>
                         <td className="text-end">
                           <button onClick={() => openDoctorModal(doc)} className="btn btn-outline-primary btn-sm me-2" title="Edit Doctor"><i className="bi bi-pencil"></i> Edit</button>
                           <button 
@@ -567,18 +585,25 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     </div>
                     <div className="col-6">
                       <label className="form-label fw-semibold small">Department</label>
-                      <select 
-                        className="form-select"
-                        value={docDept}
-                        onChange={(e) => setDocDept(e.target.value)}
-                      >
-                        <option value="General Medicine">General Medicine</option>
-                        <option value="Cardiology">Cardiology</option>
-                        <option value="Pediatrics">Pediatrics</option>
-                        <option value="Orthopedics">Orthopedics</option>
-                        <option value="Neurology">Neurology</option>
-                        <option value="Dermatology">Dermatology</option>
-                      </select>
+                      {departmentsList.length === 0 ? (
+                        <div className="alert alert-warning p-2 mb-0 small">
+                          No departments found. Please add departments first.
+                        </div>
+                      ) : (
+                        <select
+                          className="form-select"
+                          value={docDept}
+                          onChange={(e) => setDocDept(e.target.value)}
+                          required
+                        >
+                          <option value="">-- Select Department --</option>
+                          {departmentsList.filter(d => d.is_active !== false).map(dept => (
+                            <option key={dept.department_id} value={dept.name}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   </div>
                   <div className="mb-3">
@@ -589,6 +614,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={docLicense}
                       onChange={(e) => setDocLicense(e.target.value)}
                     />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Experience</label>
+                    <input type="text" className="form-control" value={docExperience} onChange={(e) => setDocExperience(e.target.value)} />
                   </div>
                   {!editingDoctor && <div className="mb-3"><label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label><input type="password" className="form-control" value={docPassword} onChange={(e) => setDocPassword(e.target.value)} minLength="8" required /></div>}
                 </div>

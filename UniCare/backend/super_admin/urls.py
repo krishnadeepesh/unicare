@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import workflows
 
 urlpatterns = [
     path('login/', views.super_admin_login, name='super_admin_login'),
@@ -42,6 +43,18 @@ urlpatterns = [
     path('unicare-access-requests/', views.request_unicare_access, name='request_unicare_access'),
     path('doctor-login-public/', views.doctor_login_public, name='doctor_login_public'),
     path('staff-login/', views.staff_login, name='staff_login'),
+
+    # Role-aware clinical workflow APIs (separate from legacy admin APIs)
+    path('auth/login/', workflows.unified_login, name='unified_login'),
+    path('auth/logout/', workflows.logout, name='workflow_logout'),
+    path('profile/', workflows.profile, name='profile'),
+    path('profile/change-password/', workflows.change_password, name='change_password'),
+    path('doctor/hospitals/', workflows.doctor_hospitals, name='doctor_hospitals'),
+    path('patients/register/', workflows.register_patient, name='register_patient'),
+    path('patients/lookup/', workflows.patient_lookup, name='patient_lookup'),
+    path('appointments/options/', workflows.booking_options, name='booking_options'),
+    path('appointments/', workflows.appointments, name='appointments'),
+    path('visits/', workflows.visits, name='visits'),
 
     # Analytics
     path('analytics/', views.analytics_data, name='analytics_data'),

@@ -1091,6 +1091,14 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                     <span>{detailHospital.hospital_phone}</span>
                   </div>
                   <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">Administrator:</span>
+                    <span>{detailHospital.admin_name || 'N/A'}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">Admin Contact:</span>
+                    <span>{detailHospital.admin_email || 'N/A'}{detailHospital.admin_phone ? ` · ${detailHospital.admin_phone}` : ''}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
                     <span className="text-muted">Status:</span>
                     <span className="badge bg-warning text-dark">{detailHospital.hospital_status}</span>
                   </div>

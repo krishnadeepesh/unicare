@@ -56,7 +56,7 @@ export default function RegisterPage({ setView }) {
       }
 
       if (response.ok && data.status === 'success') {
-        setSuccessMsg('Registration successful! Directing you to login...');
+        setSuccessMsg('Administrator account created. Sign in next to complete your hospital registration.');
         setTimeout(() => {
           setView('login');
         }, 1500);
@@ -122,7 +122,6 @@ export default function RegisterPage({ setView }) {
                     <input 
                       type="text" 
                       className="form-control" 
-                      placeholder="e.g. Dr. Arthur Pendelton"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required 
@@ -134,7 +133,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="email"
                       className="form-control"
-                      placeholder="admin@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -146,7 +144,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="tel"
                       className="form-control"
-                      placeholder="+91 98765 43210"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       pattern="[0-9+()\-\s]{7,20}"
@@ -159,7 +156,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="password"
                       className="form-control"
-                      placeholder="At least 8 characters, letters and numbers"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       minLength="8"
@@ -172,7 +168,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="password"
                       className="form-control"
-                      placeholder="Re-enter your password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       minLength="8"
@@ -194,7 +189,7 @@ export default function RegisterPage({ setView }) {
                   ) : (
                     <>
                       <i className="bi bi-check-circle me-2"></i>
-                      Register Hospital
+                      Create Administrator Account
                     </>
                   )}
                 </button>
