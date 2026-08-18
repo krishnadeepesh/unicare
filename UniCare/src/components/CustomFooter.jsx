@@ -59,7 +59,7 @@ export default function CustomFooter({ setView }) {
               </li>
               <li className="d-flex align-items-center gap-2">
                 <i className="bi bi-telephone text-primary fs-5"></i>
-                <span>+1 (555) 864-2273</span>
+                <span>+91 8739106389</span>
               </li>
               <li className="d-flex align-items-center gap-2">
                 <i className="bi bi-envelope text-primary fs-5"></i>

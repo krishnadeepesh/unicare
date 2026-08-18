@@ -259,6 +259,7 @@ export default function PatientPortalPage({ user, onLogout }) {
                         type="date"
                         className="form-control rounded-2"
                         required
+                        min={new Date().toISOString().split('T')[0]}
                         value={form.appointment_date}
                         onChange={(e) => setForm({ ...form, appointment_date: e.target.value })}
                       />

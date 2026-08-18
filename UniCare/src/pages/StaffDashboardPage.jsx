@@ -638,6 +638,7 @@ export default function StaffDashboardPage({ user, onLogout }) {
                           type="date"
                           className="form-control form-control-sm rounded-2"
                           required
+                          max={new Date().toISOString().split('T')[0]}
                           value={patientForm.date_of_birth}
                           onChange={(e) => setPatientForm({ ...patientForm, date_of_birth: e.target.value })}
                         />
@@ -1018,6 +1019,7 @@ export default function StaffDashboardPage({ user, onLogout }) {
                         type="date"
                         className="form-control"
                         required
+                        min={new Date().toISOString().split('T')[0]}
                         value={bookingDate}
                         onChange={(e) => setBookingDate(e.target.value)}
                       />

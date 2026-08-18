@@ -24,8 +24,20 @@ def payload(request):
         return request.POST
 
 
+def _ensure_columns(cursor, table, columns):
+    """Add any missing columns to an existing table."""
+    cursor.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s",
+        [table]
+    )
+    existing = {row[0] for row in cursor.fetchall()}
+    for col, definition in columns.items():
+        if col not in existing:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+
+
 def ensure_workflow_schema():
-    """Ensure only the patient_profile and patient_visit support tables exist.
+    """Ensure the patient_profile and patient_visit support tables exist with the required columns.
     tbl_appointment and tbl_doctor already have the required columns after migration.
     """
     with connection.cursor() as cursor:
@@ -40,6 +52,26 @@ def ensure_workflow_schema():
             hospital_id INT NOT NULL, appointment_id INT NULL, diagnosis TEXT NULL, medical_notes TEXT NULL,
             visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
+        # Ensure tbl_patient_profile has all required columns (table may pre-exist with a different schema)
+        _ensure_columns(cursor, 'tbl_patient_profile', {
+            'user_id': 'INT NOT NULL UNIQUE',
+            'health_id': 'VARCHAR(40) NOT NULL UNIQUE',
+            'date_of_birth': 'DATE NULL',
+            'gender': 'VARCHAR(30) NULL',
+            'address': 'TEXT NULL',
+            'patient_is_active': 'TINYINT(1) NOT NULL DEFAULT 1',
+            'created_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+        })
+        # Ensure tbl_patient_visit has all required columns (table may pre-exist with a different schema)
+        _ensure_columns(cursor, 'tbl_patient_visit', {
+            'patient_id': 'INT NOT NULL',
+            'doctor_id': 'INT NOT NULL',
+            'hospital_id': 'INT NOT NULL',
+            'appointment_id': 'INT NULL',
+            'diagnosis': 'TEXT NULL',
+            'medical_notes': 'TEXT NULL',
+            'visited_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+        })
         # Ensure doctor_experience column exists (added during schema extension)
         cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='doctor_experience'""")
@@ -753,7 +785,7 @@ def appointments(request):
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.reason, a.appointment_status,"
-                " h.hospital_name, dep.department_name, du.user_name, p.health_id, pu.user_name"
+                " h.hospital_name, dep.department_name, du.user_name, p.health_id, pu.user_name, a.patient_id"
                 " FROM tbl_appointment a"
                 " LEFT JOIN tbl_hospital h ON h.hospital_id=a.hospital_id"
                 " LEFT JOIN tbl_department dep ON dep.department_id=a.department_id"
@@ -771,6 +803,7 @@ def appointments(request):
                 'appointment_id': r[0], 'date': str(r[1]), 'time': r[2],
                 'reason': r[3] or '', 'status': r[4], 'hospital': r[5] or '',
                 'department': r[6] or '', 'doctor': r[7], 'health_id': r[8], 'patient': r[9],
+                'patient_id': r[10],
             }
             for r in rows
         ]})

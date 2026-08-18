@@ -181,7 +181,7 @@ export default function LandingPage({ setView, onOpenAuth }) {
                   </div>
                   <div>
                     <div className="fw-semibold">Direct Inquiry</div>
-                    <div className="text-muted">+1 (555) 864-2273</div>
+                    <div className="text-muted">+91 8739106389</div>
                   </div>
                 </div>
 
