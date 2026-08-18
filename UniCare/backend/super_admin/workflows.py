@@ -183,18 +183,36 @@ def profile(request):
     if request.method == 'GET':
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT user_name, user_email, user_phone FROM tbl_user WHERE user_id=%s",
+                "SELECT u.user_name, u.user_email, u.user_phone, h.hospital_name, h.hospital_id"
+                " FROM tbl_user u"
+                " LEFT JOIN tbl_hospital h ON h.hospital_id = u.hospital_id"
+                " WHERE u.user_id=%s",
                 [user['user_id']]
             )
             row = cursor.fetchone()
-            result = {'name': row[0], 'email': row[1], 'phone': row[2], 'role': user['role']}
+            result = {
+                'name': row[0], 'email': row[1], 'phone': row[2],
+                'role': user['role'],
+                'hospital_name': row[3] or '',
+                'hospital_id': row[4],
+            }
             if user['role'] == 'doctor':
                 cursor.execute(
-                    "SELECT doctor_specialization, doctor_license_no, doctor_experience FROM tbl_doctor WHERE doctor_id=%s",
+                    "SELECT d.doctor_specialization, d.doctor_license_no, d.doctor_experience,"
+                    " COALESCE(h2.hospital_name, h.hospital_name) AS hospital_name"
+                    " FROM tbl_doctor d"
+                    " JOIN tbl_user u ON u.user_id=d.user_id"
+                    " LEFT JOIN tbl_hospital h ON h.hospital_id=u.hospital_id"
+                    " LEFT JOIN tbl_hospital h2 ON h2.hospital_id=d.hospital_id"
+                    " WHERE d.doctor_id=%s",
                     [user['doctor_id']]
                 )
                 d = cursor.fetchone()
-                result.update({'specialization': d[0], 'license': d[1], 'experience': d[2] or ''})
+                if d:
+                    result.update({
+                        'specialization': d[0], 'license': d[1], 'experience': d[2] or '',
+                        'hospital_name': d[3] or result.get('hospital_name', ''),
+                    })
         return JsonResponse({'status': 'success', 'profile': result})
 
     if request.method != 'POST':
@@ -298,44 +316,136 @@ def register_patient(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
     ensure_workflow_schema()
     data = payload(request)
-    name = (data.get('name') or '').strip()
-    email = (data.get('email') or '').strip()
-    phone = (data.get('phone') or '').strip()
-    password = (data.get('password') or '').strip()
-    if not name or not (email or phone) or len(password) < 8:
-        return JsonResponse({'status': 'error', 'message': 'Name, email or phone, and an 8-character password are required.'}, status=400)
+
+    # Collect all tbl_patient fields
+    name    = (data.get('name') or '').strip()
+    email   = (data.get('email') or '').strip()
+    phone   = (data.get('phone') or '').strip()
+    password       = (data.get('password') or '').strip()
+    dob            = data.get('date_of_birth') or data.get('patient_dob') or None
+    gender         = (data.get('gender') or data.get('patient_gender') or '').strip() or None
+    blood_group    = (data.get('blood_group') or data.get('patient_blood_group') or '').strip() or None
+    address        = (data.get('address') or data.get('patient_address') or '').strip() or None
+    emergency_contact = (data.get('emergency_contact') or data.get('patient_emergency_contact') or '').strip() or None
+
+    if not name:
+        return JsonResponse({'status': 'error', 'message': 'Patient name is required.'}, status=400)
+    if not (email or phone):
+        return JsonResponse({'status': 'error', 'message': 'Email or phone number is required.'}, status=400)
+    if len(password) < 8:
+        return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
+    if not dob:
+        return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
+    if not gender:
+        return JsonResponse({'status': 'error', 'message': 'Gender is required.'}, status=400)
 
     with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT 1 FROM tbl_user WHERE (LOWER(user_email)=LOWER(%s) AND %s<>'') OR (user_phone=%s AND %s<>'') LIMIT 1",
-            [email, email, phone, phone]
-        )
-        if cursor.fetchone():
-            return JsonResponse({'status': 'error', 'message': 'An account with this email or phone already exists.'}, status=409)
+        # Uniqueness checks
+        if email:
+            cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email)=LOWER(%s) LIMIT 1", [email])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'An account with this email already exists.'}, status=409)
+        if phone:
+            cursor.execute("SELECT 1 FROM tbl_user WHERE user_phone=%s LIMIT 1", [phone])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'An account with this phone number already exists.'}, status=409)
+        if email:
+            cursor.execute("SELECT 1 FROM tbl_patient WHERE LOWER(patient_email)=LOWER(%s) LIMIT 1", [email])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'A patient with this email already exists.'}, status=409)
+        if phone:
+            cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_phone=%s LIMIT 1", [phone])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'A patient with this phone already exists.'}, status=409)
 
+        # Role lookup
         cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='patient' LIMIT 1")
-        role = cursor.fetchone()
-        if not role:
+        role_row = cursor.fetchone()
+        if not role_row:
             return JsonResponse({'status': 'error', 'message': 'Patient role is not configured in tbl_role.'}, status=500)
 
+        # Generate unique patient_uid: format PT{LETTER}{3-DIGITS}, e.g. PTA001
+        # Derive next UID safely from MAX existing UID
+        cursor.execute("SELECT patient_uid FROM tbl_patient ORDER BY patient_id DESC LIMIT 1")
+        last_row = cursor.fetchone()
+        patient_uid = _next_patient_uid(last_row[0] if last_row else None, cursor)
+
+        # Insert into tbl_user
         cursor.execute(
             "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)"
             " VALUES (%s,%s,%s,%s,%s,%s,1)",
-            [user['hospital_id'], role[0], name, email, phone, make_password(password)]
+            [user['hospital_id'], role_row[0], name, email or None, phone or None, make_password(password)]
         )
         user_id = cursor.lastrowid
+
+        # Insert into tbl_patient (primary table)
+        cursor.execute(
+            "INSERT INTO tbl_patient"
+            " (user_id, patient_uid, patient_name, patient_dob, patient_gender,"
+            "  patient_phone, patient_email, patient_blood_group, patient_address,"
+            "  patient_emergency_contact, patient_is_active)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
+            [user_id, patient_uid, name, dob, gender,
+             phone or None, email or None, blood_group, address, emergency_contact]
+        )
+        tbl_patient_id = cursor.lastrowid
+
+        # Also insert into tbl_patient_profile for backward compat
         health_id = f"HC-{date.today().strftime('%Y%m%d')}-{user_id:06d}"
         cursor.execute(
-            "INSERT INTO tbl_patient_profile (user_id, health_id, date_of_birth, gender, address) VALUES (%s,%s,%s,%s,%s)",
-            [user_id, health_id, data.get('date_of_birth') or None,
-             (data.get('gender') or '').strip() or None,
-             (data.get('address') or '').strip() or None]
+            "INSERT INTO tbl_patient_profile (user_id, health_id, date_of_birth, gender, address)"
+            " VALUES (%s,%s,%s,%s,%s)",
+            [user_id, health_id, dob, gender, address]
         )
-        patient_id = cursor.lastrowid
+        patient_profile_id = cursor.lastrowid
+
     return JsonResponse({'status': 'success', 'patient': {
-        'patient_id': patient_id, 'health_id': health_id,
-        'name': name, 'email': email, 'phone': phone,
+        'patient_id': tbl_patient_id,
+        'patient_uid': patient_uid,
+        'health_id': health_id,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'date_of_birth': dob,
+        'gender': gender,
+        'blood_group': blood_group,
+        'address': address,
+        'emergency_contact': emergency_contact,
     }})
+
+
+def _next_patient_uid(last_uid, cursor):
+    """Generate the next globally-unique patient UID in format PT{LETTER}{3-DIGITS}.
+    Examples: PTA001, PTA002 … PTA999, PTB001 …
+    Falls back to PTA001 when no existing UID is found.
+    Also checks the DB to ensure there are no collisions.
+    """
+    import string
+    LETTERS = string.ascii_uppercase  # A-Z
+
+    def uid_to_parts(uid):
+        """Return (letter_index 0-25, number 1-999) or None."""
+        if uid and len(uid) == 6 and uid.startswith('PT') and uid[2].isalpha() and uid[3:].isdigit():
+            return LETTERS.index(uid[2].upper()), int(uid[3:])
+        return None
+
+    parts = uid_to_parts(last_uid)
+    if parts is None:
+        letter_idx, number = 0, 0
+    else:
+        letter_idx, number = parts
+
+    # Try up to 26*999 candidates
+    for _ in range(26 * 999):
+        number += 1
+        if number > 999:
+            number = 1
+            letter_idx = (letter_idx + 1) % 26
+        candidate = f"PT{LETTERS[letter_idx]}{number:03d}"
+        cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_uid=%s LIMIT 1", [candidate])
+        if not cursor.fetchone():
+            return candidate
+    raise RuntimeError("Could not generate a unique patient_uid — the UID space may be exhausted.")
 
 
 def patient_lookup(request):

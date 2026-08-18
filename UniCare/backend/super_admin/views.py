@@ -1446,9 +1446,10 @@ def doctor_login_public(request):
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT d.doctor_id, u.hospital_id, d.doctor_license_no, d.doctor_specialization,
-                   u.user_name, u.user_email, u.user_phone, u.user_password
+                   u.user_name, u.user_email, u.user_phone, u.user_password, h.hospital_name
             FROM tbl_doctor d
             JOIN tbl_user u ON d.user_id = u.user_id
+            LEFT JOIN tbl_hospital h ON h.hospital_id = COALESCE(d.hospital_id, u.hospital_id)
             WHERE d.doctor_id = %s
         """, [doctor_id_num])
         row = cursor.fetchone()
@@ -1472,7 +1473,9 @@ def doctor_login_public(request):
             'email': row[5],
             'phone': row[6],
             'specialization': row[3],
-            'license': row[2]
+            'license': row[2],
+            'hospital_id': row[1],
+            'hospital_name': row[8] or ''
         }
     })
 
@@ -1488,8 +1491,25 @@ def staff_login(request):
         data = request.POST
     identifier, password = (data.get('identifier') or data.get('email') or '').strip(), (data.get('password') or '').strip()
     with connection.cursor() as cursor:
-        cursor.execute("SELECT user_id, hospital_id, role_id, user_name, user_email, user_password FROM tbl_user WHERE (LOWER(user_email)=LOWER(%s) OR LOWER(user_name)=LOWER(%s)) AND role_id IN (2,3) AND user_is_active=1 LIMIT 1", [identifier, identifier])
+        cursor.execute("""
+            SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_password, h.hospital_name 
+            FROM tbl_user u 
+            LEFT JOIN tbl_hospital h ON h.hospital_id = u.hospital_id
+            WHERE (LOWER(u.user_email)=LOWER(%s) OR LOWER(u.user_name)=LOWER(%s)) AND u.role_id IN (2,3) AND u.user_is_active=1 
+            LIMIT 1
+        """, [identifier, identifier])
         row = cursor.fetchone()
     if not row or not verify_password_and_upgrade(row[0], password, row[5]):
         return JsonResponse({'status': 'error', 'message': 'Invalid email/username or password.'}, status=401)
-    return JsonResponse({'status': 'success', 'staff': {'user_id': row[0], 'hospital_id': row[1], 'role_id': row[2], 'name': row[3], 'email': row[4], 'role': 'Doctor' if row[2] == 2 else 'Receptionist'}})
+    return JsonResponse({
+        'status': 'success', 
+        'staff': {
+            'user_id': row[0], 
+            'hospital_id': row[1], 
+            'role_id': row[2], 
+            'name': row[3], 
+            'email': row[4], 
+            'role': 'Doctor' if row[2] == 2 else 'Receptionist',
+            'hospital_name': row[6] or ''
+        }
+    })
