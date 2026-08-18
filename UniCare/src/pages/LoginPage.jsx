@@ -31,15 +31,40 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
     try {
       // One identifier field; the backend resolves the account role from email/phone.
       const roleResponse = await fetch('http://localhost:8000/api/super-admin/auth/login/', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ identifier: identifier.trim(), password: password.trim() }),
       });
       const roleData = await roleResponse.json();
-      if (roleResponse.ok && roleData.status === 'success') {
-        if (roleData.user.role === 'doctor' || roleData.user.role === 'receptionist' || roleData.user.role === 'patient') {
-          onRoleLogin?.(roleData.user); return;
+
+      if (roleResponse.ok && roleData.status === 'success' && roleData.user) {
+        const u = roleData.user;
+        if (u.role === 'super-admin') {
+          onSuperAdminLogin?.({ admin_id: u.user_id, admin_name: u.name, admin_email: u.email });
+          return;
+        }
+        if (u.role === 'hospital-admin') {
+          const hospUser = {
+            ...(u.hospital || {}),
+            type: 'hospital',
+            username: u.name,
+            user_name: u.name,
+            hospital_name: u.hospital_name || u.hospital?.hospital_name || u.name,
+            name: u.hospital_name || u.hospital?.hospital_name || u.name,
+            role: 'Hospital Administrator',
+          };
+          if (onLogin) onLogin(hospUser);
+          else setView('hospital-admin-dashboard');
+          return;
+        }
+        if (u.role === 'doctor' || u.role === 'receptionist' || u.role === 'patient') {
+          onRoleLogin?.(u);
+          return;
         }
       }
+
+      // Fallback check for legacy hospital admin login
       const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,9 +75,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
           password: password.trim(),
         }),
       });
-
       const data = await response.json();
-
       if (response.ok && data.status === 'success' && data.hospital) {
         const hospitalUser = {
           ...data.hospital,
@@ -60,29 +83,12 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
           username: data.hospital.username || data.hospital.user_name || identifier.trim(),
           role: data.hospital.role || 'Hospital Administrator',
         };
-        if (onLogin) {
-          onLogin(hospitalUser);
-        } else {
-          setView('hospital-admin-dashboard');
-        }
-      } else {
-        const staffResponse = await fetch('http://localhost:8000/api/super-admin/staff-login/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: identifier.trim(), password: password.trim() }) });
-        const staffData = await staffResponse.json();
-        if (staffResponse.ok && staffData.status === 'success') {
-          onStaffLogin?.(staffData.staff);
-          return;
-        }
-        const adminResponse = await fetch('http://localhost:8000/api/super-admin/login/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          credentials: 'include', body: JSON.stringify({ admin_email: identifier.trim(), admin_password: password.trim() }),
-        });
-        const adminData = await adminResponse.json();
-        if (adminResponse.ok && adminData.status === 'success') {
-          onSuperAdminLogin?.({ admin_id: adminData.admin_id, admin_name: adminData.admin_name, admin_email: adminData.admin_email });
-        } else {
-          setErrorMsg(data.message || adminData.message || 'Invalid Email/Username or Password');
-        }
+        if (onLogin) onLogin(hospitalUser);
+        else setView('hospital-admin-dashboard');
+        return;
       }
+
+      setErrorMsg(roleData.message || data.message || 'Invalid Email/Phone Number or Password');
     } catch (err) {
       console.warn('Backend login error:', err);
       setErrorMsg('Unable to sign in. Please verify that the backend server is running and try again.');

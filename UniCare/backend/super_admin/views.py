@@ -11,8 +11,10 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 
 
-def require_hospital_admin(request):
-    """Return the hospital bound to the current hospital-admin session."""
+def require_hospital_admin(request, require_approved=False):
+    """Return the hospital bound to the current hospital-admin session.
+    If require_approved=True, verify the hospital status is 'Approved'.
+    """
     hospital_id = request.session.get('hospital_admin_hospital_id')
     if not hospital_id:
         hospital_id = request.GET.get('hospital_id') or request.POST.get('hospital_id')
@@ -27,9 +29,21 @@ def require_hospital_admin(request):
             {'status': 'error', 'message': 'Please sign in as a hospital administrator.'}, status=401
         )
     try:
-        return int(hospital_id), None
+        hid = int(hospital_id)
     except ValueError:
-        return hospital_id, None
+        hid = hospital_id
+
+    if require_approved:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT hospital_status FROM tbl_hospital WHERE hospital_id = %s", [hid])
+            row = cursor.fetchone()
+            if not row or row[0] != 'Approved':
+                return None, JsonResponse(
+                    {'status': 'error', 'message': 'Your hospital registration is pending approval by Super Admin.'}, status=403
+                )
+
+    return hid, None
+
 
 
 def verify_password_and_upgrade(user_id, supplied_password, stored_password):
@@ -1008,7 +1022,7 @@ def add_doctor(request):
         data = request.POST
 
     ensure_doctor_extensions()
-    hospital_id_param, error = require_hospital_admin(request)
+    hospital_id_param, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     name = (data.get('name') or data.get('docName') or '').strip()
@@ -1121,7 +1135,7 @@ def delete_doctor(request):
     except Exception:
         data = request.POST
 
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
 
@@ -1163,7 +1177,7 @@ def update_doctor(request):
         data = request.POST
 
     ensure_doctor_extensions()
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
 
@@ -1246,7 +1260,7 @@ def add_receptionist(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     name, email = (data.get('name') or '').strip(), (data.get('email') or '').strip()
@@ -1283,7 +1297,7 @@ def update_receptionist(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     receptionist_id, name, email = data.get('receptionist_id'), (data.get('name') or '').strip(), (data.get('email') or '').strip()
@@ -1323,7 +1337,7 @@ def delete_receptionist(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     receptionist_id = data.get('receptionist_id')
@@ -1361,7 +1375,7 @@ def save_department(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     department_id = data.get('department_id')
@@ -1384,7 +1398,7 @@ def delete_department(request):
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    hospital_id, error = require_hospital_admin(request)
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
     if error:
         return error
     with connection.cursor() as cursor:

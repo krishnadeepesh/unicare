@@ -57,6 +57,12 @@ def session_user(request):
     role = request.session.get('unicare_role')
     hospital_id = request.session.get('unicare_hospital_id')
     if not user_id or not role:
+        admin_uid = request.session.get('hospital_admin_user_id')
+        if admin_uid:
+            user_id = admin_uid
+            role = 'hospital-admin'
+            hospital_id = request.session.get('hospital_admin_hospital_id')
+    if not user_id or not role:
         return None, JsonResponse({'status': 'error', 'message': 'Please sign in.'}, status=401)
     return {
         'user_id': user_id,
@@ -105,18 +111,61 @@ def unified_login(request):
         'receptionist': 'receptionist',
         'patient': 'patient',
         'hospitaladmin': 'hospital-admin',
+        'hospitaladministrator': 'hospital-admin',
         'superadmin': 'super-admin',
     }.get(normalized)
     if not role:
         return JsonResponse({'status': 'error', 'message': 'This account has no supported portal role.'}, status=403)
 
     profile = {
-        'user_id': row[0], 'hospital_id': row[1],
-        'name': row[3], 'email': row[4], 'phone': row[5], 'role': role,
+        'user_id': row[0],
+        'hospital_id': row[1],
+        'name': row[3],
+        'email': row[4],
+        'phone': row[5],
+        'role': role,
     }
 
     with connection.cursor() as cursor:
-        if role == 'doctor':
+        if role == 'super-admin':
+            request.session['admin_id'] = row[0]
+            request.session['admin_name'] = row[3]
+            request.session['admin_email'] = row[4]
+
+        elif role == 'hospital-admin':
+            cursor.execute(
+                "SELECT hospital_id, hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active"
+                " FROM tbl_hospital WHERE hospital_id=%s",
+                [row[1]]
+            )
+            h = cursor.fetchone()
+            if h:
+                profile['hospital'] = {
+                    'hospital_id': h[0],
+                    'hospital_uid': h[1],
+                    'id': h[1],
+                    'hospital_name': h[2],
+                    'name': h[2],
+                    'hospital_email': h[3],
+                    'hospital_phone': h[4],
+                    'hospital_address': h[5],
+                    'status': h[6],
+                    'hospital_status': h[6],
+                    'is_active': bool(h[7]),
+                    'approved': h[6] == 'Approved',
+                    'role': 'Hospital Administrator',
+                    'username': row[3],
+                    'user_name': row[3],
+                    'user_email': row[4],
+                }
+                profile['hospital_name'] = h[2]
+            request.session['hospital_admin_user_id'] = row[0]
+            request.session['hospital_admin_hospital_id'] = row[1]
+            request.session['hospital_admin_role_id'] = row[2]
+            request.session['hospital_admin_email'] = row[4]
+            request.session['hospital_admin_username'] = row[3]
+
+        elif role == 'doctor':
             cursor.execute(
                 "SELECT d.doctor_id, d.doctor_specialization, d.doctor_license_no, d.doctor_experience, d.hospital_id"
                 " FROM tbl_doctor d WHERE d.user_id=%s",
@@ -125,7 +174,6 @@ def unified_login(request):
             doctor = cursor.fetchone()
             if not doctor:
                 return JsonResponse({'status': 'error', 'message': 'Doctor profile was not found.'}, status=404)
-            # Resolve the hospital: prefer tbl_doctor.hospital_id, fall back to tbl_user.hospital_id
             doc_hospital_id = doctor[4] or row[1]
             profile.update({
                 'doctor_id': doctor[0],
@@ -133,7 +181,6 @@ def unified_login(request):
                 'license': doctor[2],
                 'experience': doctor[3] or '',
             })
-            # Build the hospital list from tbl_doctor.hospital_id + tbl_user.hospital_id
             hospitals = []
             for hid in set(filter(None, [doc_hospital_id, row[1]])):
                 cursor.execute(
@@ -145,26 +192,38 @@ def unified_login(request):
                 if h:
                     hospitals.append({'hospital_id': h[0], 'hospital_name': h[1]})
             profile['hospitals'] = hospitals
+            if hospitals:
+                profile['hospital_id'] = hospitals[0]['hospital_id']
+                profile['hospital_name'] = hospitals[0]['hospital_name']
+                request.session['unicare_hospital_id'] = hospitals[0]['hospital_id']
+            request.session['unicare_doctor_id'] = doctor[0]
+
+        elif role == 'receptionist':
+            if row[1]:
+                cursor.execute("SELECT hospital_name FROM tbl_hospital WHERE hospital_id=%s", [row[1]])
+                h_name = cursor.fetchone()
+                if h_name:
+                    profile['hospital_name'] = h_name[0]
 
         elif role == 'patient':
             cursor.execute(
-                "SELECT patient_id, health_id FROM tbl_patient_profile WHERE user_id=%s",
+                "SELECT patient_id, patient_uid FROM tbl_patient WHERE user_id=%s",
                 [row[0]]
             )
-            patient = cursor.fetchone()
-            if not patient:
+            p_row = cursor.fetchone()
+            if not p_row:
+                cursor.execute("SELECT patient_id, health_id FROM tbl_patient_profile WHERE user_id=%s", [row[0]])
+                p_row = cursor.fetchone()
+            if not p_row:
                 return JsonResponse({'status': 'error', 'message': 'Patient profile was not found.'}, status=404)
-            profile.update({'patient_id': patient[0], 'health_id': patient[1]})
+            profile.update({'patient_id': p_row[0], 'health_id': p_row[1], 'patient_uid': p_row[1]})
+            request.session['unicare_patient_id'] = p_row[0]
 
     request.session.update({
         'unicare_user_id': row[0],
         'unicare_role': role,
-        'unicare_hospital_id': row[1],
+        'unicare_hospital_id': profile.get('hospital_id') or row[1],
     })
-    if role == 'doctor':
-        request.session['unicare_doctor_id'] = profile['doctor_id']
-    if role == 'patient':
-        request.session['unicare_patient_id'] = profile['patient_id']
     request.session.modified = True
     return JsonResponse({'status': 'success', 'user': profile})
 
@@ -309,7 +368,7 @@ def doctor_hospitals(request):
 
 @csrf_exempt
 def register_patient(request):
-    user, error = require_roles(request, 'receptionist')
+    user, error = require_roles(request, 'receptionist', 'hospital-admin')
     if error:
         return error
     if request.method != 'POST':
@@ -317,7 +376,6 @@ def register_patient(request):
     ensure_workflow_schema()
     data = payload(request)
 
-    # Collect all tbl_patient fields
     name    = (data.get('name') or '').strip()
     email   = (data.get('email') or '').strip()
     phone   = (data.get('phone') or '').strip()
@@ -332,40 +390,60 @@ def register_patient(request):
         return JsonResponse({'status': 'error', 'message': 'Patient name is required.'}, status=400)
     if not (email or phone):
         return JsonResponse({'status': 'error', 'message': 'Email or phone number is required.'}, status=400)
-    if len(password) < 8:
-        return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
-    if not dob:
-        return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
-    if not gender:
-        return JsonResponse({'status': 'error', 'message': 'Gender is required.'}, status=400)
 
     with transaction.atomic(), connection.cursor() as cursor:
-        # Uniqueness checks
+        # If patient already exists, return existing global patient record
+        existing_row = None
         if email:
-            cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email)=LOWER(%s) LIMIT 1", [email])
-            if cursor.fetchone():
-                return JsonResponse({'status': 'error', 'message': 'An account with this email already exists.'}, status=409)
-        if phone:
-            cursor.execute("SELECT 1 FROM tbl_user WHERE user_phone=%s LIMIT 1", [phone])
-            if cursor.fetchone():
-                return JsonResponse({'status': 'error', 'message': 'An account with this phone number already exists.'}, status=409)
-        if email:
-            cursor.execute("SELECT 1 FROM tbl_patient WHERE LOWER(patient_email)=LOWER(%s) LIMIT 1", [email])
-            if cursor.fetchone():
-                return JsonResponse({'status': 'error', 'message': 'A patient with this email already exists.'}, status=409)
-        if phone:
-            cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_phone=%s LIMIT 1", [phone])
-            if cursor.fetchone():
-                return JsonResponse({'status': 'error', 'message': 'A patient with this phone already exists.'}, status=409)
+            cursor.execute(
+                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " FROM tbl_patient p WHERE LOWER(p.patient_email)=LOWER(%s) LIMIT 1",
+                [email]
+            )
+            existing_row = cursor.fetchone()
+        if not existing_row and phone:
+            cursor.execute(
+                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " FROM tbl_patient p WHERE p.patient_phone=%s LIMIT 1",
+                [phone]
+            )
+            existing_row = cursor.fetchone()
+
+        if existing_row:
+            return JsonResponse({
+                'status': 'success',
+                'existing': True,
+                'message': 'Patient already registered in UniCare. Linked existing global record.',
+                'patient': {
+                    'patient_id': existing_row[0],
+                    'patient_uid': existing_row[1],
+                    'health_id': existing_row[1],
+                    'name': existing_row[2],
+                    'email': existing_row[3] or '',
+                    'phone': existing_row[4] or '',
+                    'date_of_birth': str(existing_row[5]) if existing_row[5] else '',
+                    'gender': existing_row[6] or '',
+                    'blood_group': existing_row[7] or '',
+                    'address': existing_row[8] or '',
+                    'emergency_contact': existing_row[9] or '',
+                }
+            })
+
+        if len(password) < 8:
+            return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
+        if not dob:
+            return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
+        if not gender:
+            return JsonResponse({'status': 'error', 'message': 'Gender is required.'}, status=400)
 
         # Role lookup
         cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='patient' LIMIT 1")
         role_row = cursor.fetchone()
-        if not role_row:
-            return JsonResponse({'status': 'error', 'message': 'Patient role is not configured in tbl_role.'}, status=500)
+        role_id = role_row[0] if role_row else 4
 
         # Generate unique patient_uid: format PT{LETTER}{3-DIGITS}, e.g. PTA001
-        # Derive next UID safely from MAX existing UID
         cursor.execute("SELECT patient_uid FROM tbl_patient ORDER BY patient_id DESC LIMIT 1")
         last_row = cursor.fetchone()
         patient_uid = _next_patient_uid(last_row[0] if last_row else None, cursor)
@@ -374,11 +452,11 @@ def register_patient(request):
         cursor.execute(
             "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)"
             " VALUES (%s,%s,%s,%s,%s,%s,1)",
-            [user['hospital_id'], role_row[0], name, email or None, phone or None, make_password(password)]
+            [user['hospital_id'], role_id, name, email or None, phone or None, make_password(password)]
         )
         user_id = cursor.lastrowid
 
-        # Insert into tbl_patient (primary table)
+        # Insert into tbl_patient
         cursor.execute(
             "INSERT INTO tbl_patient"
             " (user_id, patient_uid, patient_name, patient_dob, patient_gender,"
@@ -390,19 +468,17 @@ def register_patient(request):
         )
         tbl_patient_id = cursor.lastrowid
 
-        # Also insert into tbl_patient_profile for backward compat
-        health_id = f"HC-{date.today().strftime('%Y%m%d')}-{user_id:06d}"
+        # Insert into tbl_patient_profile for backward compatibility
         cursor.execute(
             "INSERT INTO tbl_patient_profile (user_id, health_id, date_of_birth, gender, address)"
             " VALUES (%s,%s,%s,%s,%s)",
-            [user_id, health_id, dob, gender, address]
+            [user_id, patient_uid, dob, gender, address]
         )
-        patient_profile_id = cursor.lastrowid
 
     return JsonResponse({'status': 'success', 'patient': {
         'patient_id': tbl_patient_id,
         'patient_uid': patient_uid,
-        'health_id': health_id,
+        'health_id': patient_uid,
         'name': name,
         'email': email,
         'phone': phone,
@@ -417,25 +493,18 @@ def register_patient(request):
 def _next_patient_uid(last_uid, cursor):
     """Generate the next globally-unique patient UID in format PT{LETTER}{3-DIGITS}.
     Examples: PTA001, PTA002 … PTA999, PTB001 …
-    Falls back to PTA001 when no existing UID is found.
-    Also checks the DB to ensure there are no collisions.
     """
     import string
     LETTERS = string.ascii_uppercase  # A-Z
 
     def uid_to_parts(uid):
-        """Return (letter_index 0-25, number 1-999) or None."""
         if uid and len(uid) == 6 and uid.startswith('PT') and uid[2].isalpha() and uid[3:].isdigit():
             return LETTERS.index(uid[2].upper()), int(uid[3:])
         return None
 
     parts = uid_to_parts(last_uid)
-    if parts is None:
-        letter_idx, number = 0, 0
-    else:
-        letter_idx, number = parts
+    letter_idx, number = (0, 0) if parts is None else parts
 
-    # Try up to 26*999 candidates
     for _ in range(26 * 999):
         number += 1
         if number > 999:
@@ -445,40 +514,195 @@ def _next_patient_uid(last_uid, cursor):
         cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_uid=%s LIMIT 1", [candidate])
         if not cursor.fetchone():
             return candidate
-    raise RuntimeError("Could not generate a unique patient_uid — the UID space may be exhausted.")
+    raise RuntimeError("Could not generate a unique patient_uid — space exhausted.")
 
 
 def patient_lookup(request):
-    user, error = require_roles(request, 'doctor', 'receptionist')
+    user, error = require_roles(request, 'doctor', 'receptionist', 'hospital-admin')
     if error:
         return error
-    health_id = (request.GET.get('health_id') or '').strip()
+    health_id = (request.GET.get('health_id') or request.GET.get('patient_uid') or '').strip()
     if not health_id:
         return JsonResponse({'status': 'error', 'message': 'Health ID is required.'}, status=400)
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT p.patient_id,p.health_id,u.user_name,u.user_email,u.user_phone,p.date_of_birth,p.gender"
-            " FROM tbl_patient_profile p JOIN tbl_user u ON u.user_id=p.user_id"
-            " WHERE p.health_id=%s AND p.patient_is_active=1",
-            [health_id]
+            "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+            " FROM tbl_patient p WHERE (LOWER(p.patient_uid)=LOWER(%s) OR LOWER(p.patient_email)=LOWER(%s) OR p.patient_phone=%s)",
+            [health_id, health_id, health_id]
         )
         row = cursor.fetchone()
         if not row:
-            return JsonResponse({'status': 'error', 'message': 'Patient not found.'}, status=404)
+            cursor.execute(
+                "SELECT p.patient_id, p.health_id, u.user_name, u.user_email, u.user_phone, p.date_of_birth, p.gender"
+                " FROM tbl_patient_profile p JOIN tbl_user u ON u.user_id=p.user_id"
+                " WHERE LOWER(p.health_id)=LOWER(%s) AND p.patient_is_active=1",
+                [health_id]
+            )
+            prof_row = cursor.fetchone()
+            if not prof_row:
+                return JsonResponse({'status': 'error', 'message': 'Patient not found.'}, status=404)
+            row = (prof_row[0], prof_row[1], prof_row[2], prof_row[3], prof_row[4], prof_row[5], prof_row[6], '', '', '')
 
         if user['role'] == 'doctor':
-            # Doctor can only view a patient who has an appointment with them at their current hospital
             cursor.execute(
-                "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s",
+                "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1",
                 [row[0], user['doctor_id'], user['hospital_id']]
             )
             if not cursor.fetchone():
                 return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient.'}, status=403)
 
     return JsonResponse({'status': 'success', 'patient': {
-        'patient_id': row[0], 'health_id': row[1], 'name': row[2],
-        'email': row[3], 'phone': row[4], 'date_of_birth': row[5], 'gender': row[6],
+        'patient_id': row[0], 'patient_uid': row[1], 'health_id': row[1],
+        'name': row[2], 'email': row[3] or '', 'phone': row[4] or '',
+        'date_of_birth': str(row[5]) if row[5] else '', 'gender': row[6] or '',
+        'blood_group': row[7] or '', 'address': row[8] or '', 'emergency_contact': row[9] or '',
     }})
+
+
+@csrf_exempt
+def doctor_patient_suggestions(request):
+    """Live suggestions for Doctor search: ONLY patients having appointments with doctor at current hospital."""
+    user, error = require_roles(request, 'doctor')
+    if error:
+        return error
+    query = (request.GET.get('query') or request.GET.get('q') or '').strip().lower()
+    if not query:
+        return JsonResponse({'status': 'success', 'patients': []})
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT DISTINCT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+            " p.patient_dob, p.patient_gender"
+            " FROM tbl_patient p"
+            " JOIN tbl_appointment a ON a.patient_id = p.patient_id"
+            " WHERE a.doctor_id = %s AND a.hospital_id = %s"
+            " AND (LOWER(p.patient_name) LIKE %s OR LOWER(p.patient_uid) LIKE %s)"
+            " LIMIT 10",
+            [user['doctor_id'], user['hospital_id'], f'%{query}%', f'%{query}%']
+        )
+        rows = cursor.fetchall()
+        patients = [
+            {
+                'patient_id': r[0],
+                'patient_uid': r[1],
+                'health_id': r[1],
+                'name': r[2],
+                'email': r[3] or '',
+                'phone': r[4] or '',
+                'date_of_birth': str(r[5]) if r[5] else '',
+                'gender': r[6] or '',
+            }
+            for r in rows
+        ]
+    return JsonResponse({'status': 'success', 'patients': patients})
+
+
+@csrf_exempt
+def receptionist_patient_suggestions(request):
+    """Live suggestions for Receptionist search: ALL registered UniCare patients."""
+    user, error = require_roles(request, 'receptionist', 'hospital-admin')
+    if error:
+        return error
+    query = (request.GET.get('query') or request.GET.get('q') or '').strip().lower()
+    if not query:
+        return JsonResponse({'status': 'success', 'patients': []})
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT DISTINCT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+            " FROM tbl_patient p"
+            " WHERE (LOWER(p.patient_name) LIKE %s OR LOWER(p.patient_uid) LIKE %s OR p.patient_phone LIKE %s)"
+            " LIMIT 10",
+            [f'%{query}%', f'%{query}%', f'%{query}%']
+        )
+        rows = cursor.fetchall()
+        patients = [
+            {
+                'patient_id': r[0],
+                'patient_uid': r[1],
+                'health_id': r[1],
+                'name': r[2],
+                'email': r[3] or '',
+                'phone': r[4] or '',
+                'date_of_birth': str(r[5]) if r[5] else '',
+                'gender': r[6] or '',
+                'blood_group': r[7] or '',
+                'address': r[8] or '',
+                'emergency_contact': r[9] or '',
+            }
+            for r in rows
+        ]
+    return JsonResponse({'status': 'success', 'patients': patients})
+
+
+@csrf_exempt
+def patient_history(request):
+    """Authorized patient history endpoint for Doctor."""
+    user, error = require_roles(request, 'doctor')
+    if error:
+        return error
+    patient_id = request.GET.get('patient_id')
+    if not patient_id:
+        return JsonResponse({'status': 'error', 'message': 'Patient ID is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1",
+            [patient_id, user['doctor_id'], user['hospital_id']]
+        )
+        if not cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient history.'}, status=403)
+
+        cursor.execute(
+            "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+            " FROM tbl_patient p WHERE p.patient_id=%s",
+            [patient_id]
+        )
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+
+        patient = {
+            'patient_id': p_row[0],
+            'patient_uid': p_row[1],
+            'health_id': p_row[1],
+            'name': p_row[2],
+            'email': p_row[3] or '',
+            'phone': p_row[4] or '',
+            'date_of_birth': str(p_row[5]) if p_row[5] else '',
+            'gender': p_row[6] or '',
+            'blood_group': p_row[7] or '',
+            'address': p_row[8] or '',
+            'emergency_contact': p_row[9] or '',
+        }
+
+        cursor.execute(
+            "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name"
+            " FROM tbl_patient_visit v"
+            " JOIN tbl_doctor d ON d.doctor_id = v.doctor_id"
+            " JOIN tbl_user du ON du.user_id = d.user_id"
+            " JOIN tbl_hospital h ON h.hospital_id = v.hospital_id"
+            " WHERE v.patient_id = %s"
+            " ORDER BY v.visited_at DESC",
+            [patient_id]
+        )
+        v_rows = cursor.fetchall()
+        visits = [
+            {
+                'visit_id': r[0],
+                'diagnosis': r[1] or '',
+                'medical_notes': r[2] or '',
+                'visited_at': str(r[3]),
+                'doctor_name': r[4],
+                'hospital_name': r[5],
+            }
+            for r in v_rows
+        ]
+
+    return JsonResponse({'status': 'success', 'patient': patient, 'visits': visits})
 
 
 def booking_options(request):
