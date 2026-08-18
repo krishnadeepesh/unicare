@@ -24,7 +24,11 @@ export default function RegisterPage({ setView }) {
       return;
     }
 
-    if (!/^[0-9+()\-\s]{7,20}$/.test(phone.trim())) { setErrorMsg('Enter a valid phone number.'); return; }
+    const phoneDigits = phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      setErrorMsg('Enter a valid 10-digit phone number.');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setErrorMsg('Passwords do not match.');
@@ -146,7 +150,9 @@ export default function RegisterPage({ setView }) {
                       className="form-control"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      pattern="[0-9+()\-\s]{7,20}"
+                      pattern="[0-9+()\-\s]{10,20}"
+                      title="Enter a valid 10-digit phone number"
+                      maxLength="15"
                       required
                     />
                   </div>

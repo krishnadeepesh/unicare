@@ -14,7 +14,7 @@ from django.db import connection, transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .views import verify_password_and_upgrade
+from .views import is_valid_phone, verify_password_and_upgrade
 
 
 def payload(request):
@@ -422,6 +422,10 @@ def register_patient(request):
         return JsonResponse({'status': 'error', 'message': 'Patient name is required.'}, status=400)
     if not (email or phone):
         return JsonResponse({'status': 'error', 'message': 'Email or phone number is required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number.'}, status=400)
+    if emergency_contact and not is_valid_phone(emergency_contact):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit emergency contact number.'}, status=400)
 
     with transaction.atomic(), connection.cursor() as cursor:
         # If patient already exists, return existing global patient record

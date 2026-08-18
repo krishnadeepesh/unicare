@@ -133,10 +133,20 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const userRole = hospitalData?.role || hospitalInfo?.role || 'Hospital Administrator';
   const username = hospitalData?.username || hospitalData?.user_name || hospitalInfo?.username || hospitalInfo?.user_name || hospitalInfo?.adminEmail || hospitalInfo?.email || 'admin';
 
+  const validatePhone = (value) => {
+    if (!value || !value.trim()) return true; // optional field
+    const digits = value.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    return /^[6-9]\d{9}$/.test(digits);
+  };
+
   // Handle Add Doctor directly into MySQL
   const handleAddDoctor = async (e) => {
     e.preventDefault();
     if (!docName.trim() || !docEmail.trim()) return;
+    if (!validatePhone(docPhone)) {
+      showToast('Enter a valid 10-digit phone number for the doctor.', 'danger');
+      return;
+    }
 
     setSubmitting(true);
     const payload = {
@@ -196,6 +206,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const saveReceptionist = async (e) => {
     e.preventDefault();
+    if (!validatePhone(receptionistForm.phone)) {
+      showToast('Enter a valid 10-digit phone number for the receptionist.', 'danger');
+      return;
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/receptionists/${editingReceptionist ? 'update' : 'add'}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ hospital_id: currentHospitalId, ...receptionistForm, ...(editingReceptionist ? { receptionist_id: editingReceptionist.receptionist_id } : {}) }) });
       const data = await response.json();
@@ -227,6 +241,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const submitHospitalRegistration = async (e) => {
     e.preventDefault();
+    if (!validatePhone(hospitalRegistration.phone)) {
+      showToast('Enter a valid 10-digit hospital phone number.', 'danger');
+      return;
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/hospital-registration/submit/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -581,6 +599,9 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         className="form-control"
                         value={docPhone}
                         onChange={(e) => setDocPhone(e.target.value)}
+                        pattern="[0-9+()\-\s]{10,15}"
+                        title="Enter a valid 10-digit phone number"
+                        maxLength="15"
                       />
                     </div>
                     <div className="col-6">

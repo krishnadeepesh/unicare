@@ -264,6 +264,21 @@ export default function StaffDashboardPage({ user, onLogout }) {
     setMessage(null);
     setRegisterResult(null);
 
+    const validatePhone = (value) => {
+      if (!value || !value.trim()) return true; // optional field
+      const digits = value.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      return /^[6-9]\d{9}$/.test(digits);
+    };
+
+    if (!validatePhone(patientForm.phone)) {
+      setMessage({ text: 'Enter a valid 10-digit phone number.', type: 'danger' });
+      return;
+    }
+    if (!validatePhone(patientForm.emergency_contact)) {
+      setMessage({ text: 'Enter a valid 10-digit emergency contact number.', type: 'danger' });
+      return;
+    }
+
     try {
       const res = await fetch(`${API}/patients/register/`, {
         method: 'POST',
@@ -329,6 +344,15 @@ export default function StaffDashboardPage({ user, onLogout }) {
   // Save Profile Changes
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    const validatePhone = (value) => {
+      if (!value || !value.trim()) return true; // optional field
+      const digits = value.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      return /^[6-9]\d{9}$/.test(digits);
+    };
+    if (!validatePhone(profileForm.phone)) {
+      setMessage({ text: 'Enter a valid 10-digit phone number.', type: 'danger' });
+      return;
+    }
     try {
       const res = await fetch(`${API}/profile/`, {
         method: 'POST',
@@ -626,6 +650,9 @@ export default function StaffDashboardPage({ user, onLogout }) {
                           type="tel"
                           className="form-control form-control-sm rounded-2"
                           required
+                          pattern="[0-9+()\-\s]{10,15}"
+                          title="Enter a valid 10-digit phone number"
+                          maxLength="15"
                           value={patientForm.phone}
                           onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
                         />
@@ -677,6 +704,9 @@ export default function StaffDashboardPage({ user, onLogout }) {
                           className="form-control form-control-sm rounded-2"
                           value={patientForm.emergency_contact}
                           onChange={(e) => setPatientForm({ ...patientForm, emergency_contact: e.target.value })}
+                          pattern="[0-9+()\-\s]{10,15}"
+                          title="Enter a valid 10-digit phone number"
+                          maxLength="15"
                         />
                       </div>
                     </div>
@@ -1111,9 +1141,13 @@ export default function StaffDashboardPage({ user, onLogout }) {
                   <div className="mb-3">
                     <label className="form-label small fw-semibold text-muted">Phone Number</label>
                     <input
+                      type="tel"
                       className="form-control"
                       value={profileForm.phone}
                       onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                      pattern="[0-9+()\-\s]{10,15}"
+                      title="Enter a valid 10-digit phone number"
+                      maxLength="15"
                     />
                   </div>
                   {isDoctor && (

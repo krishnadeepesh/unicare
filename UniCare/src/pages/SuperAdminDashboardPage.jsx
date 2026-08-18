@@ -226,6 +226,15 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
   // Handle Add / Edit Submit
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    const validatePhone = (value) => {
+      if (!value || !value.trim()) return false;
+      const digits = value.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      return /^[6-9]\d{9}$/.test(digits);
+    };
+    if (!validatePhone(formData.hospital_phone)) {
+      showToast('Enter a valid 10-digit hospital phone number.', 'danger');
+      return;
+    }
     setFormSubmitting(true);
     const endpoint = showEditModal ? '/hospitals/update/' : '/hospitals/add/';
     const payload = showEditModal ? { ...formData, hospital_id: selectedHospital.hospital_id } : formData;
@@ -985,9 +994,12 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                     <div className="col-md-6">
                       <label className="form-label fw-semibold small">Contact Phone <span className="text-danger">*</span></label>
                       <input 
-                        type="text" 
+                        type="tel" 
                         className="form-control"
                         required
+                        pattern="[0-9+()\-\s]{10,15}"
+                        title="Enter a valid 10-digit phone number"
+                        maxLength="15"
                         value={formData.hospital_phone}
                         onChange={(e) => setFormData({ ...formData, hospital_phone: e.target.value })}
                       />

@@ -38,6 +38,22 @@ export default function HospitalFlowPage({ setView, onLogin }) {
     setRegisterError('');
     setLoading(true);
 
+    const validatePhone = (value) => {
+      const digits = (value || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      return /^[6-9]\d{9}$/.test(digits);
+    };
+
+    if (!validatePhone(contactNumber)) {
+      setRegisterError('Enter a valid 10-digit contact phone number.');
+      setLoading(false);
+      return;
+    }
+    if (adminPhone.trim() && !validatePhone(adminPhone)) {
+      setRegisterError('Enter a valid 10-digit admin phone number.');
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       hospital_name: hospitalName.trim(),
       hospital_address: hospitalAddress.trim(),
@@ -370,6 +386,9 @@ Your hospital registration request has been sent and is currently pending admini
                             className="form-control" 
                             value={contactNumber}
                             onChange={(e) => setContactNumber(e.target.value)}
+                            pattern="[0-9+()\-\s]{10,15}"
+                            title="Enter a valid 10-digit phone number"
+                            maxLength="15"
                             required 
                           />
                         </div>
@@ -403,6 +422,9 @@ Your hospital registration request has been sent and is currently pending admini
                             className="form-control" 
                             value={adminPhone}
                             onChange={(e) => setAdminPhone(e.target.value)}
+                            pattern="[0-9+()\-\s]{10,15}"
+                            title="Enter a valid 10-digit phone number"
+                            maxLength="15"
                           />
                         </div>
                         <div className="col-md-6">

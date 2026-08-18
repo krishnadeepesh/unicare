@@ -11,6 +11,16 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 
 
+def is_valid_phone(phone):
+    """Validate a 10-digit Indian mobile number (starts with 6-9)."""
+    if not phone:
+        return False
+    digits = ''.join(ch for ch in str(phone) if ch.isdigit())
+    if digits.startswith('91') and len(digits) == 12:
+        digits = digits[2:]
+    return len(digits) == 10 and digits[0] in '6789'
+
+
 def require_hospital_admin(request, require_approved=False):
     """Return the hospital bound to the current hospital-admin session.
     If require_approved=True, verify the hospital status is 'Approved'.
@@ -386,6 +396,8 @@ def add_hospital(request):
 
     if not name or not phone:
         return JsonResponse({'status': 'error', 'message': 'Hospital Name and Phone are required'}, status=400)
+    if not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
@@ -426,6 +438,8 @@ def update_hospital(request):
 
     if not hospital_id or not name:
         return JsonResponse({'status': 'error', 'message': 'Hospital ID and Name are required'}, status=400)
+    if not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
 
     with connection.cursor() as cursor:
         cursor.execute("""
@@ -590,6 +604,8 @@ def register_hospital_public(request):
         return JsonResponse({'status': 'error', 'message': 'Email Address is required'}, status=400)
     if not phone:
         return JsonResponse({'status': 'error', 'message': 'Phone Number is required'}, status=400)
+    if not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number.'}, status=400)
     if not password:
         return JsonResponse({'status': 'error', 'message': 'Password is required'}, status=400)
 
@@ -819,6 +835,8 @@ def submit_hospital_registration(request):
             return JsonResponse({'status': 'error', 'message': 'Hospital name, email, and phone are required.'}, status=400)
         if not name or not email or not phone:
             return JsonResponse({'status': 'error', 'message': 'Hospital name, email, and phone are required.'}, status=400)
+    if not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
     with connection.cursor() as cursor:
         if not hospital_id:
             cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
@@ -1035,6 +1053,8 @@ def add_doctor(request):
 
     if not name or not email or len(password) < 8:
         return JsonResponse({'status': 'error', 'message': 'Doctor name, email, and an 8-character password are required'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the doctor.'}, status=400)
 
     # Validate email/phone uniqueness in tbl_user
     email_clean = email.lower().strip()
@@ -1190,6 +1210,8 @@ def update_doctor(request):
     experience = (data.get('experience') or '').strip()
     if not doctor_id or not name or not email:
         return JsonResponse({'status': 'error', 'message': 'Doctor ID, name and email are required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the doctor.'}, status=400)
 
     email_clean = email.lower().strip()
     with connection.cursor() as cursor:
@@ -1268,6 +1290,8 @@ def add_receptionist(request):
     password = (data.get('password') or '').strip()
     if not hospital_id or not name or not email or len(password) < 8:
         return JsonResponse({'status': 'error', 'message': 'Name, email, and an 8-character password are required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the receptionist.'}, status=400)
 
     email_clean = email.lower().strip()
     with connection.cursor() as cursor:
@@ -1304,6 +1328,8 @@ def update_receptionist(request):
     phone = (data.get('phone') or '').strip()
     if not receptionist_id or not name or not email:
         return JsonResponse({'status': 'error', 'message': 'Receptionist ID, name and email are required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the receptionist.'}, status=400)
 
     email_clean = email.lower().strip()
     with connection.cursor() as cursor:
