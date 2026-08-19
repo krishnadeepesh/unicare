@@ -1,4 +1,5 @@
 import json
+import re
 import secrets
 import hashlib
 import hmac
@@ -87,6 +88,17 @@ def ensure_doctor_extensions():
         cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='hospital_id'")
         if not cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE tbl_doctor ADD COLUMN hospital_id INT NULL AFTER user_id")
+
+
+def ensure_recovery_columns():
+    """Ensure tbl_user has the recovery question/answer columns."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='user_recovery_question'")
+        if not cursor.fetchone()[0]:
+            cursor.execute("ALTER TABLE tbl_user ADD COLUMN user_recovery_question VARCHAR(255) NULL")
+        cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='user_recovery_answer'")
+        if not cursor.fetchone()[0]:
+            cursor.execute("ALTER TABLE tbl_user ADD COLUMN user_recovery_answer VARCHAR(255) NULL")
 
 @csrf_exempt
 def super_admin_login(request):
@@ -204,6 +216,143 @@ def confirm_password_reset(request):
     request.session.pop('password_reset_email', None)
     request.session.pop('password_reset_code', None)
     return JsonResponse({'status': 'success', 'message': 'Password updated successfully. You can now log in.'})
+
+
+RECOVERY_QUESTIONS = [
+    "What is the name of your best friend?",
+    "What was the official name of the high school or secondary school you attended?",
+    "What is the name of your first pet?",
+    "What is your mother's maiden name?",
+    "What was the make and model of your first car?",
+    "What city were you born in?",
+]
+
+
+@csrf_exempt
+def recovery_account_lookup(request):
+    """
+    Forgot Password - Step 1
+    Accepts a registered email address or phone number.
+    Returns the recovery question linked to that account (never the answer).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    identifier = (data.get('identifier') or data.get('email') or data.get('phone') or '').strip()
+    if not identifier:
+        return JsonResponse({'status': 'error', 'message': 'Email address or phone number is required.'}, status=400)
+
+    ensure_recovery_columns()
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT u.user_id, u.user_email, u.user_phone, u.user_recovery_question, u.user_recovery_answer
+            FROM tbl_user u
+            WHERE (LOWER(u.user_email) = LOWER(%s) OR u.user_phone = %s)
+              AND u.user_is_active = 1
+            LIMIT 1
+        """, [identifier, identifier])
+        row = cursor.fetchone()
+
+    if not row:
+        return JsonResponse({'status': 'error', 'message': 'No account found with this email address or phone number.'}, status=404)
+
+    user_id, user_email, user_phone, recovery_question, recovery_answer = row
+
+    if not recovery_question:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'This account does not have a recovery question set. Please contact the system administrator.'
+        }, status=400)
+
+    # Store the account context server-side, never return the answer to the client.
+    request.session['recovery_user_id'] = user_id
+    request.session['recovery_user_email'] = user_email
+    request.session['recovery_user_phone'] = user_phone
+    request.session['recovery_question'] = recovery_question
+    request.session.set_expiry(15 * 60)
+    request.session.modified = True
+
+    return JsonResponse({
+        'status': 'success',
+        'recovery_question': recovery_question
+    })
+
+
+@csrf_exempt
+def recovery_answer_verify(request):
+    """
+    Forgot Password - Step 2
+    Verifies the user-provided answer against the stored hash.
+    If correct, resets the password to the new value supplied.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    answer = (data.get('answer') or data.get('recovery_answer') or '').strip()
+    new_password = (data.get('new_password') or data.get('password') or '').strip()
+    confirm_password = (data.get('confirm_password') or data.get('confirmPassword') or '').strip()
+
+    if not answer:
+        return JsonResponse({'status': 'error', 'message': 'Recovery answer is required.'}, status=400)
+    if not new_password:
+        return JsonResponse({'status': 'error', 'message': 'New password is required.'}, status=400)
+    if len(new_password) < 8 or not re.match(r'^(?=.*[A-Za-z])(?=.*\d).{8,}$', new_password):
+        return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters and include a letter and number.'}, status=400)
+    if new_password != confirm_password:
+        return JsonResponse({'status': 'error', 'message': 'Passwords do not match.'}, status=400)
+
+    user_id = request.session.get('recovery_user_id')
+    if not user_id:
+        return JsonResponse({'status': 'error', 'message': 'Please start the password recovery process again.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_recovery_answer FROM tbl_user WHERE user_id = %s", [user_id])
+        row = cursor.fetchone()
+
+    if not row or not row[0]:
+        return JsonResponse({'status': 'error', 'message': 'Recovery data not found for this account.'}, status=400)
+
+    # Compare in a constant-time way using Django's password hasher.
+    stored_answer = row[0]
+    normalized_answer = answer.strip().lower()
+    valid = check_password(normalized_answer, stored_answer)
+
+    if not valid and stored_answer.startswith('sha256$'):
+        try:
+            _, salt, answer_hash = stored_answer.split('$', 2)
+            valid = hmac.compare_digest(
+                hashlib.sha256(f'{salt}{normalized_answer}'.encode('utf-8')).hexdigest(), answer_hash
+            )
+        except ValueError:
+            valid = False
+
+    if not valid:
+        return JsonResponse({'status': 'error', 'message': 'Incorrect recovery answer.'}, status=400)
+
+    # Answer is correct — hash and store the new password.
+    hashed_password = make_password(new_password)
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE tbl_user SET user_password = %s WHERE user_id = %s", [hashed_password, user_id])
+
+    # Clear recovery session context.
+    request.session.pop('recovery_user_id', None)
+    request.session.pop('recovery_user_email', None)
+    request.session.pop('recovery_user_phone', None)
+    request.session.pop('recovery_question', None)
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Password reset successful. You can now log in with your new password.'
+    })
 
 
 @csrf_exempt
@@ -594,6 +743,8 @@ def register_hospital_public(request):
     email = (data.get('adminEmail') or data.get('email') or data.get('admin_email') or data.get('hospital_email') or '').strip()
     phone = (data.get('contactNumber') or data.get('hospital_phone') or data.get('phone') or data.get('contact') or data.get('adminPhone') or '').strip()
     password = (data.get('adminPassword') or data.get('password') or '').strip()
+    recovery_question = (data.get('recoveryQuestion') or data.get('recovery_question') or '').strip()
+    recovery_answer = (data.get('recoveryAnswer') or data.get('recovery_answer') or '').strip()
     has_hospital_details = bool((data.get('hospital_name') or data.get('name') or '').strip())
     name = (data.get('hospital_name') or data.get('name') or f"{admin_name}'s Hospital").strip()
     address = (data.get('hospital_address') or data.get('address') or '').strip()
@@ -608,6 +759,14 @@ def register_hospital_public(request):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number.'}, status=400)
     if not password:
         return JsonResponse({'status': 'error', 'message': 'Password is required'}, status=400)
+    if not re.match(r'^(?=.*[A-Za-z])(?=.*\d).{8,}$', password):
+        return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters and include a letter and number.'}, status=400)
+    if not recovery_question:
+        return JsonResponse({'status': 'error', 'message': 'Recovery Question is required'}, status=400)
+    if not recovery_answer:
+        return JsonResponse({'status': 'error', 'message': 'Recovery Answer is required'}, status=400)
+
+    ensure_recovery_columns()
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email) = LOWER(%s) LIMIT 1", [email])
@@ -631,11 +790,13 @@ def register_hospital_public(request):
 
         # Always store ENCRYPTED / HASHED password in tbl_user
         hashed_pass = make_password(password)
+        hashed_recovery_answer = make_password(recovery_answer.strip().lower())
         display_username = admin_name
         cursor.execute("""
-            INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
-            VALUES (%s, 1, %s, %s, %s, %s, 1)
-        """, [hospital_id, display_username, email, phone, hashed_pass])
+            INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password,
+                                  user_recovery_question, user_recovery_answer, user_is_active)
+            VALUES (%s, 1, %s, %s, %s, %s, %s, %s, 1)
+        """, [hospital_id, display_username, email, phone, hashed_pass, recovery_question, hashed_recovery_answer])
 
     return JsonResponse({
         'status': 'success',

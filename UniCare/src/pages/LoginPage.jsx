@@ -6,21 +6,84 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [resetForm, setResetForm] = useState({ email: '', code: '', password: '', confirmPassword: '' });
-  const [resetStep, setResetStep] = useState('request');
+  const [resetStep, setResetStep] = useState('lookup'); // lookup → question → new-password → done
+  const [resetForm, setResetForm] = useState({ identifier: '', answer: '', password: '', confirmPassword: '' });
+  const [recoveryQuestion, setRecoveryQuestion] = useState('');
   const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
-  const handlePasswordReset = async (e) => {
+  const closeForgotModal = () => {
+    setShowForgotModal(false);
+    setResetStep('lookup');
+    setResetForm({ identifier: '', answer: '', password: '', confirmPassword: '' });
+    setRecoveryQuestion('');
+    setResetMessage('');
+    setResetError('');
+  };
+
+  const handleRecoveryLookup = async (e) => {
     e.preventDefault();
-    if (resetStep === 'confirm' && resetForm.password !== resetForm.confirmPassword) { setResetMessage('Passwords do not match.'); return; }
-    const endpoint = resetStep === 'request' ? 'password-reset/request/' : 'password-reset/confirm/';
-    const body = resetStep === 'request' ? { email: resetForm.email } : { email: resetForm.email, code: resetForm.code, password: resetForm.password };
+    setResetError('');
+    setResetMessage('');
+    setResetLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/super-admin/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
-      const data = await response.json(); setResetMessage(data.message);
-      if (response.ok && resetStep === 'request') setResetStep('confirm');
-      if (response.ok && resetStep === 'confirm') { setResetStep('request'); setResetForm({ email: '', code: '', password: '', confirmPassword: '' }); }
-    } catch { setResetMessage('Unable to process the password reset request.'); }
+      const response = await fetch('http://localhost:8000/api/super-admin/recovery/lookup/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ identifier: resetForm.identifier.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        setRecoveryQuestion(data.recovery_question);
+        setResetStep('question');
+      } else {
+        setResetError(data.message || 'Unable to find your account.');
+      }
+    } catch {
+      setResetError('Unable to process the request. Please check the server connection and try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleRecoveryVerify = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetMessage('');
+    if (resetForm.password !== resetForm.confirmPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(resetForm.password)) {
+      setResetError('Password must be at least 8 characters and include a letter and number.');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/super-admin/recovery/verify/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          answer: resetForm.answer.trim(),
+          new_password: resetForm.password,
+          confirm_password: resetForm.confirmPassword,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        setResetMessage(data.message);
+        setResetStep('done');
+      } else {
+        setResetError(data.message || 'Unable to reset your password.');
+      }
+    } catch {
+      setResetError('Unable to process the request. Please check the server connection and try again.');
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -207,26 +270,116 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
         </div>
       </div>
 
-      {/* Forgot Password Modal */}
+      {/* Forgot Password Modal - Recovery Question Flow */}
       {showForgotModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-4 border-0 shadow">
               <div className="modal-header border-0 pb-0">
                 <h5 className="modal-title fw-bold text-dark"><i className="bi bi-key me-2 text-teal"></i>Forgot Password?</h5>
-                <button type="button" className="btn-close" onClick={() => setShowForgotModal(false)}></button>
+                <button type="button" className="btn-close" onClick={closeForgotModal}></button>
               </div>
-              <form onSubmit={handlePasswordReset}><div className="modal-body py-4 text-secondary">
-                <p className="small">Use your registered email address to receive a verification code and set a new password.</p>
-                {resetMessage && <div className="alert alert-info py-2 small">{resetMessage}</div>}
-                <div className="mb-3"><label className="form-label">Registered email</label><input type="email" className="form-control" value={resetForm.email} onChange={(e) => setResetForm({ ...resetForm, email: e.target.value })} required /></div>
-                {resetStep === 'confirm' && <><div className="mb-3"><label className="form-label">Email verification code</label><input className="form-control" value={resetForm.code} onChange={(e) => setResetForm({ ...resetForm, code: e.target.value })} required /></div><div className="mb-3"><label className="form-label">New password</label><input type="password" minLength="5" className="form-control" value={resetForm.password} onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })} required /></div><div><label className="form-label">Confirm new password</label><input type="password" minLength="5" className="form-control" value={resetForm.confirmPassword} onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })} required /></div></>}
+
+              <div className="modal-body py-4 text-secondary">
+                {resetStep === 'lookup' && (
+                  <form onSubmit={handleRecoveryLookup}>
+                    <p className="small">Enter your registered email address or phone number. We will show you your recovery question to verify your identity.</p>
+                    {resetError && <div className="alert alert-danger py-2 small">{resetError}</div>}
+                    {resetMessage && <div className="alert alert-success py-2 small">{resetMessage}</div>}
+                    <div className="mb-3">
+                      <label className="form-label">Registered email or phone number</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={resetForm.identifier}
+                        onChange={(e) => setResetForm({ ...resetForm, identifier: e.target.value })}
+                        placeholder="e.g. admin@hospital.com or 9876543210"
+                        required
+                      />
+                    </div>
+                    <div className="d-flex justify-content-end gap-2">
+                      <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
+                      <button type="submit" className="btn btn-primary px-4 rounded-pill" disabled={resetLoading}>
+                        {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Checking...</> : 'Continue'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {resetStep === 'question' && (
+                  <form onSubmit={handleRecoveryVerify}>
+                    <p className="small">Answer your recovery question to verify your identity.</p>
+                    {resetError && <div className="alert alert-danger py-2 small">{resetError}</div>}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold text-slate-700">Recovery Question</label>
+                      <div className="alert alert-info py-2 small mb-0">
+                        <i className="bi bi-question-circle me-1"></i>
+                        {recoveryQuestion}
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Your Answer</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={resetForm.answer}
+                        onChange={(e) => setResetForm({ ...resetForm, answer: e.target.value })}
+                        placeholder="Enter your answer"
+                        required
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">New Password</label>
+                      <input
+                        type="password"
+                        className="form-control"
+                        value={resetForm.password}
+                        onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })}
+                        placeholder="At least 8 characters with a letter and number"
+                        required
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Confirm New Password</label>
+                      <input
+                        type="password"
+                        className="form-control"
+                        value={resetForm.confirmPassword}
+                        onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })}
+                        placeholder="Re-enter your new password"
+                        required
+                      />
+                    </div>
+                    <div className="d-flex justify-content-end gap-2">
+                      <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
+                      <button type="submit" className="btn btn-primary px-4 rounded-pill" disabled={resetLoading}>
+                        {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Verifying...</> : 'Reset Password'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {resetStep === 'done' && (
+                  <div className="text-center py-3">
+                    <div className="text-success mb-3">
+                      <i className="bi bi-check-circle-fill" style={{ fontSize: '3rem' }}></i>
+                    </div>
+                    <h6 className="fw-bold text-dark mb-2">Password Reset Successful</h6>
+                    <p className="small mb-4">{resetMessage}</p>
+                    <button
+                      type="button"
+                      className="btn btn-primary px-4 rounded-pill"
+                      onClick={() => {
+                        closeForgotModal();
+                        setPassword('');
+                      }}
+                    >
+                      Go to Login
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="modal-footer border-0 pt-0">
-                <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={() => setShowForgotModal(false)}>Close</button>
-                <button type="submit" className="btn btn-primary px-4 rounded-pill">{resetStep === 'request' ? 'Email Code' : 'Update Password'}</button>
-              </div>
-              </form></div>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
 
+const RECOVERY_QUESTIONS = [
+  'What is the name of your best friend?',
+  'What was the official name of the high school or secondary school you attended?',
+  'What is the name of your first pet?',
+  "What is your mother's maiden name?",
+  'What was the make and model of your first car?',
+  'What city were you born in?',
+];
+
 export default function RegisterPage({ setView }) {
   // Required User / Admin Registration Fields
   const [fullName, setFullName] = useState('');
@@ -7,6 +16,8 @@ export default function RegisterPage({ setView }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [recoveryQuestion, setRecoveryQuestion] = useState('');
+  const [recoveryAnswer, setRecoveryAnswer] = useState('');
 
   // Form State
   const [loading, setLoading] = useState(false);
@@ -35,6 +46,16 @@ export default function RegisterPage({ setView }) {
       return;
     }
 
+    if (!recoveryQuestion) {
+      setErrorMsg('Please select a recovery question.');
+      return;
+    }
+
+    if (!recoveryAnswer.trim()) {
+      setErrorMsg('Please enter an answer to your recovery question.');
+      return;
+    }
+
     setLoading(true);
 
     const payload = {
@@ -42,6 +63,8 @@ export default function RegisterPage({ setView }) {
       email: email.trim(),
       phone: phone.trim(),
       password,
+      recoveryQuestion,
+      recoveryAnswer: recoveryAnswer.trim(),
     };
 
     try {
@@ -179,6 +202,45 @@ export default function RegisterPage({ setView }) {
                       minLength="8"
                       required
                     />
+                  </div>
+                </div>
+
+                {/* Section 2: Account Recovery Details */}
+                <h3 className="h6 fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
+                  <i className="bi bi-shield-lock me-2"></i>Account Recovery Details
+                </h3>
+                <p className="text-muted small mb-3">
+                  Choose a recovery question and answer. You will use these to reset your password if you ever forget it.
+                </p>
+
+                <div className="row g-3 mb-4">
+                  <div className="col-12">
+                    <label className="form-label fw-semibold text-slate-700">Recovery Question *</label>
+                    <select
+                      className="form-select"
+                      value={recoveryQuestion}
+                      onChange={(e) => setRecoveryQuestion(e.target.value)}
+                      required
+                    >
+                      <option value="">Select a recovery question...</option>
+                      {RECOVERY_QUESTIONS.map((q) => (
+                        <option key={q} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label fw-semibold text-slate-700">Recovery Answer *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={recoveryAnswer}
+                      onChange={(e) => setRecoveryAnswer(e.target.value)}
+                      placeholder="Enter your answer"
+                      maxLength="100"
+                      required
+                    />
+                    <div className="form-text">Your answer is stored securely and will never be shown to anyone.</div>
                   </div>
                 </div>
 

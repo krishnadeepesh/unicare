@@ -10,6 +10,10 @@ urlpatterns = [
     path('check-session/', views.check_session, name='check_session'),
     path('dashboard-stats/', views.dashboard_stats, name='dashboard_stats'),
     
+    # Forgot Password Recovery (email/phone → question → answer → new password)
+    path('recovery/lookup/', views.recovery_account_lookup, name='recovery_account_lookup'),
+    path('recovery/verify/', views.recovery_answer_verify, name='recovery_answer_verify'),
+
     # Public Hospital Operations
     path('hospital-register-public/', views.register_hospital_public, name='register_hospital_public'),
     path('hospital-registration/submit/', views.submit_hospital_registration, name='submit_hospital_registration'),
