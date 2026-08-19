@@ -293,7 +293,6 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                         className="form-control"
                         value={resetForm.identifier}
                         onChange={(e) => setResetForm({ ...resetForm, identifier: e.target.value })}
-                        placeholder="e.g. admin@hospital.com or 9876543210"
                         required
                       />
                     </div>

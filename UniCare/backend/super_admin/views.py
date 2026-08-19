@@ -222,7 +222,7 @@ RECOVERY_QUESTIONS = [
     "What is the name of your best friend?",
     "What was the official name of the high school or secondary school you attended?",
     "What is the name of your first pet?",
-    "What is your mother's maiden name?",
+    "What is your mother's name?",
     "What was the make and model of your first car?",
     "What city were you born in?",
 ]
