@@ -284,7 +284,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   };
 
   return (
-    <div className="min-vh-100 bg-light d-flex flex-column">
+    <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 2000 }}>
@@ -297,40 +297,81 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         </div>
       )}
 
-      {/* Header Bar displaying Hospital Name, Role, and Username */}
-      <header className="bg-white border-bottom shadow-sm py-3 px-4 d-flex align-items-center justify-content-between">
-        <div className="d-flex align-items-center gap-3">
-          <div className="text-white rounded-3 p-2 d-flex align-items-center justify-content-center shadow-sm" style={{ width: '45px', height: '45px', backgroundColor: '#0d9488' }}>
-            <i className="bi bi-hospital fs-4"></i>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
+        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+            <i className="bi bi-hospital fs-5"></i>
           </div>
           <div>
-            <h5 className="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-              <span>{currentHospitalName}</span>
-              <small className="text-muted fw-normal fs-7">({currentHospitalUid})</small>
-            </h5>
-            <div className="d-flex align-items-center gap-2 mt-1" style={{ fontSize: '0.875rem' }}>
-              <span className="badge border px-2 py-1 rounded-pill fw-semibold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                <i className="bi bi-person-badge me-1"></i>Role: {userRole}
-              </span>
-              <span className="text-secondary fw-semibold ms-1">
-                <i className="bi bi-person-circle me-1 text-teal"></i>Username: <code className="text-dark fw-bold bg-light px-2 py-0.5 rounded border">{username}</code>
-              </span>
-            </div>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Admin</h6>
+            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Hospital Admin</small>
           </div>
         </div>
 
-        <div className="d-flex align-items-center gap-2">
-          <button 
+        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
+          <div className="fw-bold text-dark small truncate">{currentHospitalName}</div>
+          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+            ID: {currentHospitalUid}
+          </div>
+        </div>
+
+        <nav className="nav nav-pills flex-column mb-auto gap-1">
+          {[
+            { id: 'home', icon: 'bi-speedometer2', label: 'Dashboard' },
+            { id: 'doctors', icon: 'bi-person-badge', label: 'Doctors', count: doctorsList.length },
+            { id: 'receptionists', icon: 'bi-person-workspace', label: 'Receptionists / Staff', count: receptionistsList.length },
+            { id: 'departments', icon: 'bi-diagram-3', label: 'Departments', count: departmentsList.length },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+                activeSection === item.id ? 'text-white' : 'text-slate-700'
+              }`}
+              style={{
+                backgroundColor: activeSection === item.id ? '#0d9488' : 'transparent',
+                color: activeSection === item.id ? '#ffffff' : '#334155'
+              }}
+            >
+              <i className={`bi ${item.icon}`}></i> {item.label}
+              {item.count > 0 && (
+                <span className={`badge rounded-pill ms-auto extra-small ${activeSection === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeSection === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="pt-2 border-top mt-2">
+          <button
             onClick={onLogout}
-            className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1.5"
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
           >
-            <i className="bi bi-box-arrow-right me-1"></i> Logout
+            <i className="bi bi-box-arrow-right"></i> Logout
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Main Container */}
-      <div className="container py-4 flex-grow-1">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-grow-1 overflow-auto d-flex flex-column">
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+              🏥 {currentHospitalName} ({currentHospitalUid})
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center gap-3">
+            <div className="text-end">
+              <div className="fw-bold text-dark small">{username}</div>
+              <small className="text-muted extra-small">Hospital Administrator</small>
+            </div>
+          </div>
+        </header>
+
+        <div className="container-fluid py-4 flex-grow-1">
         {!isApproved ? (
           <div className="row justify-content-center"><div className="col-lg-8">
             <div className={`alert ${registrationStatus === 'Rejected' ? 'alert-danger' : 'alert-warning'} border-0 rounded-4 shadow-sm p-4 mb-4`}>
@@ -671,6 +712,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       {showDepartmentModal && (
         <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-success text-white"><h5 className="modal-title fw-bold">{editingDepartment ? 'Edit Department' : 'Add Department'}</h5><button className="btn-close btn-close-white" onClick={() => setShowDepartmentModal(false)}></button></div><form onSubmit={saveDepartment}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Department Name *</label><input className="form-control" value={departmentForm.name} onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })} required /></div><div><label className="form-label">Description</label><textarea className="form-control" rows="3" value={departmentForm.description} onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}></textarea></div></div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowDepartmentModal(false)}>Cancel</button><button className="btn btn-success" type="submit">Save Department</button></div></form></div></div></div>
       )}
+      </main>
     </div>
   );
 }

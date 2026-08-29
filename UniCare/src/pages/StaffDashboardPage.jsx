@@ -6,7 +6,7 @@ export default function StaffDashboardPage({ user, onLogout }) {
   const isDoctor = user?.role === 'doctor' || user?.role === 'Doctor';
   const roleName = isDoctor ? 'Doctor' : 'Receptionist';
 
-  // Base state
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [profile, setProfile] = useState(null);
   const [hospitalName, setHospitalName] = useState(user?.hospital_name || user?.hospital || '');
   const [hospitalId, setHospitalId] = useState(user?.hospital_id || user?.unicare_hospital_id || null);
@@ -64,7 +64,7 @@ const RECOVERY_QUESTIONS = [
   "What city were you born in?",
 ];
 
-// Profile & Password Update Form
+  const [profileTab, setProfileTab] = useState('security');
   const [profileForm, setProfileForm] = useState({ name: '', phone: '', experience: '' });
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -442,79 +442,110 @@ const RECOVERY_QUESTIONS = [
   const displayHospital = hospitalName || user?.hospital_name || 'Hospital Network';
 
   return (
-    <div className="min-vh-100 bg-light d-flex flex-column" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* NAVBAR */}
-      <nav className="navbar navbar-expand-lg sticky-top bg-white border-bottom shadow-sm py-2 px-3">
-        <div className="container-fluid max-w-7xl">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm"
-              style={{ width: '42px', height: '42px', backgroundColor: isDoctor ? '#0d9488' : '#f59e0b' }}
-            >
-              <i className={`bi ${isDoctor ? 'bi-stethoscope fs-4' : 'bi-person-badge fs-4'}`}></i>
-            </div>
-            <div>
-              <div className="d-flex align-items-center gap-2">
-                <span className="navbar-brand fw-bold text-dark mb-0 py-0" style={{ fontSize: '1.15rem' }}>
-                  {displayHospital}
-                </span>
-                <span
-                  className="badge rounded-pill fw-medium px-2.5 py-1"
-                  style={{
-                    backgroundColor: isDoctor ? 'rgba(13, 148, 136, 0.12)' : 'rgba(245, 158, 11, 0.15)',
-                    color: isDoctor ? '#0d9488' : '#b45309',
-                    fontSize: '0.75rem'
-                  }}
-                >
-                  <i className={`bi ${isDoctor ? 'bi-hospital me-1' : 'bi-building me-1'}`}></i>
-                  {roleName} Portal
-                </span>
-              </div>
-              <small className="text-muted d-block" style={{ fontSize: '0.78rem' }}>
-                UniCare Integrated Health System
-              </small>
-            </div>
+    <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
+        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+            <i className="bi bi-person-badge-fill fs-5"></i>
           </div>
-
-          {/* Doctor Hospital Switcher & Profile Modal Trigger */}
-          <div className="d-flex align-items-center gap-3 ms-auto mt-2 mt-lg-0">
-            {isDoctor && doctorHospitals.length > 1 && (
-              <div className="d-flex align-items-center gap-1">
-                <small className="text-muted fw-semibold">Hospital:</small>
-                <select
-                  className="form-select form-select-sm rounded-pill fw-bold border-teal text-teal"
-                  value={hospitalId || ''}
-                  onChange={(e) => handleSwitchHospital(Number(e.target.value))}
-                  style={{ fontSize: '0.82rem' }}
-                >
-                  {doctorHospitals.map(h => (
-                    <option key={h.hospital_id} value={h.hospital_id}>
-                      {h.hospital_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="btn btn-light btn-sm rounded-pill px-3 border d-flex align-items-center gap-1"
-              onClick={() => setShowProfileModal(true)}
-            >
-              <i className="bi bi-person-circle text-teal"></i>
-              <span className="fw-semibold text-dark small">{displayName}</span>
-            </button>
-
-            <button
-              onClick={onLogout}
-              className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 d-flex align-items-center gap-1"
-              style={{ fontSize: '0.85rem' }}
-            >
-              <i className="bi bi-box-arrow-right"></i> Logout
-            </button>
+          <div>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Desk</h6>
+            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Receptionist Portal</small>
           </div>
         </div>
-      </nav>
+
+        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
+          <div className="fw-bold text-dark small truncate">{displayName}</div>
+          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+            🏥 {displayHospital}
+          </div>
+        </div>
+
+        <nav className="nav nav-pills flex-column mb-auto gap-1">
+          {[
+            { id: 'dashboard', icon: 'bi-speedometer2', label: 'Dashboard' },
+            { id: 'registration', icon: 'bi-person-plus', label: 'Patient Registration' },
+            { id: 'appointments', icon: 'bi-calendar-event', label: 'Appointments', count: appointments.length },
+            { id: 'queue', icon: 'bi-clock-history', label: 'Hospital Queue', count: pendingApps },
+            { id: 'patients', icon: 'bi-people', label: 'Patients Roster' },
+            { id: 'reports', icon: 'bi-file-earmark-medical', label: 'Reports' },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+                activeTab === item.id ? 'text-white' : 'text-slate-700'
+              }`}
+              style={{
+                backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
+                color: activeTab === item.id ? '#ffffff' : '#334155'
+              }}
+            >
+              <i className={`bi ${item.icon}`}></i> {item.label}
+              {item.count > 0 && (
+                <span className={`badge rounded-pill ms-auto extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
+
+          <hr className="my-2 text-muted opacity-25" />
+
+          <button
+            onClick={() => { setActiveTab('profile'); setShowProfileModal(true); setProfileTab('info'); }}
+            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'profile' ? 'text-white' : 'text-slate-700'
+            }`}
+            style={{
+              backgroundColor: activeTab === 'profile' ? '#0d9488' : 'transparent',
+              color: activeTab === 'profile' ? '#ffffff' : '#334155'
+            }}
+          >
+            <i className="bi bi-person"></i> My Profile
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('password'); setShowProfileModal(true); setProfileTab('security'); }}
+            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'password' ? 'text-white' : 'text-slate-700'
+            }`}
+            style={{
+              backgroundColor: activeTab === 'password' ? '#0d9488' : 'transparent',
+              color: activeTab === 'password' ? '#ffffff' : '#334155'
+            }}
+          >
+            <i className="bi bi-shield-lock"></i> Change Password
+          </button>
+        </nav>
+
+        <div className="pt-2 border-top mt-2">
+          <button
+            onClick={onLogout}
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
+          >
+            <i className="bi bi-box-arrow-right"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-grow-1 overflow-auto d-flex flex-column">
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+              🏥 {displayHospital}
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center gap-3">
+            <div className="text-end">
+              <div className="fw-bold text-dark small">{displayName}</div>
+              <small className="text-muted extra-small">Receptionist & Desk Admin</small>
+            </div>
+          </div>
+        </header>
 
       {/* DASHBOARD BODY */}
       <div className="container-fluid max-w-7xl py-4 flex-grow-1">
@@ -1159,12 +1190,30 @@ const RECOVERY_QUESTIONS = [
       {/* PROFILE & CHANGE PASSWORD MODAL */}
       {showProfileModal && (
         <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content rounded-4 border-0 shadow-lg">
-              <div className="modal-header bg-teal text-white rounded-top-4 p-4" style={{ backgroundColor: '#0d9488' }}>
-                <h5 className="modal-title fw-bold">
-                  <i className="bi bi-person-lines-fill me-2"></i>My Staff Profile
-                </h5>
+              <div className="modal-header bg-teal text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <div className="d-flex align-items-center gap-3">
+                  <h5 className="modal-title fw-bold mb-0 fs-5">
+                    <i className="bi bi-person-lines-fill me-2"></i>My Staff Profile
+                  </h5>
+                  <div className="btn-group btn-group-sm bg-white bg-opacity-25 p-0.5 rounded-pill">
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-3 fw-bold ${profileTab === 'security' ? 'btn-white text-teal shadow-sm bg-white' : 'text-white border-0'}`}
+                      onClick={() => setProfileTab('security')}
+                    >
+                      <i className="bi bi-shield-lock me-1"></i> Password & Recovery
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-3 fw-bold ${profileTab === 'info' ? 'btn-white text-teal shadow-sm bg-white' : 'text-white border-0'}`}
+                      onClick={() => setProfileTab('info')}
+                    >
+                      <i className="bi bi-person-circle me-1"></i> Personal Info
+                    </button>
+                  </div>
+                </div>
                 <button
                   type="button"
                   className="btn-close btn-close-white"
@@ -1172,129 +1221,139 @@ const RECOVERY_QUESTIONS = [
                 ></button>
               </div>
 
-              <div className="modal-body p-4">
+              <div className="modal-body p-3 px-4">
                 {passwordMsg && (
-                  <div className={`alert alert-${passwordMsg.type} py-2 px-3 small mb-3`}>
+                  <div className={`alert alert-${passwordMsg.type} py-1.5 px-3 small mb-3`}>
                     {passwordMsg.text}
                   </div>
                 )}
 
-                {/* Profile Information Form */}
-                <form onSubmit={handleSaveProfile} className="mb-4 pb-4 border-bottom">
-                  <h6 className="fw-bold text-dark mb-3">Update Personal Information</h6>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Full Name</label>
-                    <input
-                      className="form-control"
-                      value={profileForm.name}
-                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Phone Number</label>
-                    <input
-                      type="tel"
-                      className="form-control"
-                      value={profileForm.phone}
-                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      pattern="[0-9+()\-\s]{10,15}"
-                      title="Enter a valid 10-digit phone number"
-                      maxLength="15"
-                    />
-                  </div>
-                  {isDoctor && (
-                    <div className="mb-3">
-                      <label className="form-label small fw-semibold text-muted">Clinical Experience</label>
-                      <input
-                        className="form-control"
-                        placeholder="e.g. 5 Years"
-                        value={profileForm.experience}
-                        onChange={(e) => setProfileForm({ ...profileForm, experience: e.target.value })}
-                      />
+                {profileTab === 'info' ? (
+                  /* Profile Information Form */
+                  <form onSubmit={handleSaveProfile}>
+                    <h6 className="fw-bold text-dark mb-2">Update Personal Information</h6>
+                    <div className="row g-2 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold text-muted mb-1">Full Name</label>
+                        <input
+                          className="form-control form-control-sm"
+                          value={profileForm.name}
+                          onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold text-muted mb-1">Phone Number</label>
+                        <input
+                          type="tel"
+                          className="form-control form-control-sm"
+                          value={profileForm.phone}
+                          onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                          pattern="[0-9+()\-\s]{10,15}"
+                          title="Enter a valid 10-digit phone number"
+                          maxLength="15"
+                        />
+                      </div>
+                      {isDoctor && (
+                        <div className="col-12">
+                          <label className="form-label small fw-semibold text-muted mb-1">Clinical Experience</label>
+                          <input
+                            className="form-control form-control-sm"
+                            placeholder="e.g. 5 Years"
+                            value={profileForm.experience}
+                            onChange={(e) => setProfileForm({ ...profileForm, experience: e.target.value })}
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <button className="btn btn-outline-teal btn-sm fw-bold w-100 rounded-3">
-                    Save Profile Changes
-                  </button>
-                </form>
+                    <button className="btn btn-outline-teal btn-sm fw-bold w-100 rounded-3">
+                      Save Profile Changes
+                    </button>
+                  </form>
+                ) : (
+                  /* Change Password & Recovery Form */
+                  <form onSubmit={handleChangePassword}>
+                    <h6 className="fw-bold text-dark mb-2">Change Password & Security Recovery</h6>
+                    <div className="row g-2 mb-2">
+                      <div className="col-md-4">
+                        <label className="form-label extra-small fw-semibold text-muted mb-1">Current Password *</label>
+                        <input
+                          type="password"
+                          className="form-control form-control-sm"
+                          required
+                          value={passwordForm.current_password}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label extra-small fw-semibold text-muted mb-1">New Password (Min 8 chars) *</label>
+                        <input
+                          type="password"
+                          className="form-control form-control-sm"
+                          minLength="8"
+                          required
+                          value={passwordForm.new_password}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label extra-small fw-semibold text-muted mb-1">Confirm New Password *</label>
+                        <input
+                          type="password"
+                          className="form-control form-control-sm"
+                          minLength="8"
+                          required
+                          value={passwordForm.confirm_password}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
+                        />
+                      </div>
+                    </div>
 
-                {/* Change Password & Recovery Form */}
-                <form onSubmit={handleChangePassword}>
-                  <h6 className="fw-bold text-dark mb-3">Change Password & Security Recovery</h6>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Current Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      required
-                      value={passwordForm.current_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">New Password (Min 8 chars)</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      minLength="8"
-                      required
-                      value={passwordForm.new_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Confirm New Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      minLength="8"
-                      required
-                      value={passwordForm.confirm_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
-                    />
-                  </div>
+                    <div className="border-top pt-2 mt-2">
+                      <h6 className="fw-bold text-dark mb-1 small">Account Recovery Setup</h6>
+                      <p className="text-muted extra-small mb-2" style={{ fontSize: '0.78rem' }}>
+                        Select a security question and answer for self-service password recovery.
+                      </p>
 
-                  <hr className="my-3" />
-                  <h6 className="fw-bold text-dark mb-2">Account Recovery Setup</h6>
-                  <p className="text-muted extra-small mb-3" style={{ fontSize: '0.8rem' }}>
-                    Select a security recovery question and answer to enable self-service password reset if you forget your password.
-                  </p>
+                      <div className="row g-2 mb-2">
+                        <div className="col-md-6">
+                          <label className="form-label extra-small fw-semibold text-muted mb-1">Security Recovery Question *</label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={passwordForm.recovery_question}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
+                            required
+                          >
+                            {RECOVERY_QUESTIONS.map((q, idx) => (
+                              <option key={idx} value={q}>{q}</option>
+                            ))}
+                          </select>
+                        </div>
 
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Security Recovery Question *</label>
-                    <select
-                      className="form-select text-sm"
-                      value={passwordForm.recovery_question}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
-                      required
-                    >
-                      {RECOVERY_QUESTIONS.map((q, idx) => (
-                        <option key={idx} value={q}>{q}</option>
-                      ))}
-                    </select>
-                  </div>
+                        <div className="col-md-6">
+                          <label className="form-label extra-small fw-semibold text-muted mb-1">Security Recovery Answer *</label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="Enter your secret answer"
+                            required
+                            value={passwordForm.recovery_answer}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Security Recovery Answer *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Enter your secret answer"
-                      required
-                      value={passwordForm.recovery_answer}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
-                    />
-                  </div>
-
-                  <button className="btn btn-teal text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
-                    Update Password & Security Settings
-                  </button>
-                </form>
+                    <button className="btn btn-teal text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
+                      Update Password & Security Settings
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

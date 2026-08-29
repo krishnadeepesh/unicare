@@ -301,117 +301,85 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation (LIGHT THEME) */}
       <aside 
-        className="d-flex flex-column flex-shrink-0 p-3 text-white shadow-lg" 
-        style={{ width: '260px', background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)', zIndex: 1000 }}
+        className="d-flex flex-column flex-shrink-0 p-3 bg-white border-end shadow-sm" 
+        style={{ width: '260px', zIndex: 1000 }}
       >
         {/* Brand Section */}
-        <div className="d-flex align-items-center mb-4 px-2 pt-2">
-          <div className="bg-primary rounded-3 p-2 text-white me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px' }}>
+        <div className="d-flex align-items-center mb-3 px-2 pt-2">
+          <div className="rounded-3 p-2 text-white me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', backgroundColor: '#0d9488' }}>
             <i className="bi bi-shield-plus fs-4"></i>
           </div>
           <div>
-            <h5 className="fw-bold mb-0 text-white tracking-wide">UniCare</h5>
-            <small className="text-white-50 text-uppercase fw-semibold" style={{ fontSize: '0.7rem' }}>Super Admin</small>
+            <h5 className="fw-bold mb-0 text-dark tracking-wide">UniCare</h5>
+            <small className="text-teal text-uppercase fw-semibold" style={{ fontSize: '0.7rem', color: '#0d9488' }}>Super Admin</small>
           </div>
         </div>
 
-        <hr className="text-secondary opacity-25 my-2" />
+        <hr className="my-2 text-muted opacity-25" />
 
         {/* Sidebar Menu Items */}
         <ul className="nav nav-pills flex-column mb-auto gap-1">
-          {/* Dashboard */}
-          <li className="nav-item">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 fw-medium transition-all ${
-                activeTab === 'dashboard' ? 'active bg-primary text-white shadow-sm' : 'text-white-50 hover-light'
-              }`}
-            >
-              <i className="bi bi-grid-1x2-fill fs-5"></i>
-              <span>Dashboard</span>
-            </button>
-          </li>
-
-          {/* Hospital Requests */}
-          <li className="nav-item">
-            <button
-              onClick={() => setActiveTab('requests')}
-              className={`nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 fw-medium transition-all position-relative ${
-                activeTab === 'requests' ? 'active bg-primary text-white shadow-sm' : 'text-white-50 hover-light'
-              }`}
-            >
-              <i className="bi bi-clock-history fs-5"></i>
-              <span>Hospital Requests</span>
-              {stats.pending_hospitals > 0 && (
-                <span className="badge bg-warning text-dark ms-auto fw-bold" style={{ fontSize: '0.7rem' }}>
-                  {stats.pending_hospitals}
-                </span>
-              )}
-            </button>
-          </li>
-
-          {/* Manage Hospitals */}
-          <li className="nav-item">
-            <button
-              onClick={() => setActiveTab('hospitals')}
-              className={`nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 fw-medium transition-all ${
-                activeTab === 'hospitals' ? 'active bg-primary text-white shadow-sm' : 'text-white-50 hover-light'
-              }`}
-            >
-              <i className="bi bi-hospital fs-5"></i>
-              <span>Manage Hospitals</span>
-            </button>
-          </li>
-
-          {/* Analytics */}
-          <li className="nav-item">
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 fw-medium transition-all ${
-                activeTab === 'analytics' ? 'active bg-primary text-white shadow-sm' : 'text-white-50 hover-light'
-              }`}
-            >
-              <i className="bi bi-bar-chart-line-fill fs-5"></i>
-              <span>Analytics</span>
-            </button>
-          </li>
-
-          {/* Profile */}
+          {[
+            { id: 'dashboard', icon: 'bi-grid-1x2-fill', label: 'Dashboard' },
+            { id: 'requests', icon: 'bi-clock-history', label: 'Hospital Approvals', count: stats.pending_hospitals },
+            { id: 'hospitals', icon: 'bi-hospital', label: 'Manage Hospitals' },
+            { id: 'analytics', icon: 'bi-graph-up-arrow', label: 'System Analytics' },
+          ].map(item => (
+            <li className="nav-item" key={item.id}>
+              <button
+                onClick={() => setActiveTab(item.id)}
+                className={`nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 fw-semibold transition-all ${
+                  activeTab === item.id ? 'text-white' : 'text-slate-700'
+                }`}
+                style={{
+                  backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
+                  color: activeTab === item.id ? '#ffffff' : '#334155'
+                }}
+              >
+                <i className={`bi ${item.icon} fs-5`}></i>
+                <span>{item.label}</span>
+                {item.count > 0 && (
+                  <span className={`badge rounded-pill ms-auto fw-bold ${activeTab === item.id ? 'bg-white text-teal' : 'bg-warning text-dark'}`} style={{ fontSize: '0.7rem' }}>
+                    {item.count}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
           <li className="nav-item mt-2">
             <button
               onClick={() => setProfileModalOpen(true)}
-              className="nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 text-white-50 hover-light fw-medium"
+              className="nav-link w-100 text-start d-flex align-items-center gap-3 px-3 py-2.5 rounded-3 text-slate-700 fw-semibold"
             >
               <i className="bi bi-person-badge-fill fs-5"></i>
-              <span>Profile</span>
+              <span>Profile Settings</span>
             </button>
           </li>
         </ul>
 
-        <hr className="text-secondary opacity-25 my-3" />
+        <hr className="my-2 text-muted opacity-25" />
 
         {/* User Card & Logout */}
-        <div className="d-flex align-items-center justify-content-between p-2 rounded-3 bg-white bg-opacity-10 mb-2">
+        <div className="d-flex align-items-center justify-content-between p-2 rounded-3 bg-light border mb-2">
           <div className="d-flex align-items-center gap-2 overflow-hidden">
-            <div className="bg-primary bg-gradient rounded-circle text-white d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', flexShrink: 0 }}>
+            <div className="text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', flexShrink: 0, backgroundColor: '#0d9488' }}>
               {adminName.charAt(0).toUpperCase()}
             </div>
-            <div className="truncate">
-              <div className="fw-semibold text-white text-truncate small">{adminName}</div>
-              <small className="text-white-50 text-truncate d-block" style={{ fontSize: '0.7rem' }}>Super Admin</small>
+            <div className="overflow-hidden">
+              <div className="fw-bold text-dark text-truncate small">{adminName}</div>
+              <div className="text-teal extra-small" style={{ color: '#0d9488' }}>Super Administrator</div>
             </div>
           </div>
+          <button 
+            onClick={handleLogoutClick}
+            className="btn btn-outline-danger btn-sm p-1.5 rounded-circle border-0 ms-1"
+            title="Logout"
+          >
+            <i className="bi bi-box-arrow-right fs-6"></i>
+          </button>
         </div>
-
-        <button
-          onClick={handleLogoutClick}
-          className="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2 py-2 rounded-3 border-opacity-50"
-        >
-          <i className="bi bi-box-arrow-right fs-5"></i>
-          <span className="fw-bold">Logout</span>
-        </button>
       </aside>
 
       {/* Main Content Area */}

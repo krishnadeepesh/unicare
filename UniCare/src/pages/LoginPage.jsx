@@ -168,24 +168,24 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
             
             {/* Back Arrow */}
             <button 
-              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
+              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-2 p-0"
               onClick={() => setView('landing')}
             >
               <i className="bi bi-arrow-left me-2"></i>
               Back to Home
             </button>
 
-            <div className="auth-card unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
-              <div className="auth-card-header text-center mb-4">
-                <div className="bg-teal-subtle text-teal rounded-circle d-inline-flex p-3 mb-3" style={{ backgroundColor: '#e6f4f1' }}>
-                  <i className="bi bi-shield-lock fs-2" style={{ color: '#0d9488' }}></i>
+            <div className="auth-card unicare-card p-3 p-md-4 shadow-lg border-0 rounded-4 bg-white">
+              <div className="auth-card-header text-center mb-3">
+                <div className="bg-teal-subtle text-teal rounded-circle d-inline-flex p-2 mb-2" style={{ backgroundColor: '#e6f4f1' }}>
+                  <i className="bi bi-shield-lock fs-3" style={{ color: '#0d9488' }}></i>
                 </div>
-                <h2 className="fw-bold text-slate-800">UniCare Login</h2>
-                <p className="text-muted" style={{ fontSize: '0.875rem' }}>Use your registered email address or phone number to access your portal.</p>
+                <h3 className="fw-bold text-slate-800 fs-4 mb-1">UniCare Login</h3>
+                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Use your registered email address or phone number to access your portal.</p>
               </div>
 
               {errorMsg && (
-                <div className="alert alert-danger py-2 px-3 mb-3 text-start small d-flex align-items-center gap-2">
+                <div className="alert alert-danger py-1.5 px-3 mb-2.5 text-start small d-flex align-items-center gap-2">
                   <i className="bi bi-exclamation-triangle-fill"></i>
                   <span>{errorMsg}</span>
                 </div>
@@ -193,8 +193,8 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
 
               <form onSubmit={handleSubmit}>
                 {/* Email / Username Field */}
-                <div className="mb-3">
-                  <label className="form-label fw-semibold text-slate-700">Email or Phone Number</label>
+                <div className="mb-2.5">
+                  <label className="form-label fw-semibold text-slate-700 small mb-1">Email or Phone Number</label>
                   <div className="input-group">
                     <span className="input-group-text bg-light text-muted border-end-0"><i className="bi bi-person"></i></span>
                     <input 
@@ -208,12 +208,13 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                 </div>
 
                 {/* Password Field */}
-                <div className="mb-3">
+                <div className="mb-2.5">
                   <div className="d-flex justify-content-between align-items-center mb-1">
-                    <label className="form-label fw-semibold text-slate-700 mb-0">Password</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-0">Password</label>
                     <button 
                       type="button" 
-                      className="btn btn-link p-0 text-teal text-decoration-none small fw-semibold"
+                      className="btn btn-link p-0 text-teal text-decoration-none extra-small fw-semibold"
+                      style={{ fontSize: '0.8rem' }}
                       onClick={() => setShowForgotModal(true)}
                     >
                       Forgot Password?
@@ -234,7 +235,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                 {/* Login Button */}
                 <button 
                   type="submit" 
-                  className="btn btn-primary-unicare w-100 py-3 fs-6 rounded-3 mt-3 shadow-sm"
+                  className="btn btn-primary-unicare w-100 py-2.5 fs-6 rounded-3 mt-2.5 shadow-sm"
                   disabled={loading}
                 >
                   {loading ? (
@@ -252,8 +253,8 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
               </form>
 
               {/* Bottom Registration Callout */}
-              <div className="text-center mt-4 pt-3 border-top">
-                <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+              <div className="text-center mt-3 pt-2 border-top">
+                <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>
                   New to UniCare?{' '}
                   <button 
                     type="button"
@@ -275,19 +276,19 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-4 border-0 shadow">
-              <div className="modal-header border-0 pb-0">
-                <h5 className="modal-title fw-bold text-dark"><i className="bi bi-key me-2 text-teal"></i>Forgot Password?</h5>
+              <div className="modal-header border-0 pb-0 pt-3 px-4">
+                <h5 className="modal-title fw-bold text-dark fs-5"><i className="bi bi-key me-2 text-teal"></i>Forgot Password?</h5>
                 <button type="button" className="btn-close" onClick={closeForgotModal}></button>
               </div>
 
-              <div className="modal-body py-4 text-secondary">
+              <div className="modal-body py-3 px-4 text-secondary">
                 {resetStep === 'lookup' && (
                   <form onSubmit={handleRecoveryLookup}>
-                    <p className="small">Enter your registered email address or phone number. We will show you your recovery question to verify your identity.</p>
-                    {resetError && <div className="alert alert-danger py-2 small">{resetError}</div>}
-                    {resetMessage && <div className="alert alert-success py-2 small">{resetMessage}</div>}
+                    <p className="small mb-3">Enter your registered email address or phone number. We will show you your recovery question to verify your identity.</p>
+                    {resetError && <div className="alert alert-danger py-2 small mb-3">{resetError}</div>}
+                    {resetMessage && <div className="alert alert-success py-2 small mb-3">{resetMessage}</div>}
                     <div className="mb-3">
-                      <label className="form-label">Registered email or phone number</label>
+                      <label className="form-label small fw-semibold">Registered email or phone number</label>
                       <input
                         type="text"
                         className="form-control"
@@ -296,9 +297,9 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                         required
                       />
                     </div>
-                    <div className="d-flex justify-content-end gap-2">
-                      <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
-                      <button type="submit" className="btn btn-primary px-4 rounded-pill" disabled={resetLoading}>
+                    <div className="d-flex justify-content-end gap-2 mt-3">
+                      <button type="button" className="btn btn-secondary btn-sm px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
+                      <button type="submit" className="btn btn-primary btn-sm px-4 rounded-pill" disabled={resetLoading}>
                         {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Checking...</> : 'Continue'}
                       </button>
                     </div>
@@ -307,51 +308,53 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
 
                 {resetStep === 'question' && (
                   <form onSubmit={handleRecoveryVerify}>
-                    <p className="small">Answer your recovery question to verify your identity.</p>
-                    {resetError && <div className="alert alert-danger py-2 small">{resetError}</div>}
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold text-slate-700">Recovery Question</label>
-                      <div className="alert alert-info py-2 small mb-0">
+                    <p className="small mb-2">Answer your recovery question to verify your identity.</p>
+                    {resetError && <div className="alert alert-danger py-1.5 small mb-2">{resetError}</div>}
+                    <div className="mb-2">
+                      <label className="form-label small fw-semibold text-slate-700 mb-1">Recovery Question</label>
+                      <div className="alert alert-info py-1.5 px-3 small mb-0">
                         <i className="bi bi-question-circle me-1"></i>
                         {recoveryQuestion}
                       </div>
                     </div>
-                    <div className="mb-3">
-                      <label className="form-label">Your Answer</label>
+                    <div className="mb-2">
+                      <label className="form-label small fw-semibold">Your Answer</label>
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={resetForm.answer}
                         onChange={(e) => setResetForm({ ...resetForm, answer: e.target.value })}
                         placeholder="Enter your answer"
                         required
                       />
                     </div>
-                    <div className="mb-3">
-                      <label className="form-label">New Password</label>
-                      <input
-                        type="password"
-                        className="form-control"
-                        value={resetForm.password}
-                        onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })}
-                        placeholder="At least 8 characters with a letter and number"
-                        required
-                      />
+                    <div className="row g-2 mb-2">
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold">New Password</label>
+                        <input
+                          type="password"
+                          className="form-control form-control-sm"
+                          value={resetForm.password}
+                          onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })}
+                          placeholder="Min 8 chars (letter & number)"
+                          required
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-semibold">Confirm Password</label>
+                        <input
+                          type="password"
+                          className="form-control form-control-sm"
+                          value={resetForm.confirmPassword}
+                          onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })}
+                          placeholder="Re-enter password"
+                          required
+                        />
+                      </div>
                     </div>
-                    <div className="mb-3">
-                      <label className="form-label">Confirm New Password</label>
-                      <input
-                        type="password"
-                        className="form-control"
-                        value={resetForm.confirmPassword}
-                        onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })}
-                        placeholder="Re-enter your new password"
-                        required
-                      />
-                    </div>
-                    <div className="d-flex justify-content-end gap-2">
-                      <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
-                      <button type="submit" className="btn btn-primary px-4 rounded-pill" disabled={resetLoading}>
+                    <div className="d-flex justify-content-end gap-2 mt-3">
+                      <button type="button" className="btn btn-secondary btn-sm px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
+                      <button type="submit" className="btn btn-primary btn-sm px-4 rounded-pill" disabled={resetLoading}>
                         {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Verifying...</> : 'Reset Password'}
                       </button>
                     </div>

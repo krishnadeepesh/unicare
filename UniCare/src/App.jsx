@@ -11,6 +11,7 @@ import HospitalRoleSelectorPage from './pages/HospitalRoleSelectorPage';
 import HospitalAdminDashboardPage from './pages/HospitalAdminDashboardPage';
 import SuperAdminDashboardPage from './pages/SuperAdminDashboardPage';
 import StaffDashboardPage from './pages/StaffDashboardPage';
+import DoctorDashboardPage from './pages/DoctorDashboardPage';
 import PatientPortalPage from './pages/PatientPortalPage';
 
 function App() {
@@ -191,6 +192,7 @@ function App() {
           />
         );
       case 'doctor-dashboard':
+        return <DoctorDashboardPage user={currentUser} onLogout={handleLogout} />;
       case 'receptionist-dashboard':
         return <StaffDashboardPage user={currentUser} onLogout={handleLogout} />;
       case 'patient-dashboard':

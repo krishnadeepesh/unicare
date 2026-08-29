@@ -716,27 +716,29 @@ def patient_history(request):
     user, error = require_roles(request, 'doctor')
     if error:
         return error
-    patient_id = request.GET.get('patient_id')
-    if not patient_id:
-        return JsonResponse({'status': 'error', 'message': 'Patient ID is required.'}, status=400)
+    patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
+    if not patient_param:
+        return JsonResponse({'status': 'error', 'message': 'Patient ID or Health ID is required.'}, status=400)
 
     with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT patient_id, patient_uid, patient_name, patient_email, patient_phone,"
+            " patient_dob, patient_gender, patient_blood_group, patient_address, patient_emergency_contact"
+            " FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1",
+            [patient_param, patient_param]
+        )
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+
+        patient_id = p_row[0]
+
         cursor.execute(
             "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1",
             [patient_id, user['doctor_id'], user['hospital_id']]
         )
         if not cursor.fetchone():
             return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient history.'}, status=403)
-
-        cursor.execute(
-            "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
-            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
-            " FROM tbl_patient p WHERE p.patient_id=%s",
-            [patient_id]
-        )
-        p_row = cursor.fetchone()
-        if not p_row:
-            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
 
         patient = {
             'patient_id': p_row[0],
@@ -774,6 +776,7 @@ def patient_history(request):
             }
             for r in v_rows
         ]
+    return JsonResponse({'status': 'success', 'patient': patient, 'history': visits})
 
     return JsonResponse({'status': 'success', 'patient': patient, 'visits': visits})
 
@@ -906,34 +909,71 @@ def visits(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
     ensure_workflow_schema()
     data = payload(request)
-    patient_id = data.get('patient_id')
-    appointment_id = data.get('appointment_id')
-    if not patient_id:
+    patient_param = data.get('patient_id') or data.get('health_id')
+    raw_appointment_id = data.get('appointment_id')
+
+    appointment_id = None
+    if raw_appointment_id and str(raw_appointment_id).strip() not in ('', 'null', 'undefined', 'None', '0'):
+        try:
+            appointment_id = int(raw_appointment_id)
+        except (ValueError, TypeError):
+            appointment_id = None
+
+    if not patient_param:
         return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
 
     with connection.cursor() as cursor:
-        # Verify the appointment belongs to this doctor and hospital
-        sql = (
-            "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s"
-            + (" AND appointment_id=%s" if appointment_id else "")
+        cursor.execute(
+            "SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1",
+            [patient_param, patient_param]
         )
-        params = [patient_id, user['doctor_id'], user['hospital_id']]
-        if appointment_id:
-            params.append(appointment_id)
-        cursor.execute(sql, params)
-        if not cursor.fetchone():
-            return JsonResponse({'status': 'error', 'message': 'The visit must be linked to one of your hospital appointments.'}, status=403)
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+        patient_id = p_row[0]
 
+        # If an explicit appointment_id was provided, verify it belongs to this doctor & hospital
+        if appointment_id:
+            cursor.execute(
+                "SELECT appointment_id FROM tbl_appointment WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
+                [appointment_id, user['doctor_id'], user['hospital_id']]
+            )
+            if not cursor.fetchone():
+                appointment_id = None
+
+        # If no valid appointment_id was found/passed, look for any existing appointment for this patient with this doctor at this hospital
+        if not appointment_id:
+            cursor.execute(
+                "SELECT appointment_id FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s"
+                " ORDER BY (appointment_status IN ('Pending','Confirmed')) DESC, appointment_id DESC LIMIT 1",
+                [patient_id, user['doctor_id'], user['hospital_id']]
+            )
+            app_row = cursor.fetchone()
+            if app_row:
+                appointment_id = app_row[0]
+
+        # If still no appointment exists (e.g. direct walk-in consultation), auto-create an appointment record
+        if not appointment_id:
+            cursor.execute(
+                "INSERT INTO tbl_appointment (patient_id, hospital_id, doctor_id, appointment_date, appointment_time, reason, created_by_user_id, appointment_status)"
+                " VALUES (%s, %s, %s, CURRENT_DATE(), DATE_FORMAT(NOW(), '%%H:%%i'), %s, %s, 'Completed')",
+                [patient_id, user['hospital_id'], user['doctor_id'], (data.get('diagnosis') or 'Walk-in Visit').strip(), user['user_id']]
+            )
+            appointment_id = cursor.lastrowid
+
+        # Insert clinical visit record
         cursor.execute(
             "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes)"
             " VALUES (%s,%s,%s,%s,%s,%s)",
             [patient_id, user['doctor_id'], user['hospital_id'], appointment_id,
              (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip()]
         )
-        if appointment_id:
-            cursor.execute(
-                "UPDATE tbl_appointment SET appointment_status='Completed'"
-                " WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
-                [appointment_id, user['doctor_id'], user['hospital_id']]
-            )
+
+        # Mark appointment as completed
+        cursor.execute(
+            "UPDATE tbl_appointment SET appointment_status='Completed'"
+            " WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
+            [appointment_id, user['doctor_id'], user['hospital_id']]
+        )
+
     return JsonResponse({'status': 'success', 'message': 'Patient visit saved successfully.'})

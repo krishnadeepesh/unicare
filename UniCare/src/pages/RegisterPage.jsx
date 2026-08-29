@@ -106,71 +106,70 @@ export default function RegisterPage({ setView }) {
             
             {/* Back Arrow */}
             <button 
-              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-4 p-0"
+              className="auth-back-link btn btn-link text-muted text-decoration-none hover-primary mb-2 p-0"
               onClick={() => setView('landing')}
             >
               <i className="bi bi-arrow-left me-2"></i>
               Back to Home
             </button>
 
-            <div className="auth-card unicare-card p-4 p-md-5 shadow-lg border-0 rounded-4 bg-white">
-              <div className="auth-card-header text-center mb-4">
-                <span className="badge px-3 py-2 rounded-pill mb-2" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+            <div className="auth-card unicare-card p-3 p-md-4 shadow-lg border-0 rounded-4 bg-white">
+              <div className="auth-card-header text-center mb-2">
+                <span className="badge px-3 py-1 rounded-pill mb-1" style={{ backgroundColor: '#e6f4f1', color: '#0d9488', fontSize: '0.78rem' }}>
                   UniCare Network Registration
                 </span>
-                <h2 className="fw-bold text-slate-800">Hospital Admin Registration</h2>
-                <p className="text-muted" style={{ fontSize: '0.875rem' }}>Create your administrator account and register your hospital.</p>
+                <h3 className="fw-bold text-slate-800 fs-4 mb-1">Hospital Admin Registration</h3>
+                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Create your administrator account and register your hospital.</p>
               </div>
 
               {errorMsg && (
-                <div className="alert alert-danger py-2 px-3 mb-3 text-start small d-flex align-items-center gap-2">
+                <div className="alert alert-danger py-1.5 px-3 mb-2 text-start small d-flex align-items-center gap-2">
                   <i className="bi bi-exclamation-triangle-fill"></i>
                   <span>{errorMsg}</span>
                 </div>
               )}
 
               {successMsg && (
-                <div className="alert alert-success py-2 px-3 mb-3 text-start small d-flex align-items-center gap-2">
+                <div className="alert alert-success py-1.5 px-3 mb-2 text-start small d-flex align-items-center gap-2">
                   <i className="bi bi-check-circle-fill me-1"></i>
                   <span>{successMsg}</span>
                 </div>
               )}
 
               <form onSubmit={handleRegister}>
-                {/* Section 1: User / Administrator Details */}
-                <h3 className="h6 fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
-                  <i className="bi bi-person-badge me-2"></i>Administrator Account Details
-                </h3>
+                {/* Section 1: Account Credentials */}
+                <h4 className="small fw-bold text-teal text-uppercase mb-2 border-bottom pb-1" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
+                  <i className="bi bi-person-badge me-1.5"></i>Account Credentials
+                </h4>
 
-                <div className="row g-3 mb-4">
-                  {/* Full Name * */}
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Full Name *</label>
+                <div className="row g-2 mb-2">
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Full Name *</label>
                     <input 
                       type="text" 
-                      className="form-control" 
+                      className="form-control form-control-sm" 
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required 
                     />
                   </div>
 
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Email Address *</label>
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Email Address *</label>
                     <input
                       type="email"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
 
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Phone Number *</label>
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Phone Number *</label>
                     <input
                       type="tel"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       pattern="[0-9+()\-\s]{10,20}"
@@ -181,10 +180,10 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Password *</label>
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Password (Min 8 chars, letter & number) *</label>
                     <input
                       type="password"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       minLength="8"
@@ -193,10 +192,10 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700">Confirm Password *</label>
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Confirm Password *</label>
                     <input
                       type="password"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       minLength="8"
@@ -205,19 +204,16 @@ export default function RegisterPage({ setView }) {
                   </div>
                 </div>
 
-                {/* Section 2: Account Recovery Details */}
-                <h3 className="h6 fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
-                  <i className="bi bi-shield-lock me-2"></i>Account Recovery Details
-                </h3>
-                <p className="text-muted small mb-3">
-                  Choose a recovery question and answer. You will use these to reset your password if you ever forget it.
-                </p>
+                {/* Section 2: Account Recovery Setup */}
+                <h4 className="small fw-bold text-teal text-uppercase mb-2 border-bottom pb-1 mt-1" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
+                  <i className="bi bi-shield-lock me-1.5"></i>Account Recovery Setup
+                </h4>
 
-                <div className="row g-3 mb-4">
-                  <div className="col-12">
-                    <label className="form-label fw-semibold text-slate-700">Recovery Question *</label>
+                <div className="row g-2 mb-2">
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Recovery Question *</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={recoveryQuestion}
                       onChange={(e) => setRecoveryQuestion(e.target.value)}
                       required
@@ -229,24 +225,23 @@ export default function RegisterPage({ setView }) {
                     </select>
                   </div>
 
-                  <div className="col-12">
-                    <label className="form-label fw-semibold text-slate-700">Recovery Answer *</label>
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Recovery Answer *</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={recoveryAnswer}
                       onChange={(e) => setRecoveryAnswer(e.target.value)}
-                      placeholder="Enter your answer"
+                      placeholder="Enter secret answer"
                       maxLength="100"
                       required
                     />
-                    <div className="form-text">Your answer is stored securely and will never be shown to anyone.</div>
                   </div>
                 </div>
 
                 <button 
                   type="submit" 
-                  className="btn btn-primary-unicare w-100 py-3 fs-6 rounded-3 shadow-sm"
+                  className="btn btn-primary-unicare w-100 py-2.5 fs-6 rounded-3 shadow-sm mt-2"
                   disabled={loading}
                 >
                   {loading ? (
@@ -264,8 +259,8 @@ export default function RegisterPage({ setView }) {
               </form>
 
               {/* Bottom Login Link */}
-              <div className="text-center mt-4 pt-3 border-top">
-                <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+              <div className="text-center mt-2.5 pt-2 border-top">
+                <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>
                   Already registered?{' '}
                   <button 
                     type="button"

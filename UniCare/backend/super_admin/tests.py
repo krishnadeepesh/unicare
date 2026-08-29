@@ -62,6 +62,19 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
                 patient_emergency_contact VARCHAR(20) NULL,
                 patient_is_active TINYINT(1) DEFAULT 1
             )""")
+            cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_appointment (
+                appointment_id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_id INT NOT NULL,
+                hospital_id INT NOT NULL,
+                department_id INT NULL,
+                doctor_id INT NOT NULL,
+                appointment_date DATE NOT NULL,
+                appointment_time VARCHAR(20) NOT NULL,
+                reason TEXT NULL,
+                created_by_user_id INT NULL,
+                appointment_status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
 
         ensure_workflow_schema()
         ensure_recovery_columns()
@@ -183,3 +196,47 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
         )
         self.assertEqual(login_res.status_code, 200)
         self.assertEqual(login_res.json()['status'], 'success')
+
+    def test_doctor_record_visit_flow(self):
+        # 1. Doctor login
+        doc_login = self.client.post(
+            '/api/super-admin/auth/login/',
+            data=json.dumps({'identifier': 'doctor_temp@test.com', 'password': 'TempPass123!'}),
+            content_type='application/json'
+        )
+        self.assertEqual(doc_login.status_code, 200)
+
+        # 2. Setup appointment between Doctor and Patient
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM tbl_doctor WHERE user_id=%s", [self.doctor_user_id])
+            doc_id = cursor.fetchone()[0]
+            cursor.execute("SELECT patient_id FROM tbl_patient WHERE user_id=%s", [self.patient_user_id])
+            pat_id = cursor.fetchone()[0]
+
+            cursor.execute("""
+                INSERT INTO tbl_appointment (patient_id, hospital_id, doctor_id, appointment_date, appointment_time, appointment_status)
+                VALUES (%s, 9000, %s, '2026-08-30', '10:00', 'Confirmed')
+            """, [pat_id, doc_id])
+            app_id = cursor.lastrowid
+
+        # 3. Post visit record with empty appointment_id string (verifying empty string cleaning fix)
+        visit_res = self.client.post(
+            '/api/super-admin/visits/',
+            data=json.dumps({
+                'patient_id': 'PTT001',
+                'appointment_id': '',
+                'diagnosis': 'Seasonal Allergies',
+                'medical_notes': 'Prescribed antihistamines.'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(visit_res.status_code, 200)
+        self.assertEqual(visit_res.json()['status'], 'success')
+
+        # 4. Fetch patient history via health_id
+        hist_res = self.client.get('/api/super-admin/patient-history/?health_id=PTT001')
+        self.assertEqual(hist_res.status_code, 200)
+        self.assertEqual(hist_res.json()['status'], 'success')
+        self.assertEqual(len(hist_res.json()['history']), 1)
+        self.assertEqual(hist_res.json()['history'][0]['diagnosis'], 'Seasonal Allergies')
+

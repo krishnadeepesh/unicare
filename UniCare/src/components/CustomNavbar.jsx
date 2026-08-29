@@ -89,9 +89,17 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
               <>
                 <button 
                   className="btn btn-outline-teal px-3 py-2 fs-7 d-flex align-items-center gap-1"
-                  onClick={() => setView(currentUser.type === 'hospital' ? 'hospital-dashboard' : 'patient-dashboard')}
+                  onClick={() => {
+                    const targetView = 
+                      currentUser.role === 'doctor' ? 'doctor-dashboard' :
+                      currentUser.role === 'receptionist' ? 'receptionist-dashboard' :
+                      currentUser.role === 'patient' || currentUser.role === 'Patient' ? 'patient-dashboard' :
+                      currentUser.type === 'hospital' || currentUser.role === 'hospital-admin' ? 'hospital-admin-dashboard' :
+                      'patient-dashboard';
+                    setView(targetView);
+                  }}
                 >
-                  <i className={`bi ${currentUser.type === 'hospital' ? 'bi-hospital' : 'bi-person-circle'}`}></i>
+                  <i className={`bi ${currentUser.role === 'doctor' ? 'bi-stethoscope' : currentUser.type === 'hospital' ? 'bi-hospital' : 'bi-person-circle'}`}></i>
                   <span>Dashboard</span>
                 </button>
                 <button 

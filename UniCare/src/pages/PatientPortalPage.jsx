@@ -13,6 +13,7 @@ const RECOVERY_QUESTIONS = [
 ];
 
 export default function PatientPortalPage({ user, onLogout }) {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [appointments, setAppointments] = useState([]);
   const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -141,52 +142,109 @@ export default function PatientPortalPage({ user, onLogout }) {
   const patientName = user?.name || user?.user_name || 'Patient';
 
   return (
-    <div className="min-vh-100 bg-light d-flex flex-column" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* NAVBAR */}
-      <nav className="navbar navbar-expand-lg sticky-top bg-white border-bottom shadow-sm py-2 px-3">
-        <div className="container-fluid max-w-7xl">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm"
-              style={{ width: '42px', height: '42px', backgroundColor: '#0d9488' }}
-            >
-              <i className="bi bi-heart-pulse-fill fs-4"></i>
-            </div>
-            <div>
-              <span className="navbar-brand fw-bold text-dark mb-0 py-0" style={{ fontSize: '1.15rem' }}>
-                UniCare Patient Portal
-              </span>
-              <small className="text-muted d-block" style={{ fontSize: '0.8rem' }}>
-                Unified Healthcare Network
-              </small>
-            </div>
+    <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
+        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+            <i className="bi bi-heart-pulse-fill fs-5"></i>
           </div>
-
-          <div className="d-flex align-items-center gap-3 ms-auto">
-            <div className="text-end d-none d-md-block">
-              <div className="fw-semibold text-dark small">
-                <i className="bi bi-person-circle text-teal me-1"></i>
-                {patientName}
-              </div>
-              <small className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
-                ID: {user?.patient_uid || user?.health_id || 'N/A'}
-              </small>
-            </div>
-            <button
-              onClick={() => setShowSecurityModal(true)}
-              className="btn btn-outline-teal btn-sm rounded-pill px-3 py-1 me-1 d-flex align-items-center gap-1"
-            >
-              <i className="bi bi-shield-lock"></i> Security & Password
-            </button>
-            <button
-              onClick={onLogout}
-              className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 d-flex align-items-center gap-1"
-            >
-              <i className="bi bi-box-arrow-right"></i> Logout
-            </button>
+          <div>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Patient</h6>
+            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Patient Access Portal</small>
           </div>
         </div>
-      </nav>
+
+        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
+          <div className="fw-bold text-dark small truncate">{patientName}</div>
+          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+            ID: {user?.patient_uid || user?.health_id || 'N/A'}
+          </div>
+        </div>
+
+        <nav className="nav nav-pills flex-column mb-auto gap-1">
+          {[
+            { id: 'dashboard', icon: 'bi-speedometer2', label: 'Dashboard' },
+            { id: 'appointments', icon: 'bi-calendar-event', label: 'My Appointments', count: appointments.length },
+            { id: 'records', icon: 'bi-folder2-open', label: 'Medical Records' },
+            { id: 'prescriptions', icon: 'bi-capsule', label: 'Prescriptions' },
+            { id: 'reports', icon: 'bi-file-earmark-medical', label: 'Reports' },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+                activeTab === item.id ? 'text-white' : 'text-slate-700'
+              }`}
+              style={{
+                backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
+                color: activeTab === item.id ? '#ffffff' : '#334155'
+              }}
+            >
+              <i className={`bi ${item.icon}`}></i> {item.label}
+              {item.count > 0 && (
+                <span className={`badge rounded-pill ms-auto extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
+
+          <hr className="my-2 text-muted opacity-25" />
+
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'profile' ? 'text-white' : 'text-slate-700'
+            }`}
+            style={{
+              backgroundColor: activeTab === 'profile' ? '#0d9488' : 'transparent',
+              color: activeTab === 'profile' ? '#ffffff' : '#334155'
+            }}
+          >
+            <i className="bi bi-person"></i> My Profile
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('security'); setShowSecurityModal(true); }}
+            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'security' ? 'text-white' : 'text-slate-700'
+            }`}
+            style={{
+              backgroundColor: activeTab === 'security' ? '#0d9488' : 'transparent',
+              color: activeTab === 'security' ? '#ffffff' : '#334155'
+            }}
+          >
+            <i className="bi bi-shield-lock"></i> Security & Password
+          </button>
+        </nav>
+
+        <div className="pt-2 border-top mt-2">
+          <button
+            onClick={onLogout}
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
+          >
+            <i className="bi bi-box-arrow-right"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-grow-1 overflow-auto d-flex flex-column">
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+              🏥 UniCare Healthcare Network
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center gap-3">
+            <div className="text-end">
+              <div className="fw-bold text-dark small">{patientName}</div>
+              <small className="text-muted font-monospace extra-small">ID: {user?.patient_uid || user?.health_id || 'N/A'}</small>
+            </div>
+          </div>
+        </header>
 
       {/* MAIN CONTAINER */}
       <div className="container-fluid max-w-7xl py-4 flex-grow-1">
@@ -466,10 +524,10 @@ export default function PatientPortalPage({ user, onLogout }) {
       {/* SECURITY & CHANGE PASSWORD MODAL */}
       {showSecurityModal && (
         <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content rounded-4 border-0 shadow-lg">
-              <div className="modal-header text-white rounded-top-4 p-4" style={{ backgroundColor: '#0d9488' }}>
-                <h5 className="modal-title fw-bold">
+              <div className="modal-header text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold fs-5 mb-0">
                   <i className="bi bi-shield-lock me-2"></i>Security & Account Password
                 </h5>
                 <button
@@ -479,78 +537,83 @@ export default function PatientPortalPage({ user, onLogout }) {
                 ></button>
               </div>
 
-              <div className="modal-body p-4">
+              <div className="modal-body p-3 px-4">
                 {passwordMsg && (
-                  <div className={`alert alert-${passwordMsg.type} py-2 px-3 small mb-3`}>
+                  <div className={`alert alert-${passwordMsg.type} py-1.5 px-3 small mb-2.5`}>
                     {passwordMsg.text}
                   </div>
                 )}
 
                 <form onSubmit={handleChangePassword}>
-                  <h6 className="fw-bold text-dark mb-3">Update Password</h6>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Current Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      required
-                      value={passwordForm.current_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">New Password (Min 8 chars)</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      minLength="8"
-                      required
-                      value={passwordForm.new_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Confirm New Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      minLength="8"
-                      required
-                      value={passwordForm.confirm_password}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
-                    />
-                  </div>
-
-                  <hr className="my-3" />
-                  <h6 className="fw-bold text-dark mb-2">Account Recovery Setup</h6>
-                  <p className="text-muted extra-small mb-3" style={{ fontSize: '0.8rem' }}>
-                    Select a security recovery question and secret answer. If you ever forget your password, you can use this question to reset it yourself.
-                  </p>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Security Recovery Question *</label>
-                    <select
-                      className="form-select text-sm"
-                      value={passwordForm.recovery_question}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
-                      required
-                    >
-                      {RECOVERY_QUESTIONS.map((q, idx) => (
-                        <option key={idx} value={q}>{q}</option>
-                      ))}
-                    </select>
+                  <h6 className="fw-bold text-dark mb-2">Update Password</h6>
+                  <div className="row g-2 mb-2">
+                    <div className="col-md-4">
+                      <label className="form-label extra-small fw-semibold text-muted mb-1">Current Password *</label>
+                      <input
+                        type="password"
+                        className="form-control form-control-sm"
+                        required
+                        value={passwordForm.current_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label extra-small fw-semibold text-muted mb-1">New Password (Min 8 chars) *</label>
+                      <input
+                        type="password"
+                        className="form-control form-control-sm"
+                        minLength="8"
+                        required
+                        value={passwordForm.new_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label extra-small fw-semibold text-muted mb-1">Confirm New Password *</label>
+                      <input
+                        type="password"
+                        className="form-control form-control-sm"
+                        minLength="8"
+                        required
+                        value={passwordForm.confirm_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
+                      />
+                    </div>
                   </div>
 
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold text-muted">Security Recovery Answer *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Enter your secret answer"
-                      required
-                      value={passwordForm.recovery_answer}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
-                    />
+                  <div className="border-top pt-2 mt-2">
+                    <h6 className="fw-bold text-dark mb-1 small">Account Recovery Setup</h6>
+                    <p className="text-muted extra-small mb-2" style={{ fontSize: '0.78rem' }}>
+                      Select a security question and secret answer. You can use these to reset your password if you ever forget it.
+                    </p>
+
+                    <div className="row g-2 mb-2">
+                      <div className="col-md-6">
+                        <label className="form-label extra-small fw-semibold text-muted mb-1">Security Recovery Question *</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={passwordForm.recovery_question}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
+                          required
+                        >
+                          {RECOVERY_QUESTIONS.map((q, idx) => (
+                            <option key={idx} value={q}>{q}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label extra-small fw-semibold text-muted mb-1">Security Recovery Answer *</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="Enter your secret answer"
+                          required
+                          value={passwordForm.recovery_answer}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <button className="btn text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
@@ -562,6 +625,7 @@ export default function PatientPortalPage({ user, onLogout }) {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }
