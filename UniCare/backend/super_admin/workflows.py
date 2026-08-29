@@ -72,6 +72,11 @@ def ensure_workflow_schema():
             'medical_notes': 'TEXT NULL',
             'visited_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
         })
+        _ensure_columns(cursor, 'tbl_user', {
+            'user_recovery_question': 'VARCHAR(255) NULL',
+            'user_recovery_answer': 'VARCHAR(255) NULL',
+            'must_change_password': 'TINYINT(1) NOT NULL DEFAULT 0',
+        })
         # Ensure doctor_experience column exists (added during schema extension)
         cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='doctor_experience'""")
@@ -128,7 +133,8 @@ def unified_login(request):
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
-            " r.role_name FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
+            " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
+            " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
             " WHERE (LOWER(u.user_email)=LOWER(%s) OR u.user_phone=%s) AND u.user_is_active=1 LIMIT 1",
             [identifier, identifier]
         )
@@ -156,6 +162,9 @@ def unified_login(request):
         'email': row[4],
         'phone': row[5],
         'role': role,
+        'must_change_password': bool(row[8]),
+        'has_recovery_question': bool(row[9] and row[10]),
+        'recovery_question': row[9] or '',
     }
 
     with connection.cursor() as cursor:
@@ -274,7 +283,7 @@ def profile(request):
     if request.method == 'GET':
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT u.user_name, u.user_email, u.user_phone, h.hospital_name, h.hospital_id"
+                "SELECT u.user_name, u.user_email, u.user_phone, h.hospital_name, h.hospital_id, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
                 " FROM tbl_user u"
                 " LEFT JOIN tbl_hospital h ON h.hospital_id = u.hospital_id"
                 " WHERE u.user_id=%s",
@@ -286,6 +295,9 @@ def profile(request):
                 'role': user['role'],
                 'hospital_name': row[3] or '',
                 'hospital_id': row[4],
+                'must_change_password': bool(row[5]),
+                'has_recovery_question': bool(row[6] and row[7]),
+                'recovery_question': row[6] or '',
             }
             if user['role'] == 'doctor':
                 cursor.execute(
@@ -335,15 +347,40 @@ def change_password(request):
     data = payload(request)
     current = (data.get('current_password') or '').strip()
     new = (data.get('new_password') or '').strip()
+    recovery_question = (data.get('recovery_question') or '').strip()
+    recovery_answer = (data.get('recovery_answer') or '').strip()
+
     if len(new) < 8:
         return JsonResponse({'status': 'error', 'message': 'New password must contain at least 8 characters.'}, status=400)
+
     with connection.cursor() as cursor:
-        cursor.execute("SELECT user_password FROM tbl_user WHERE user_id=%s", [user['user_id']])
+        cursor.execute("SELECT user_password, user_recovery_question FROM tbl_user WHERE user_id=%s", [user['user_id']])
         row = cursor.fetchone()
         if not row or not verify_password_and_upgrade(user['user_id'], current, row[0]):
             return JsonResponse({'status': 'error', 'message': 'Current password is incorrect.'}, status=400)
-        cursor.execute("UPDATE tbl_user SET user_password=%s WHERE user_id=%s", [make_password(new), user['user_id']])
-    return JsonResponse({'status': 'success', 'message': 'Password changed successfully.'})
+
+        # If user does not have a recovery question set, or if they passed a new one, require recovery fields
+        existing_question = row[1]
+        if not existing_question or recovery_question:
+            if not recovery_question:
+                return JsonResponse({'status': 'error', 'message': 'A recovery question is required for account security.'}, status=400)
+            if not recovery_answer:
+                return JsonResponse({'status': 'error', 'message': 'A recovery answer is required.'}, status=400)
+
+        hashed_new_pass = make_password(new)
+        if recovery_question and recovery_answer:
+            hashed_answer = make_password(recovery_answer.lower())
+            cursor.execute(
+                "UPDATE tbl_user SET user_password=%s, user_recovery_question=%s, user_recovery_answer=%s, must_change_password=0 WHERE user_id=%s",
+                [hashed_new_pass, recovery_question, hashed_answer, user['user_id']]
+            )
+        else:
+            cursor.execute(
+                "UPDATE tbl_user SET user_password=%s, must_change_password=0 WHERE user_id=%s",
+                [hashed_new_pass, user['user_id']]
+            )
+
+    return JsonResponse({'status': 'success', 'message': 'Password and security recovery settings updated successfully.'})
 
 
 @csrf_exempt
@@ -486,8 +523,8 @@ def register_patient(request):
 
         # Insert into tbl_user
         cursor.execute(
-            "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)"
-            " VALUES (%s,%s,%s,%s,%s,%s,1)",
+            "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)"
+            " VALUES (%s,%s,%s,%s,%s,%s,1,1)",
             [user['hospital_id'], role_id, name, email or None, phone or None, make_password(password)]
         )
         user_id = cursor.lastrowid

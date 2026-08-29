@@ -55,9 +55,24 @@ export default function StaffDashboardPage({ user, onLogout }) {
   });
   const [registerResult, setRegisterResult] = useState(null);
 
-  // Profile & Password Update Form
+const RECOVERY_QUESTIONS = [
+  "What is the name of your best friend?",
+  "What was the official name of the high school or secondary school you attended?",
+  "What is the name of your first pet?",
+  "What is your mother's name?",
+  "What was the make and model of your first car?",
+  "What city were you born in?",
+];
+
+// Profile & Password Update Form
   const [profileForm, setProfileForm] = useState({ name: '', phone: '', experience: '' });
-  const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+    recovery_question: RECOVERY_QUESTIONS[0],
+    recovery_answer: ''
+  });
   const [passwordMsg, setPasswordMsg] = useState(null);
 
   // Time Slots
@@ -380,6 +395,10 @@ export default function StaffDashboardPage({ user, onLogout }) {
       setPasswordMsg({ text: 'New passwords do not match.', type: 'danger' });
       return;
     }
+    if (!passwordForm.recovery_question || !passwordForm.recovery_answer.trim()) {
+      setPasswordMsg({ text: 'Please select a security recovery question and enter your answer.', type: 'danger' });
+      return;
+    }
     try {
       const res = await fetch(`${API}/profile/change-password/`, {
         method: 'POST',
@@ -387,18 +406,30 @@ export default function StaffDashboardPage({ user, onLogout }) {
         credentials: 'include',
         body: JSON.stringify({
           current_password: passwordForm.current_password,
-          new_password: passwordForm.new_password
+          new_password: passwordForm.new_password,
+          recovery_question: passwordForm.recovery_question,
+          recovery_answer: passwordForm.recovery_answer
         })
       });
       const data = await res.json();
       if (res.ok) {
-        setPasswordMsg({ text: 'Password changed successfully!', type: 'success' });
-        setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
+        setPasswordMsg({ text: 'Password and security recovery details updated successfully!', type: 'success' });
+        setPasswordForm(prev => ({
+          ...prev,
+          current_password: '',
+          new_password: '',
+          confirm_password: '',
+          recovery_answer: ''
+        }));
+        if (profile) {
+          setProfile({ ...profile, must_change_password: false, has_recovery_question: true });
+        }
+        loadData();
       } else {
         setPasswordMsg({ text: data.message || 'Could not change password.', type: 'danger' });
       }
     } catch (err) {
-      setPasswordMsg({ text: 'Error changing password.', type: 'danger' });
+      setPasswordMsg({ text: 'Error updating password and recovery question.', type: 'danger' });
     }
   };
 
@@ -495,6 +526,27 @@ export default function StaffDashboardPage({ user, onLogout }) {
               <div>{message.text}</div>
             </div>
             <button type="button" className="btn-close" onClick={() => setMessage(null)}></button>
+          </div>
+        )}
+
+        {/* Temporary Password & Security Recovery Warning Banner */}
+        {(profile?.must_change_password || user?.must_change_password || !profile?.has_recovery_question) && (
+          <div className="alert alert-warning border-warning shadow-sm mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 rounded-3 gap-3">
+            <div className="d-flex align-items-center gap-3">
+              <i className="bi bi-shield-exclamation fs-2 text-warning"></i>
+              <div>
+                <strong className="text-dark">Action Required: Temporary Password Detected</strong>
+                <div className="small text-secondary">
+                  Your account password was temporarily set by your administrator. Please update your password and set a security recovery question to secure your account.
+                </div>
+              </div>
+            </div>
+            <button
+              className="btn btn-warning btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
+              onClick={() => setShowProfileModal(true)}
+            >
+              <i className="bi bi-key me-1"></i> Change Password & Recovery
+            </button>
           </div>
         )}
 
@@ -1166,9 +1218,9 @@ export default function StaffDashboardPage({ user, onLogout }) {
                   </button>
                 </form>
 
-                {/* Change Password Form */}
+                {/* Change Password & Recovery Form */}
                 <form onSubmit={handleChangePassword}>
-                  <h6 className="fw-bold text-dark mb-3">Change Portal Password</h6>
+                  <h6 className="fw-bold text-dark mb-3">Change Password & Security Recovery</h6>
                   <div className="mb-3">
                     <label className="form-label small fw-semibold text-muted">Current Password</label>
                     <input
@@ -1201,8 +1253,41 @@ export default function StaffDashboardPage({ user, onLogout }) {
                       onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
                     />
                   </div>
-                  <button className="btn btn-teal text-white btn-sm fw-bold w-100 rounded-3" style={{ backgroundColor: '#0d9488' }}>
-                    Update Password
+
+                  <hr className="my-3" />
+                  <h6 className="fw-bold text-dark mb-2">Account Recovery Setup</h6>
+                  <p className="text-muted extra-small mb-3" style={{ fontSize: '0.8rem' }}>
+                    Select a security recovery question and answer to enable self-service password reset if you forget your password.
+                  </p>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Security Recovery Question *</label>
+                    <select
+                      className="form-select text-sm"
+                      value={passwordForm.recovery_question}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
+                      required
+                    >
+                      {RECOVERY_QUESTIONS.map((q, idx) => (
+                        <option key={idx} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Security Recovery Answer *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter your secret answer"
+                      required
+                      value={passwordForm.recovery_answer}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
+                    />
+                  </div>
+
+                  <button className="btn btn-teal text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
+                    Update Password & Security Settings
                   </button>
                 </form>
               </div>

@@ -91,7 +91,7 @@ def ensure_doctor_extensions():
 
 
 def ensure_recovery_columns():
-    """Ensure tbl_user has the recovery question/answer columns."""
+    """Ensure tbl_user has the recovery question/answer and must_change_password columns."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='user_recovery_question'")
         if not cursor.fetchone()[0]:
@@ -99,6 +99,9 @@ def ensure_recovery_columns():
         cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='user_recovery_answer'")
         if not cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE tbl_user ADD COLUMN user_recovery_answer VARCHAR(255) NULL")
+        cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='must_change_password'")
+        if not cursor.fetchone()[0]:
+            cursor.execute("ALTER TABLE tbl_user ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0")
 
 @csrf_exempt
 def super_admin_login(request):
@@ -1253,10 +1256,11 @@ def add_doctor(request):
             return JsonResponse({'status': 'error', 'message': 'Hospital account was not found.'}, status=404)
 
     with connection.cursor() as cursor:
+        ensure_recovery_columns()
         # Step 1: Create user record in tbl_user
         cursor.execute("""
-            INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active)
-            VALUES (%s, 2, %s, %s, %s, %s, 1)
+            INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)
+            VALUES (%s, 2, %s, %s, %s, %s, 1, 1)
         """, [valid_hospital_id, name, email, phone, make_password(password)])
         user_id = cursor.lastrowid
 
@@ -1467,7 +1471,8 @@ def add_receptionist(request):
                 return JsonResponse({'status': 'error', 'message': 'Phone number is already registered.'}, status=409)
 
     with connection.cursor() as cursor:
-        cursor.execute("INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active) VALUES (%s, 3, %s, %s, %s, %s, 1)", [hospital_id, name, email, phone, make_password(password)])
+        ensure_recovery_columns()
+        cursor.execute("INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password) VALUES (%s, 3, %s, %s, %s, %s, 1, 1)", [hospital_id, name, email, phone, make_password(password)])
         user_id = cursor.lastrowid
         cursor.execute("INSERT INTO tbl_receptionist (user_id, hospital_id, receptionist_is_active) VALUES (%s, %s, 1)", [user_id, hospital_id])
         receptionist_id = cursor.lastrowid

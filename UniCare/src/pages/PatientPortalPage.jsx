@@ -3,11 +3,30 @@ import DigitalHealthCard from '../components/DigitalHealthCard';
 
 const API = 'http://localhost:8000/api/super-admin';
 
+const RECOVERY_QUESTIONS = [
+  "What is the name of your best friend?",
+  "What was the official name of the high school or secondary school you attended?",
+  "What is the name of your first pet?",
+  "What is your mother's name?",
+  "What was the make and model of your first car?",
+  "What city were you born in?",
+];
+
 export default function PatientPortalPage({ user, onLogout }) {
   const [appointments, setAppointments] = useState([]);
   const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+    recovery_question: RECOVERY_QUESTIONS[0],
+    recovery_answer: ''
+  });
+  const [passwordMsg, setPasswordMsg] = useState(null);
   const [form, setForm] = useState({
     hospital_id: '',
     department_id: '',
@@ -19,6 +38,18 @@ export default function PatientPortalPage({ user, onLogout }) {
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
+    fetch(`${API}/profile/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.profile) {
+          setProfile(d.profile);
+          if (d.profile.recovery_question) {
+            setPasswordForm(prev => ({ ...prev, recovery_question: d.profile.recovery_question }));
+          }
+        }
+      })
+      .catch((err) => console.error("Error loading patient profile:", err));
+
     fetch(`${API}/appointments/`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => setAppointments(d.appointments || []))
@@ -71,6 +102,42 @@ export default function PatientPortalPage({ user, onLogout }) {
     }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setPasswordMsg({ text: 'New passwords do not match.', type: 'danger' });
+      return;
+    }
+    if (!passwordForm.recovery_question || !passwordForm.recovery_answer.trim()) {
+      setPasswordMsg({ text: 'Please select a security recovery question and enter your answer.', type: 'danger' });
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/profile/change-password/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          current_password: passwordForm.current_password,
+          new_password: passwordForm.new_password,
+          recovery_question: passwordForm.recovery_question,
+          recovery_answer: passwordForm.recovery_answer
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPasswordMsg({ text: 'Password and security recovery settings updated successfully!', type: 'success' });
+        setPasswordForm(prev => ({ ...prev, current_password: '', new_password: '', confirm_password: '', recovery_answer: '' }));
+        setProfile(prev => prev ? ({ ...prev, must_change_password: false, has_recovery_question: true }) : null);
+      } else {
+        setPasswordMsg({ text: data.message || 'Could not update password.', type: 'danger' });
+      }
+    } catch (err) {
+      setPasswordMsg({ text: 'Error updating password and recovery question.', type: 'danger' });
+    }
+  };
+
   const patientName = user?.name || user?.user_name || 'Patient';
 
   return (
@@ -106,6 +173,12 @@ export default function PatientPortalPage({ user, onLogout }) {
               </small>
             </div>
             <button
+              onClick={() => setShowSecurityModal(true)}
+              className="btn btn-outline-teal btn-sm rounded-pill px-3 py-1 me-1 d-flex align-items-center gap-1"
+            >
+              <i className="bi bi-shield-lock"></i> Security & Password
+            </button>
+            <button
               onClick={onLogout}
               className="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 d-flex align-items-center gap-1"
             >
@@ -125,6 +198,27 @@ export default function PatientPortalPage({ user, onLogout }) {
               <div>{message.text}</div>
             </div>
             <button type="button" className="btn-close" onClick={() => setMessage(null)}></button>
+          </div>
+        )}
+
+        {/* Temporary Password & Security Recovery Warning Banner */}
+        {(profile?.must_change_password || user?.must_change_password || !profile?.has_recovery_question) && (
+          <div className="alert alert-warning border-warning shadow-sm mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 rounded-3 gap-3">
+            <div className="d-flex align-items-center gap-3">
+              <i className="bi bi-shield-exclamation fs-2 text-warning"></i>
+              <div>
+                <strong className="text-dark">Action Required: Temporary Password Detected</strong>
+                <div className="small text-secondary">
+                  Your account password was temporarily set by the hospital. Please change your password and set up your security recovery question now.
+                </div>
+              </div>
+            </div>
+            <button
+              className="btn btn-warning btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
+              onClick={() => setShowSecurityModal(true)}
+            >
+              <i className="bi bi-key me-1"></i> Update Security Now
+            </button>
           </div>
         )}
 
@@ -368,6 +462,106 @@ export default function PatientPortalPage({ user, onLogout }) {
           </div>
         </div>
       </div>
+
+      {/* SECURITY & CHANGE PASSWORD MODAL */}
+      {showSecurityModal && (
+        <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header text-white rounded-top-4 p-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold">
+                  <i className="bi bi-shield-lock me-2"></i>Security & Account Password
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowSecurityModal(false)}
+                ></button>
+              </div>
+
+              <div className="modal-body p-4">
+                {passwordMsg && (
+                  <div className={`alert alert-${passwordMsg.type} py-2 px-3 small mb-3`}>
+                    {passwordMsg.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword}>
+                  <h6 className="fw-bold text-dark mb-3">Update Password</h6>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Current Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      required
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">New Password (Min 8 chars)</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      minLength="8"
+                      required
+                      value={passwordForm.new_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Confirm New Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      minLength="8"
+                      required
+                      value={passwordForm.confirm_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
+                    />
+                  </div>
+
+                  <hr className="my-3" />
+                  <h6 className="fw-bold text-dark mb-2">Account Recovery Setup</h6>
+                  <p className="text-muted extra-small mb-3" style={{ fontSize: '0.8rem' }}>
+                    Select a security recovery question and secret answer. If you ever forget your password, you can use this question to reset it yourself.
+                  </p>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Security Recovery Question *</label>
+                    <select
+                      className="form-select text-sm"
+                      value={passwordForm.recovery_question}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_question: e.target.value })}
+                      required
+                    >
+                      {RECOVERY_QUESTIONS.map((q, idx) => (
+                        <option key={idx} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold text-muted">Security Recovery Answer *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter your secret answer"
+                      required
+                      value={passwordForm.recovery_answer}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, recovery_answer: e.target.value })}
+                    />
+                  </div>
+
+                  <button className="btn text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
+                    Update Security Settings
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
