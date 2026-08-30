@@ -596,25 +596,97 @@ const RECOVERY_QUESTIONS = [
               </p>
             </div>
 
-            {/* Quick Stat Cards */}
+            {/* Quick Stat Cards (CLICKABLE) */}
             <div className="d-flex flex-wrap gap-2">
-              <div className="bg-light border rounded-3 p-2 px-3 text-center" style={{ minWidth: '90px' }}>
+              <div 
+                className="bg-light border rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                style={{ minWidth: '90px', cursor: 'pointer' }}
+                onClick={() => setActiveTab('appointments')}
+                title="Click to view all appointments"
+              >
                 <span className="text-muted small d-block" style={{ fontSize: '0.72rem' }}>Total</span>
                 <span className="fw-bold text-dark fs-5">{totalApps}</span>
               </div>
-              <div className="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 px-3 text-center" style={{ minWidth: '90px' }}>
+              <div 
+                className="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                style={{ minWidth: '90px', cursor: 'pointer' }}
+                onClick={() => setActiveTab('queue')}
+                title="Click to view queue"
+              >
                 <span className="text-warning-emphasis small d-block" style={{ fontSize: '0.72rem' }}>Pending</span>
                 <span className="fw-bold text-warning-emphasis fs-5">{pendingApps}</span>
               </div>
-              <div className="bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-2 px-3 text-center" style={{ minWidth: '90px' }}>
+              <div 
+                className="bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                style={{ minWidth: '90px', cursor: 'pointer' }}
+                onClick={() => setActiveTab('appointments')}
+                title="Click to view confirmed appointments"
+              >
                 <span className="text-primary small d-block" style={{ fontSize: '0.72rem' }}>Confirmed</span>
                 <span className="fw-bold text-primary fs-5">{confirmedApps}</span>
               </div>
-              <div className="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 px-3 text-center" style={{ minWidth: '90px' }}>
+              <div 
+                className="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                style={{ minWidth: '90px', cursor: 'pointer' }}
+                onClick={() => setActiveTab('appointments')}
+                title="Click to view completed visits"
+              >
                 <span className="text-success small d-block" style={{ fontSize: '0.72rem' }}>Completed</span>
                 <span className="fw-bold text-success fs-5">{completedApps}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Quick Action Navigation Grid */}
+        <div className="row g-3 mb-4">
+          <div className="col-6 col-md-3">
+            <button
+              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+              onClick={() => setActiveTab('registration')}
+            >
+              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+                <i className="bi bi-person-plus-fill"></i>
+              </div>
+              <span className="fw-bold text-dark small">Register Patient</span>
+              <small className="text-muted">Generate Global Health ID</small>
+            </button>
+          </div>
+          <div className="col-6 col-md-3">
+            <button
+              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+              onClick={() => setActiveTab('appointments')}
+            >
+              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-primary" style={{ width: '38px', height: '38px' }}>
+                <i className="bi bi-calendar2-check-fill"></i>
+              </div>
+              <span className="fw-bold text-dark small">Appointments</span>
+              <small className="text-muted">Manage scheduled visits</small>
+            </button>
+          </div>
+          <div className="col-6 col-md-3">
+            <button
+              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+              onClick={() => setActiveTab('queue')}
+            >
+              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-warning" style={{ width: '38px', height: '38px' }}>
+                <i className="bi bi-clock-history"></i>
+              </div>
+              <span className="fw-bold text-dark small">Hospital Queue</span>
+              <small className="text-muted">Live patient waitlist</small>
+            </button>
+          </div>
+          <div className="col-6 col-md-3">
+            <button
+              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+              onClick={() => { setActiveTab('password'); setShowProfileModal(true); setProfileTab('security'); }}
+            >
+              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-danger" style={{ width: '38px', height: '38px' }}>
+                <i className="bi bi-shield-lock-fill"></i>
+              </div>
+              <span className="fw-bold text-dark small">Security Settings</span>
+              <small className="text-muted">Change password & recovery</small>
+            </button>
           </div>
         </div>
 
@@ -969,7 +1041,8 @@ const RECOVERY_QUESTIONS = [
                   <table className="table table-hover align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                        <th className="ps-4">Date & Time</th>
+                        <th className="ps-4">Appt ID</th>
+                        <th>Date & Time</th>
                         <th>Patient</th>
                         <th>Doctor</th>
                         <th>Status</th>
@@ -979,13 +1052,16 @@ const RECOVERY_QUESTIONS = [
                     <tbody>
                       {appointments.map((a) => (
                         <tr key={a.appointment_id}>
-                          <td className="ps-4 fw-semibold text-dark">
+                          <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                            {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                          </td>
+                          <td className="fw-semibold text-dark">
                             <div>{a.date}</div>
                             <small className="text-muted">{a.time}</small>
                           </td>
                           <td>
                             <div className="fw-bold text-dark">{a.patient}</div>
-                            <small className="text-muted font-monospace">{a.health_id}</small>
+                            <small className="text-muted font-monospace">{a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}</small>
                           </td>
                           <td>{a.doctor}</td>
                           <td>

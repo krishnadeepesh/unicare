@@ -488,13 +488,18 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                 </div>
               </div>
 
-              {/* Cards Grid */}
+              {/* Cards Grid (CLICKABLE REDIRECTION) */}
               <div className="row g-4 mb-5">
                 <div className="col-12 col-sm-6 col-xl-3">
-                  <div className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-primary">
+                  <div 
+                    className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-primary hover-teal cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => { setActiveTab('hospitals'); setStatusFilter('all'); }}
+                    title="Click to manage all hospitals"
+                  >
                     <div className="card-body p-4">
                       <div className="d-flex align-items-center justify-content-between mb-3">
-                        <span className="text-secondary fw-semibold small text-uppercase">Total Active Hospitals</span>
+                        <span className="text-secondary fw-semibold small text-uppercase">Total Hospitals</span>
                         <div className="rounded-circle p-3 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
                           <i className="bi bi-hospital fs-3"></i>
                         </div>
@@ -502,12 +507,18 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                       <h2 className="display-5 fw-extrabold mb-0 text-dark">
                         {statsLoading ? <span className="spinner-border spinner-border-sm text-primary"></span> : stats.total_hospitals}
                       </h2>
+                      <small className="text-primary d-block mt-2"><i className="bi bi-arrow-right-circle me-1"></i>View Directory</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="col-12 col-sm-6 col-xl-3">
-                  <div className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-warning">
+                  <div 
+                    className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-warning hover-teal cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setActiveTab('requests')}
+                    title="Click to review pending requests"
+                  >
                     <div className="card-body p-4">
                       <div className="d-flex align-items-center justify-content-between mb-3">
                         <span className="text-secondary fw-semibold small text-uppercase">Pending Requests</span>
@@ -518,12 +529,18 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                       <h2 className="display-5 fw-extrabold mb-0 text-dark">
                         {statsLoading ? <span className="spinner-border spinner-border-sm text-warning"></span> : stats.pending_hospitals}
                       </h2>
+                      <small className="text-warning-emphasis d-block mt-2"><i className="bi bi-arrow-right-circle me-1"></i>Review Approvals</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="col-12 col-sm-6 col-xl-3">
-                  <div className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-success">
+                  <div 
+                    className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-success hover-teal cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => { setActiveTab('hospitals'); setStatusFilter('Approved'); }}
+                    title="Click to view approved hospitals"
+                  >
                     <div className="card-body p-4">
                       <div className="d-flex align-items-center justify-content-between mb-3">
                         <span className="text-secondary fw-semibold small text-uppercase">Approved Hospitals</span>
@@ -534,12 +551,18 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                       <h2 className="display-5 fw-extrabold mb-0 text-dark">
                         {statsLoading ? <span className="spinner-border spinner-border-sm text-success"></span> : stats.approved_hospitals}
                       </h2>
+                      <small className="text-success d-block mt-2"><i className="bi bi-arrow-right-circle me-1"></i>View Approved</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="col-12 col-sm-6 col-xl-3">
-                  <div className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-danger">
+                  <div 
+                    className="card border-0 rounded-4 shadow-sm h-100 bg-white border-top border-4 border-danger hover-teal cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => { setActiveTab('hospitals'); setStatusFilter('Rejected'); }}
+                    title="Click to view rejected hospitals"
+                  >
                     <div className="card-body p-4">
                       <div className="d-flex align-items-center justify-content-between mb-3">
                         <span className="text-secondary fw-semibold small text-uppercase">Rejected Hospitals</span>
@@ -550,6 +573,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                       <h2 className="display-5 fw-extrabold mb-0 text-dark">
                         {statsLoading ? <span className="spinner-border spinner-border-sm text-danger"></span> : stats.rejected_hospitals}
                       </h2>
+                      <small className="text-danger d-block mt-2"><i className="bi bi-arrow-right-circle me-1"></i>View Rejected</small>
                     </div>
                   </div>
                 </div>

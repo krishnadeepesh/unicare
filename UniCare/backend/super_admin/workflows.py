@@ -768,6 +768,9 @@ def patient_history(request):
         visits = [
             {
                 'visit_id': r[0],
+                'id': f"VIS{r[0]:03d}",
+                'vis_uid': f"VIS{r[0]:03d}",
+                'visit_uid': f"VIS{r[0]:03d}",
                 'diagnosis': r[1] or '',
                 'medical_notes': r[2] or '',
                 'visited_at': str(r[3]),
@@ -776,9 +779,7 @@ def patient_history(request):
             }
             for r in v_rows
         ]
-    return JsonResponse({'status': 'success', 'patient': patient, 'history': visits})
-
-    return JsonResponse({'status': 'success', 'patient': patient, 'visits': visits})
+    return JsonResponse({'status': 'success', 'patient': patient, 'history': visits, 'visits': visits})
 
 
 def booking_options(request):
@@ -792,7 +793,7 @@ def booking_options(request):
             " WHERE hospital_id=%s AND department_is_active=1 ORDER BY department_name",
             [hospital_id]
         )
-        departments = [{'department_id': r[0], 'name': r[1]} for r in cursor.fetchall()]
+        departments = [{'department_id': r[0], 'id': f"DEP{r[0]:03d}", 'name': r[1]} for r in cursor.fetchall()]
         # Doctors who belong to this hospital via tbl_doctor.hospital_id OR tbl_user.hospital_id
         cursor.execute(
             "SELECT DISTINCT d.doctor_id, u.user_name, d.doctor_specialization, d.department_id"
@@ -803,7 +804,7 @@ def booking_options(request):
             " ORDER BY u.user_name",
             [hospital_id, hospital_id]
         )
-        doctors = [{'doctor_id': r[0], 'name': r[1], 'specialization': r[2] or '', 'department_id': r[3]} for r in cursor.fetchall()]
+        doctors = [{'doctor_id': r[0], 'id': f"DOC{r[0]:03d}", 'name': r[1], 'specialization': r[2] or '', 'department_id': r[3]} for r in cursor.fetchall()]
     return JsonResponse({'status': 'success', 'departments': departments, 'doctors': doctors})
 
 
@@ -844,7 +845,11 @@ def appointments(request):
             rows = cursor.fetchall()
         return JsonResponse({'status': 'success', 'appointments': [
             {
-                'appointment_id': r[0], 'date': str(r[1]), 'time': r[2],
+                'appointment_id': r[0],
+                'id': f"APT{r[0]:03d}",
+                'apt_uid': f"APT{r[0]:03d}",
+                'appointment_uid': f"APT{r[0]:03d}",
+                'date': str(r[1]), 'time': r[2],
                 'reason': r[3] or '', 'status': r[4], 'hospital': r[5] or '',
                 'department': r[6] or '', 'doctor': r[7], 'health_id': r[8], 'patient': r[9],
                 'patient_id': r[10],

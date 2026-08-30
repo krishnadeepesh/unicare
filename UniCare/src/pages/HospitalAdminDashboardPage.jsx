@@ -465,36 +465,85 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
               </div>
             </div>
 
-            {/* HOSPITAL-SPECIFIC SUMMARY STATISTICS */}
+            {/* HOSPITAL-SPECIFIC SUMMARY STATISTICS (CLICKABLE REDIRECTION) */}
             <div className="row g-3 mb-4">
-                <div className="col-6 col-md-4 col-lg">
-                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-primary">
+              <div className="col-6 col-md-4 col-lg">
+                <div 
+                  className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-primary hover-teal cursor-pointer"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveSection('doctors')}
+                  title="Click to view Doctors"
+                >
                   <span className="text-muted small d-block mb-1">Total Doctors</span>
                   <span className="fs-3 fw-bold text-primary">{statsData?.total_doctors ?? doctorsList.length}</span>
+                  <small className="text-primary d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
                 </div>
               </div>
               <div className="col-6 col-md-4 col-lg">
-                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-warning">
+                <div 
+                  className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-warning hover-teal cursor-pointer"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveSection('receptionists')}
+                  title="Click to view Receptionists"
+                >
                   <span className="text-muted small d-block mb-1">Total Receptionists</span>
                   <span className="fs-3 fw-bold text-warning-emphasis">{statsData?.total_receptionists ?? receptionistsList.length}</span>
+                  <small className="text-warning-emphasis d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
                 </div>
               </div>
               <div className="col-6 col-md-4 col-lg">
-                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-info">
-                  <span className="text-muted small d-block mb-1">Total Patients</span>
-                  <span className="fs-3 fw-bold text-info-emphasis">{statsData?.total_patients ?? 0}</span>
-                </div>
-              </div>
-              <div className="col-6 col-md-4 col-lg">
-                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-danger">
-                  <span className="text-muted small d-block mb-1">Today's Appointments</span>
-                  <span className="fs-3 fw-bold text-danger">{statsData?.today_appointments ?? 0}</span>
-                </div>
-              </div>
-              <div className="col-6 col-md-4 col-lg">
-                <div className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-success">
+                <div 
+                  className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-success hover-teal cursor-pointer"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveSection('departments')}
+                  title="Click to view Departments"
+                >
                   <span className="text-muted small d-block mb-1">Departments</span>
                   <span className="fs-3 fw-bold text-success">{statsData?.total_departments ?? departmentsList.length}</span>
+                  <small className="text-success d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Navigation Grid */}
+            <div className="card border-0 rounded-4 shadow-sm bg-white p-4 mb-4">
+              <h5 className="fw-bold text-dark mb-3"><i className="bi bi-lightning-charge-fill text-warning me-2"></i>Quick Administrative Actions</h5>
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <button 
+                    className="btn btn-outline-primary w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
+                    onClick={() => { setActiveSection('doctors'); openDoctorModal(); }}
+                  >
+                    <i className="bi bi-person-plus-fill fs-3"></i>
+                    <div>
+                      <div className="fw-bold">Register Doctor</div>
+                      <small className="text-muted">Add doctor with login credentials</small>
+                    </div>
+                  </button>
+                </div>
+                <div className="col-md-4">
+                  <button 
+                    className="btn btn-outline-warning w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3 text-dark"
+                    onClick={() => { setActiveSection('receptionists'); setShowReceptionistModal(true); }}
+                  >
+                    <i className="bi bi-person-workspace fs-3 text-warning"></i>
+                    <div>
+                      <div className="fw-bold">Add Receptionist</div>
+                      <small className="text-muted">Create desk staff account</small>
+                    </div>
+                  </button>
+                </div>
+                <div className="col-md-4">
+                  <button 
+                    className="btn btn-outline-success w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
+                    onClick={() => { setActiveSection('departments'); setShowDepartmentModal(true); }}
+                  >
+                    <i className="bi bi-diagram-3-fill fs-3"></i>
+                    <div>
+                      <div className="fw-bold">Create Department</div>
+                      <small className="text-muted">Add medical specialty unit</small>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>

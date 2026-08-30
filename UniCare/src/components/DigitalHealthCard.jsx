@@ -32,10 +32,10 @@ export default function DigitalHealthCard({ patient }) {
         {/* Card Number / Patient ID */}
         <div className="mb-4">
           <div className="text-light opacity-50 fs-8 text-uppercase mb-1" style={{ fontSize: '10px', letterSpacing: '1px' }}>
-            Patient Identification Number
+            Global Health Identification ID
           </div>
-          <div className="fs-4 fw-bold tracking-widest text-white" style={{ letterSpacing: '2px' }}>
-            {patient.patientId || 'UC-2026-0000'}
+          <div className="fs-4 fw-bold tracking-widest text-white font-monospace" style={{ letterSpacing: '2px' }}>
+            {patient.healthId || patient.patient_uid || patient.patientId || 'PTA001'}
           </div>
         </div>
 
@@ -54,7 +54,7 @@ export default function DigitalHealthCard({ patient }) {
               Blood Type
             </div>
             <div className="fw-bold text-info" style={{ fontSize: '1.1rem' }}>
-              {patient.bloodGroup || 'O+'}
+              {patient.bloodGroup || patient.blood_group || 'O+'}
             </div>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default function DigitalHealthCard({ patient }) {
               Date of Birth
             </div>
             <div className="fw-semibold text-white-50" style={{ fontSize: '0.9rem' }}>
-              {patient.dob || patient.dateOfBirth || '01/01/1990'}
+              {patient.dob || patient.dateOfBirth || patient.date_of_birth || '01/01/1990'}
             </div>
           </div>
           <div className="col-6 text-end">
@@ -82,8 +82,8 @@ export default function DigitalHealthCard({ patient }) {
         {/* Simulated Barcode */}
         <div className="mt-3">
           <div className="health-card-barcode mb-1"></div>
-          <div className="text-center text-white-50" style={{ fontSize: '9px', letterSpacing: '4px' }}>
-            *{patient.patientId || 'UC20260000'}*
+          <div className="text-center text-white-50 font-monospace" style={{ fontSize: '9px', letterSpacing: '4px' }}>
+            *{patient.healthId || patient.patient_uid || patient.patientId || 'PTA001'}*
           </div>
         </div>
       </div>

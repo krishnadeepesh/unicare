@@ -549,7 +549,8 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                     <table className="table table-hover align-middle mb-0">
                       <thead className="table-light">
                         <tr>
-                          <th className="ps-4">Patient Name</th>
+                          <th className="ps-4">Appt ID</th>
+                          <th>Patient Name</th>
                           <th>Health ID</th>
                           <th>Time</th>
                           <th>Status</th>
@@ -559,9 +560,12 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                       <tbody>
                         {todayApps.map(a => (
                           <tr key={a.appointment_id}>
-                            <td className="ps-4 fw-bold text-dark">{a.patient}</td>
+                            <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                              {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                            </td>
+                            <td className="fw-bold text-dark">{a.patient}</td>
                             <td>
-                              <span className="badge bg-light text-dark border font-monospace">{a.patient_uid || a.health_id || `PT-${a.patient_id}`}</span>
+                              <span className="badge bg-light text-dark border font-monospace">{a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}</span>
                             </td>
                             <td className="fw-semibold text-secondary">{a.time}</td>
                             <td>
@@ -590,7 +594,7 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                         ))}
                         {!todayApps.length && (
                           <tr>
-                            <td colSpan="5" className="text-center text-muted py-4">
+                            <td colSpan="6" className="text-center text-muted py-4">
                               <i className="bi bi-calendar-x text-secondary d-block fs-3 mb-1"></i>
                               No appointments scheduled for today.
                             </td>
@@ -668,6 +672,7 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
                     <tr>
+                      <th className="ps-3">Appt ID</th>
                       <th>Date & Time</th>
                       <th>Patient Name</th>
                       <th>Health ID</th>
@@ -679,13 +684,16 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                   <tbody>
                     {filteredAppointments.map(a => (
                       <tr key={a.appointment_id}>
+                        <td className="ps-3 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                          {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                        </td>
                         <td className="fw-bold text-dark">
                           <div>{a.date}</div>
                           <small className="text-muted">{a.time}</small>
                         </td>
                         <td className="fw-semibold">{a.patient}</td>
                         <td>
-                          <span className="badge bg-light text-dark border font-monospace">{a.patient_uid || a.health_id || `PT-${a.patient_id}`}</span>
+                          <span className="badge bg-light text-dark border font-monospace">{a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}</span>
                         </td>
                         <td className="text-muted">{a.department}</td>
                         <td>
@@ -815,6 +823,7 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                       <table className="table table-sm table-bordered bg-white mb-0">
                         <thead className="table-light">
                           <tr>
+                            <th>Visit ID</th>
                             <th>Date</th>
                             <th>Doctor</th>
                             <th>Hospital</th>
@@ -825,6 +834,9 @@ export default function DoctorDashboardPage({ user, onLogout }) {
                         <tbody>
                           {patientHistory.map((h, i) => (
                             <tr key={i}>
+                              <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                                {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (i + 1)).padStart(3, '0')}`}
+                              </td>
                               <td className="fw-bold text-nowrap">{h.visited_at || h.date}</td>
                               <td>{h.doctor_name}</td>
                               <td>{h.hospital_name}</td>

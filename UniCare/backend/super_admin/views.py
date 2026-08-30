@@ -552,9 +552,9 @@ def add_hospital(request):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
+        cursor.execute("SELECT COALESCE(MAX(hospital_id), 0) FROM tbl_hospital")
         max_id = cursor.fetchone()[0]
-        new_uid = f"HOSP-{max_id + 1}"
+        new_uid = f"HOS{max_id + 1:03d}"
 
         cursor.execute("""
             INSERT INTO tbl_hospital (hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active)
@@ -1003,9 +1003,9 @@ def submit_hospital_registration(request):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
     with connection.cursor() as cursor:
         if not hospital_id:
-            cursor.execute("SELECT COALESCE(MAX(hospital_id), 1000) FROM tbl_hospital")
-            hospital_id = cursor.fetchone()[0] + 1
-            hospital_uid = f"HOSP-{hospital_id}"
+            cursor.execute("SELECT COALESCE(MAX(hospital_id), 0) FROM tbl_hospital")
+            next_hid = cursor.fetchone()[0] + 1
+            hospital_uid = f"HOS{next_hid:03d}"
             cursor.execute("""INSERT INTO tbl_hospital (hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active)
                 VALUES (%s,%s,%s,%s,%s,'Pending',0)""", [hospital_uid, name, email, phone, address])
             hospital_id = cursor.lastrowid
@@ -1158,7 +1158,7 @@ def get_doctors(request):
 
     doctors_list = []
     for r in rows:
-        doc_uid = f"DOC-{r[0]}"
+        doc_uid = f"DOC{r[0]:03d}"
         doctors_list.append({
             'doctor_id': r[0],
             'id': doc_uid,
@@ -1280,7 +1280,7 @@ def add_doctor(request):
         )
         doctor_id = cursor.lastrowid
 
-        doc_uid = f"DOC-{doctor_id}"
+        doc_uid = f"DOC{doctor_id:03d}"
 
     return JsonResponse({
         'status': 'success',
@@ -1328,8 +1328,11 @@ def delete_doctor(request):
     if not doctor_id:
         return JsonResponse({'status': 'error', 'message': 'Doctor ID required'}, status=400)
 
-    if isinstance(doctor_id, str) and doctor_id.startswith('DOC-'):
-        doctor_id = int(doctor_id.replace('DOC-', ''))
+    if isinstance(doctor_id, str):
+        if doctor_id.startswith('DOC-'):
+            doctor_id = int(doctor_id.replace('DOC-', ''))
+        elif doctor_id.startswith('DOC'):
+            doctor_id = int(doctor_id.replace('DOC', ''))
 
     with connection.cursor() as cursor:
         cursor.execute("""
@@ -1434,7 +1437,17 @@ def get_receptionists(request):
         cursor.execute(sql, params)
         rows = cursor.fetchall()
     return JsonResponse({'status': 'success', 'receptionists': [
-        {'receptionist_id': row[0], 'rec_uid': f'REC-{row[0]}', 'hospital_id': row[1], 'is_active': bool(row[2]), 'name': row[3], 'email': row[4], 'phone': row[5], 'created_at': row[6].strftime('%Y-%m-%d') if hasattr(row[6], 'strftime') else str(row[6] or '')}
+        {
+            'receptionist_id': row[0],
+            'id': f'REC{row[0]:03d}',
+            'rec_uid': f'REC{row[0]:03d}',
+            'hospital_id': row[1],
+            'is_active': bool(row[2]),
+            'name': row[3],
+            'email': row[4],
+            'phone': row[5],
+            'created_at': row[6].strftime('%Y-%m-%d') if hasattr(row[6], 'strftime') else str(row[6] or '')
+        }
         for row in rows
     ]})
 
@@ -1476,7 +1489,8 @@ def add_receptionist(request):
         user_id = cursor.lastrowid
         cursor.execute("INSERT INTO tbl_receptionist (user_id, hospital_id, receptionist_is_active) VALUES (%s, %s, 1)", [user_id, hospital_id])
         receptionist_id = cursor.lastrowid
-    return JsonResponse({'status': 'success', 'message': 'Receptionist added successfully.', 'receptionist': {'receptionist_id': receptionist_id, 'rec_uid': f'REC-{receptionist_id}'}})
+        rec_uid = f"REC{receptionist_id:03d}"
+    return JsonResponse({'status': 'success', 'message': 'Receptionist added successfully.', 'receptionist': {'receptionist_id': receptionist_id, 'id': rec_uid, 'rec_uid': rec_uid}})
 
 
 @csrf_exempt
@@ -1496,6 +1510,12 @@ def update_receptionist(request):
         return JsonResponse({'status': 'error', 'message': 'Receptionist ID, name and email are required.'}, status=400)
     if phone and not is_valid_phone(phone):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the receptionist.'}, status=400)
+
+    if isinstance(receptionist_id, str):
+        if receptionist_id.startswith('REC-'):
+            receptionist_id = int(receptionist_id.replace('REC-', ''))
+        elif receptionist_id.startswith('REC'):
+            receptionist_id = int(receptionist_id.replace('REC', ''))
 
     email_clean = email.lower().strip()
     with connection.cursor() as cursor:
@@ -1535,6 +1555,11 @@ def delete_receptionist(request):
     receptionist_id = data.get('receptionist_id')
     if not receptionist_id:
         return JsonResponse({'status': 'error', 'message': 'Receptionist ID is required.'}, status=400)
+    if isinstance(receptionist_id, str):
+        if receptionist_id.startswith('REC-'):
+            receptionist_id = int(receptionist_id.replace('REC-', ''))
+        elif receptionist_id.startswith('REC'):
+            receptionist_id = int(receptionist_id.replace('REC', ''))
     with connection.cursor() as cursor:
         cursor.execute("SELECT user_id FROM tbl_receptionist WHERE receptionist_id=%s AND hospital_id=%s", [receptionist_id, hospital_id])
         row = cursor.fetchone()
@@ -1556,7 +1581,21 @@ def get_departments(request):
     with connection.cursor() as cursor:
         cursor.execute("SELECT department_id, hospital_id, department_name, department_description, department_is_active FROM tbl_department WHERE hospital_id=%s ORDER BY department_id DESC", [hospital_id])
         rows = cursor.fetchall()
-    return JsonResponse({'status': 'success', 'departments': [{'department_id': r[0], 'hospital_id': r[1], 'name': r[2], 'description': r[3] or '', 'is_active': bool(r[4])} for r in rows]})
+    return JsonResponse({
+        'status': 'success',
+        'departments': [
+            {
+                'department_id': r[0],
+                'id': f'DEP{r[0]:03d}',
+                'dep_uid': f'DEP{r[0]:03d}',
+                'hospital_id': r[1],
+                'name': r[2],
+                'description': r[3] or '',
+                'is_active': bool(r[4])
+            }
+            for r in rows
+        ]
+    })
 
 
 @csrf_exempt

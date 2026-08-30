@@ -280,246 +280,504 @@ export default function PatientPortalPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* Dashboard Header */}
-        <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-            <div>
-              <span className="badge bg-teal-subtle text-teal px-3 py-1 rounded-pill fw-medium small mb-2 d-inline-block" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                Patient Access Center
-              </span>
-              <h3 className="fw-bold text-dark mb-1">Welcome back, {patientName}!</h3>
-              <p className="text-muted small mb-0">
-                Manage your appointments, view medical profile, and schedule consultations across all partner hospitals.
-              </p>
+        {/* PAGE VIEWS */}
+        {activeTab === 'dashboard' && (
+          <div>
+            {/* Dashboard Welcome Header */}
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div>
+                  <span className="badge bg-teal-subtle text-teal px-3 py-1 rounded-pill fw-medium small mb-2 d-inline-block" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                    Patient Access Center
+                  </span>
+                  <h3 className="fw-bold text-dark mb-1">Welcome back, {patientName}!</h3>
+                  <p className="text-muted small mb-0">
+                    Manage your appointments, view medical profile, and schedule consultations across all partner hospitals.
+                  </p>
+                </div>
+
+                <div className="d-flex gap-2">
+                  <div className="bg-light border rounded-3 p-2 px-3 text-center" style={{ minWidth: '95px' }}>
+                    <span className="text-muted extra-small d-block">Total Apps</span>
+                    <span className="fw-bold text-dark fs-5">{appointments.length}</span>
+                  </div>
+                  <div className="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 px-3 text-center" style={{ minWidth: '95px' }}>
+                    <span className="text-warning-emphasis extra-small d-block">Pending</span>
+                    <span className="fw-bold text-warning-emphasis fs-5">{appointments.filter(a => a.status === 'Pending').length}</span>
+                  </div>
+                  <div className="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 px-3 text-center" style={{ minWidth: '95px' }}>
+                    <span className="text-success extra-small d-block">Completed</span>
+                    <span className="fw-bold text-success fs-5">{appointments.filter(a => a.status === 'Completed').length}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="d-flex gap-3">
-              <div className="bg-light border rounded-3 p-2 px-3 text-center">
-                <span className="text-muted small d-block" style={{ fontSize: '0.75rem' }}>Total Appointments</span>
-                <span className="fw-bold text-dark fs-5">{appointments.length}</span>
+            {/* Quick Action Navigation Buttons */}
+            <div className="row g-3 mb-4">
+              <div className="col-6 col-md-3">
+                <button
+                  className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+                  onClick={() => setActiveTab('appointments')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+                    <i className="bi bi-calendar-plus-fill"></i>
+                  </div>
+                  <span className="fw-bold text-dark small">Book Consultation</span>
+                  <small className="text-muted">Schedule appointment</small>
+                </button>
+              </div>
+              <div className="col-6 col-md-3">
+                <button
+                  className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+                  onClick={() => setActiveTab('records')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-primary" style={{ width: '38px', height: '38px' }}>
+                    <i className="bi bi-journal-medical"></i>
+                  </div>
+                  <span className="fw-bold text-dark small">Medical History</span>
+                  <small className="text-muted">Doctor visit records</small>
+                </button>
+              </div>
+              <div className="col-6 col-md-3">
+                <button
+                  className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+                  onClick={() => setActiveTab('prescriptions')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-warning" style={{ width: '38px', height: '38px' }}>
+                    <i className="bi bi-capsule"></i>
+                  </div>
+                  <span className="fw-bold text-dark small">Prescriptions</span>
+                  <small className="text-muted">Medications & dosage</small>
+                </button>
+              </div>
+              <div className="col-6 col-md-3">
+                <button
+                  className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
+                  onClick={() => { setActiveTab('security'); setShowSecurityModal(true); }}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-danger" style={{ width: '38px', height: '38px' }}>
+                    <i className="bi bi-shield-lock-fill"></i>
+                  </div>
+                  <span className="fw-bold text-dark small">Account Security</span>
+                  <small className="text-muted">Change password & recovery</small>
+                </button>
+              </div>
+            </div>
+
+            <div className="row g-4">
+              {/* LEFT: Health Card */}
+              <div className="col-lg-5 col-xl-4">
+                <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+                  <DigitalHealthCard
+                    patient={{
+                      ...user,
+                      patientId: user.patient_id || user.id,
+                      healthId: user.patient_uid || user.health_id
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* RIGHT: Recent Appointments */}
+              <div className="col-lg-7 col-xl-8">
+                <div className="card border-0 shadow-sm rounded-4">
+                  <div className="card-header bg-white p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <div className="d-flex align-items-center gap-2">
+                      <i className="bi bi-calendar2-check text-teal fs-5" style={{ color: '#0d9488' }}></i>
+                      <h5 className="fw-bold mb-0 text-dark">Recent Appointments</h5>
+                    </div>
+                    <button className="btn btn-sm btn-outline-teal rounded-pill px-3" onClick={() => setActiveTab('appointments')}>
+                      View All
+                    </button>
+                  </div>
+                  <div className="card-body p-0">
+                    <div className="table-responsive">
+                      <table className="table table-hover align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th className="ps-4">Appt ID</th>
+                            <th>Date & Time</th>
+                            <th>Hospital</th>
+                            <th>Doctor</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {appointments.slice(0, 5).map((a) => (
+                            <tr key={a.appointment_id}>
+                              <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                                {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                              </td>
+                              <td className="fw-semibold text-dark">
+                                <div>{a.date}</div>
+                                <small className="text-muted">{a.time}</small>
+                              </td>
+                              <td>
+                                <div className="fw-bold text-dark">{a.hospital}</div>
+                                <small className="text-muted">{a.department}</small>
+                              </td>
+                              <td>
+                                <div className="fw-medium">{a.doctor}</div>
+                                <small className="text-muted">{a.reason}</small>
+                              </td>
+                              <td>
+                                <span
+                                  className={`badge rounded-pill px-3 py-1.5 ${
+                                    a.status === 'Completed'
+                                      ? 'bg-success'
+                                      : a.status === 'Confirmed'
+                                      ? 'bg-primary'
+                                      : 'bg-warning text-dark'
+                                  }`}
+                                >
+                                  {a.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                          {!appointments.length && (
+                            <tr>
+                              <td colSpan="4" className="text-center text-muted py-5">
+                                <i className="bi bi-calendar-x text-secondary d-block fs-2 mb-2"></i>
+                                No appointments booked yet. Click <strong>Book Consultation</strong> above to schedule.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="row g-4">
-          {/* LEFT COLUMN: Health Card & Book Appointment Form */}
-          <div className="col-lg-5 col-xl-4">
-            {/* Digital Health Card */}
-            <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
-              <DigitalHealthCard
-                patient={{
-                  ...user,
-                  patientId: user.patient_id || user.id,
-                  healthId: user.patient_uid || user.health_id
-                }}
-              />
-            </div>
-
-            {/* Appointment Booking Card */}
-            <div className="card border-0 shadow-sm rounded-4 mb-4">
-              <div className="card-header bg-white p-3 border-bottom d-flex align-items-center gap-2">
-                <i className="bi bi-calendar-plus-fill text-teal fs-5"></i>
-                <h5 className="fw-bold mb-0 text-dark">Book Consultation</h5>
-              </div>
-              <div className="card-body p-4">
-                <form onSubmit={book}>
-                  {/* Select Hospital */}
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small text-secondary">Hospital *</label>
-                    <select
-                      className="form-select rounded-2"
-                      required
-                      value={form.hospital_id}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          hospital_id: e.target.value,
-                          department_id: '',
-                          doctor_id: ''
-                        })
-                      }
-                    >
-                      <option value="">-- Choose Hospital --</option>
-                      {hospitals.map((h) => (
-                        <option key={h.hospital_id} value={h.hospital_id}>
-                          {h.hospital_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Select Department */}
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small text-secondary">Department *</label>
-                    <select
-                      className="form-select rounded-2"
-                      required
-                      disabled={!form.hospital_id}
-                      value={form.department_id}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          department_id: e.target.value,
-                          doctor_id: ''
-                        })
-                      }
-                    >
-                      <option value="">
-                        {!form.hospital_id ? 'Select hospital first' : '-- Choose Department --'}
-                      </option>
-                      {departments.map((d) => (
-                        <option key={d.department_id} value={d.department_id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Select Doctor */}
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small text-secondary">Doctor *</label>
-                    <select
-                      className="form-select rounded-2"
-                      required
-                      disabled={!form.hospital_id}
-                      value={form.doctor_id}
-                      onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
-                    >
-                      <option value="">
-                        {!form.hospital_id ? 'Select hospital first' : '-- Choose Doctor --'}
-                      </option>
-                      {doctors
-                        .filter(
-                          (d) =>
-                            !form.department_id ||
-                            String(d.department_id) === String(form.department_id)
-                        )
-                        .map((d) => (
-                          <option key={d.doctor_id} value={d.doctor_id}>
-                            {d.name} — {d.specialization}
+        {/* APPOINTMENTS VIEW */}
+        {activeTab === 'appointments' && (
+          <div className="row g-4">
+            {/* BOOKING FORM */}
+            <div className="col-lg-5 col-xl-4">
+              <div className="card border-0 shadow-sm rounded-4 mb-4">
+                <div className="card-header bg-white p-3 border-bottom d-flex align-items-center gap-2">
+                  <i className="bi bi-calendar-plus-fill text-teal fs-5" style={{ color: '#0d9488' }}></i>
+                  <h5 className="fw-bold mb-0 text-dark">Book Consultation</h5>
+                </div>
+                <div className="card-body p-4">
+                  <form onSubmit={book}>
+                    {/* Select Hospital */}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small text-secondary">Hospital *</label>
+                      <select
+                        className="form-select rounded-2"
+                        required
+                        value={form.hospital_id}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            hospital_id: e.target.value,
+                            department_id: '',
+                            doctor_id: ''
+                          })
+                        }
+                      >
+                        <option value="">-- Choose Hospital --</option>
+                        {hospitals.map((h) => (
+                          <option key={h.hospital_id} value={h.hospital_id}>
+                            {h.hospital_name}
                           </option>
                         ))}
-                    </select>
-                  </div>
+                      </select>
+                    </div>
 
-                  {/* Date & Time */}
-                  <div className="row g-2 mb-3">
-                    <div className="col-6">
-                      <label className="form-label fw-semibold small text-secondary">Date *</label>
-                      <input
-                        type="date"
-                        className="form-control rounded-2"
+                    {/* Select Department */}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small text-secondary">Department *</label>
+                      <select
+                        className="form-select rounded-2"
                         required
-                        min={new Date().toISOString().split('T')[0]}
-                        value={form.appointment_date}
-                        onChange={(e) => setForm({ ...form, appointment_date: e.target.value })}
+                        disabled={!form.hospital_id}
+                        value={form.department_id}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            department_id: e.target.value,
+                            doctor_id: ''
+                          })
+                        }
+                      >
+                        <option value="">
+                          {!form.hospital_id ? 'Select hospital first' : '-- Choose Department --'}
+                        </option>
+                        {departments.map((d) => (
+                          <option key={d.department_id} value={d.department_id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Select Doctor */}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small text-secondary">Doctor *</label>
+                      <select
+                        className="form-select rounded-2"
+                        required
+                        disabled={!form.hospital_id}
+                        value={form.doctor_id}
+                        onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
+                      >
+                        <option value="">
+                          {!form.hospital_id ? 'Select hospital first' : '-- Choose Doctor --'}
+                        </option>
+                        {doctors
+                          .filter(
+                            (d) =>
+                              !form.department_id ||
+                              String(d.department_id) === String(form.department_id)
+                          )
+                          .map((d) => (
+                            <option key={d.doctor_id} value={d.doctor_id}>
+                              {d.name} — {d.specialization}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Date & Time */}
+                    <div className="row g-2 mb-3">
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small text-secondary">Date *</label>
+                        <input
+                          type="date"
+                          className="form-control rounded-2"
+                          required
+                          min={new Date().toISOString().split('T')[0]}
+                          value={form.appointment_date}
+                          onChange={(e) => setForm({ ...form, appointment_date: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small text-secondary">Time *</label>
+                        <input
+                          type="time"
+                          className="form-control rounded-2"
+                          required
+                          value={form.appointment_time}
+                          onChange={(e) => setForm({ ...form, appointment_time: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Reason */}
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small text-secondary">Reason *</label>
+                      <input
+                        type="text"
+                        className="form-control rounded-2"
+                        placeholder="Symptoms or reason for visit"
+                        required
+                        value={form.reason}
+                        onChange={(e) => setForm({ ...form, reason: e.target.value })}
                       />
                     </div>
-                    <div className="col-6">
-                      <label className="form-label fw-semibold small text-secondary">Time *</label>
-                      <input
-                        type="time"
-                        className="form-control rounded-2"
-                        required
-                        value={form.appointment_time}
-                        onChange={(e) => setForm({ ...form, appointment_time: e.target.value })}
-                      />
-                    </div>
-                  </div>
 
-                  {/* Reason */}
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small text-secondary">Reason *</label>
-                    <input
-                      type="text"
-                      className="form-control rounded-2"
-                      placeholder="Symptoms or reason for visit"
-                      required
-                      value={form.reason}
-                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="btn w-100 fw-bold py-2 rounded-3 text-white shadow-sm"
-                    style={{ backgroundColor: '#0d9488' }}
-                  >
-                    <i className="bi bi-calendar-check-fill me-1"></i> Book Appointment Now
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      className="btn w-100 fw-bold py-2 rounded-3 text-white shadow-sm"
+                      style={{ backgroundColor: '#0d9488' }}
+                    >
+                      <i className="bi bi-calendar-check-fill me-1"></i> Confirm Appointment
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* RIGHT COLUMN: Appointments List */}
-          <div className="col-lg-7 col-xl-8">
-            <div className="card border-0 shadow-sm rounded-4">
-              <div className="card-header bg-white p-3 border-bottom d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center gap-2">
-                  <i className="bi bi-clock-history text-teal fs-5"></i>
-                  <h5 className="fw-bold mb-0 text-dark">My Appointments</h5>
+            {/* FULL APPOINTMENTS LIST */}
+            <div className="col-lg-7 col-xl-8">
+              <div className="card border-0 shadow-sm rounded-4">
+                <div className="card-header bg-white p-3 border-bottom d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <i className="bi bi-clock-history text-teal fs-5" style={{ color: '#0d9488' }}></i>
+                    <h5 className="fw-bold mb-0 text-dark">My Appointments List</h5>
+                  </div>
+                  <span className="badge bg-secondary rounded-pill">{appointments.length} Total</span>
                 </div>
-                <span className="badge bg-secondary rounded-pill">{appointments.length} Appointments</span>
-              </div>
-              <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th className="ps-4">Date & Time</th>
-                        <th>Hospital</th>
-                        <th>Doctor</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {appointments.map((a) => (
-                        <tr key={a.appointment_id}>
-                          <td className="ps-4 fw-semibold text-dark">
-                            <div>{a.date}</div>
-                            <small className="text-muted">{a.time}</small>
-                          </td>
-                          <td>
-                            <div className="fw-bold text-dark">{a.hospital}</div>
-                            <small className="text-muted">{a.department}</small>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{a.doctor}</div>
-                            <small className="text-muted">{a.reason}</small>
-                          </td>
-                          <td>
-                            <span
-                              className={`badge rounded-pill px-3 py-1.5 ${
-                                a.status === 'Completed'
-                                  ? 'bg-success'
-                                  : a.status === 'Confirmed'
-                                  ? 'bg-primary'
-                                  : 'bg-warning text-dark'
-                              }`}
-                            >
-                              {a.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                      {!appointments.length && (
+                <div className="card-body p-0">
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="table-light">
                         <tr>
-                          <td colSpan="4" className="text-center text-muted py-5">
-                            <i className="bi bi-calendar-x text-secondary d-block fs-2 mb-2"></i>
-                            No appointments booked yet. Use the booking form to schedule your first consultation.
-                          </td>
+                          <th className="ps-4">Appt ID</th>
+                          <th>Date & Time</th>
+                          <th>Hospital</th>
+                          <th>Doctor</th>
+                          <th>Status</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {appointments.map((a) => (
+                          <tr key={a.appointment_id}>
+                            <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                              {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                            </td>
+                            <td className="fw-semibold text-dark">
+                              <div>{a.date}</div>
+                              <small className="text-muted">{a.time}</small>
+                            </td>
+                            <td>
+                              <div className="fw-bold text-dark">{a.hospital}</div>
+                              <small className="text-muted">{a.department}</small>
+                            </td>
+                            <td>
+                              <div className="fw-medium">{a.doctor}</div>
+                              <small className="text-muted">{a.reason}</small>
+                            </td>
+                            <td>
+                              <span
+                                className={`badge rounded-pill px-3 py-1.5 ${
+                                  a.status === 'Completed'
+                                    ? 'bg-success'
+                                    : a.status === 'Confirmed'
+                                    ? 'bg-primary'
+                                    : 'bg-warning text-dark'
+                                }`}
+                              >
+                                {a.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {!appointments.length && (
+                          <tr>
+                            <td colSpan="5" className="text-center text-muted py-5">
+                              <i className="bi bi-calendar-x text-secondary d-block fs-2 mb-2"></i>
+                              No appointments booked yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+        )}
+
+        {/* MEDICAL RECORDS & PRESCRIPTIONS & REPORTS VIEWS */}
+        {['records', 'prescriptions', 'reports'].includes(activeTab) && (
+          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <h4 className="fw-bold text-dark text-capitalize mb-1">
+              <i className="bi bi-journal-medical text-teal me-2" style={{ color: '#0d9488' }}></i>My {activeTab === 'records' ? 'Medical Records' : activeTab === 'prescriptions' ? 'Prescriptions' : 'Diagnostic Reports'}
+            </h4>
+            <p className="text-muted small mb-4">View your complete authorized clinical consultation records and physician notes.</p>
+
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="ps-4">
+                      {activeTab === 'records' ? 'Visit ID' : activeTab === 'prescriptions' ? 'Prescription ID' : 'Report ID'}
+                    </th>
+                    <th>Date & Time</th>
+                    <th>Hospital</th>
+                    <th>Doctor</th>
+                    <th>Diagnosis / Reason</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appointments.filter(a => activeTab === 'records' ? true : a.status === 'Completed').map((a, idx) => (
+                    <tr key={a.appointment_id}>
+                      <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                        {activeTab === 'records'
+                          ? (a.visit_uid || `VIS${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)
+                          : activeTab === 'prescriptions'
+                          ? (a.prescription_uid || `PRE${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)
+                          : (a.report_uid || `LAB${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)}
+                      </td>
+                      <td className="fw-semibold text-dark">
+                        <div>{a.date}</div>
+                        <small className="text-muted">{a.time}</small>
+                      </td>
+                      <td>
+                        <div className="fw-bold text-dark">{a.hospital}</div>
+                        <small className="text-muted">{a.department}</small>
+                      </td>
+                      <td>
+                        <div className="fw-medium">{a.doctor}</div>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{a.reason || 'Routine Checkup'}</div>
+                      </td>
+                      <td>
+                        <span className={`badge rounded-pill px-3 py-1 ${a.status === 'Completed' ? 'bg-success' : 'bg-primary'}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!appointments.length && (
+                    <tr>
+                      <td colSpan="6" className="text-center text-muted py-5">
+                        <i className="bi bi-journal-x d-block fs-2 mb-2 text-secondary"></i>
+                        No records logged yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* PROFILE VIEW */}
+        {activeTab === 'profile' && (
+          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white" style={{ maxWidth: '720px' }}>
+            <h4 className="fw-bold text-dark mb-1"><i className="bi bi-person-lines-fill text-teal me-2" style={{ color: '#0d9488' }}></i>My Patient Profile</h4>
+            <p className="text-muted small mb-4">Your digital health identity information.</p>
+
+            <div className="row g-3">
+              <div className="col-md-6">
+                <div className="p-3 bg-light rounded-3 border">
+                  <span className="text-muted small d-block mb-1">Full Name</span>
+                  <span className="fw-bold text-dark fs-6">{patientName}</span>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="p-3 bg-light rounded-3 border">
+                  <span className="text-muted small d-block mb-1">Global Health ID</span>
+                  <code className="fw-bold text-teal fs-6" style={{ color: '#0d9488' }}>{user?.patient_uid || user?.health_id || 'N/A'}</code>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="p-3 bg-light rounded-3 border">
+                  <span className="text-muted small d-block mb-1">Phone</span>
+                  <span className="fw-semibold text-dark">{user?.phone || user?.user_phone || 'N/A'}</span>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="p-3 bg-light rounded-3 border">
+                  <span className="text-muted small d-block mb-1">Email</span>
+                  <span className="fw-semibold text-dark">{user?.email || user?.user_email || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-top d-flex gap-2">
+              <button className="btn btn-teal text-white fw-bold rounded-pill px-4" style={{ backgroundColor: '#0d9488' }} onClick={() => setActiveTab('appointments')}>
+                Book an Appointment
+              </button>
+              <button className="btn btn-outline-teal fw-bold rounded-pill px-4" onClick={() => { setActiveTab('security'); setShowSecurityModal(true); }}>
+                Security Settings
+              </button>
+            </div>
+          </div>
+        )}
         </div>
-      </div>
 
       {/* SECURITY & CHANGE PASSWORD MODAL */}
       {showSecurityModal && (
