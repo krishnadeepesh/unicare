@@ -114,6 +114,10 @@ def ensure_workflow_schema():
             'prescription_is_active': 'TINYINT(1) DEFAULT 1',
             'prescription_created_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
         })
+        try:
+            cursor.execute("ALTER TABLE tbl_prescription MODIFY COLUMN record_id INT NULL DEFAULT NULL")
+        except Exception:
+            pass
         _ensure_columns(cursor, 'tbl_prescription_item', {
             'prescription_id': 'INT NOT NULL',
             'medicine_name': 'VARCHAR(100) NOT NULL',
@@ -135,6 +139,10 @@ def ensure_workflow_schema():
             'report_is_active': 'TINYINT(1) DEFAULT 1',
             'report_uploaded_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
         })
+        try:
+            cursor.execute("ALTER TABLE tbl_lab_report MODIFY COLUMN record_id INT NULL DEFAULT NULL")
+        except Exception:
+            pass
 
 
 def session_user(request):
