@@ -29,6 +29,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const [doctorsList, setDoctorsList] = useState([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // New Doctor Form State
   const [docName, setDocName] = useState('');
@@ -297,31 +298,31 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         </div>
       )}
 
-      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & UNCONGESTED) */}
-      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '270px', height: '100vh', position: 'sticky', top: 0, overflowY: 'auto' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & BEAUTIFULLY ANIMATED) */}
+      <aside className="unicare-sidebar">
         {/* Brand Header */}
-        <div className="d-flex align-items-center gap-2 px-2 py-2 mb-3 border-bottom pb-3">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '40px', height: '40px', backgroundColor: '#0d9488' }}>
-            <i className="bi bi-hospital fs-5"></i>
+        <div className="sidebar-brand-box">
+          <div className="sidebar-brand-icon">
+            <i className="bi bi-shield-plus"></i>
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.05rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare</h6>
-            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>HOSPITAL ADMIN</small>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.1rem', letterSpacing: '0.3px' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.74rem', letterSpacing: '0.6px' }}>HOSPITAL ADMIN</small>
           </div>
         </div>
 
         {/* Hospital Card */}
-        <div className="p-3 rounded-3 mb-3 border bg-light">
-          <div className="fw-bold text-dark text-truncate">{currentHospitalName}</div>
-          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.78rem' }}>Admin: {username}</small>
+        <div className="sidebar-context-card">
+          <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.95rem' }}>{currentHospitalName}</div>
+          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.8rem' }}>Admin: {username}</small>
           <div className="badge bg-white text-teal border px-2.5 py-1.5 rounded-2 font-monospace w-100 text-truncate text-start" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
             ID: {currentHospitalUid}
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav className="nav nav-pills flex-column mb-auto gap-1">
-          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-1 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+        <nav className="d-flex flex-column mb-auto">
+          <div className="sidebar-section-title">
             Administration
           </div>
 
@@ -334,60 +335,84 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id)}
-              className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold transition-all ${
-                activeSection === item.id ? 'text-white shadow-sm' : 'text-secondary hover-bg-light'
-              }`}
-              style={{
-                backgroundColor: activeSection === item.id ? '#0d9488' : 'transparent',
-                fontSize: '0.88rem'
-              }}
+              className={`sidebar-nav-link ${activeSection === item.id ? 'active' : ''}`}
             >
-              <i className={`bi ${item.icon} fs-6`}></i>
+              <div className="sidebar-nav-icon-box">
+                <i className={`bi ${item.icon}`}></i>
+              </div>
               <span className="flex-grow-1 text-truncate">{item.label}</span>
               {item.count > 0 && (
-                <span className={`badge rounded-pill extra-small ${activeSection === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeSection === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                <span className="sidebar-count-badge">
                   {item.count}
                 </span>
               )}
             </button>
           ))}
         </nav>
-
-        {/* Sidebar Footer Logout */}
-        <div className="pt-3 border-top mt-3">
-          <button
-            onClick={onLogout}
-            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold shadow-sm"
-          >
-            <i className="bi bi-box-arrow-right"></i>
-            <span>Sign Out</span>
-          </button>
-        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-grow-1 overflow-auto d-flex flex-column min-vh-100">
         {/* Top Header Bar */}
-        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center z-2">
+        <header className="portal-topbar d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-2">
             <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
               🏥 {currentHospitalName} ({currentHospitalUid})
             </span>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
-            <div className="text-end">
-              <div className="fw-bold text-dark small">{username}</div>
-              <small className="text-muted extra-small">Hospital Administrator</small>
-            </div>
-            <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '36px', height: '36px', backgroundColor: '#0d9488' }}>
-              {username ? username.charAt(0).toUpperCase() : 'A'}
-            </div>
+          {/* Top Right Profile Avatar Dropdown */}
+          <div className="position-relative">
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2.5 border-0 shadow-none"
+              style={{ outline: 'none' }}
+            >
+              <div className="text-end d-none d-sm-block">
+                <div className="fw-bold text-dark small">{username}</div>
+                <small className="text-muted extra-small">Hospital Administrator</small>
+              </div>
+              <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+                {username ? username.charAt(0).toUpperCase() : 'A'}
+              </div>
+              <i className={`bi bi-chevron-${showProfileMenu ? 'up' : 'down'} text-muted extra-small ms-1`}></i>
+            </button>
+
+            {showProfileMenu && (
+              <div 
+                className="dropdown-menu dropdown-menu-end show shadow-lg border-0 rounded-4 p-2 mt-2" 
+                style={{ minWidth: '230px', zIndex: 1050, position: 'absolute', right: 0 }}
+              >
+                <div className="px-3 py-2 border-bottom mb-1 bg-light rounded-3">
+                  <div className="fw-bold text-dark small">{username}</div>
+                  <small className="text-muted extra-small d-block text-truncate">{hospitalData?.email || 'admin@hospital.com'}</small>
+                  <span className="badge bg-teal-subtle text-teal mt-1 font-monospace extra-small" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                    {currentHospitalUid}
+                  </span>
+                </div>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setActiveSection('home'); setShowProfileMenu(false); }}
+                >
+                  <i className="bi bi-speedometer2 text-teal fs-6"></i>
+                  <span>Admin Dashboard</span>
+                </button>
+                <div className="dropdown-divider my-1"></div>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
+                  onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                >
+                  <i className="bi bi-box-arrow-right fs-6"></i>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Main Content Body */}
-        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5">
+        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5 animate-soft-entrance">
         {!isApproved ? (
           <div className="row justify-content-center"><div className="col-lg-8">
             <div className={`alert ${registrationStatus === 'Rejected' ? 'alert-danger' : 'alert-warning'} border-0 rounded-4 shadow-sm p-4 mb-4`}>

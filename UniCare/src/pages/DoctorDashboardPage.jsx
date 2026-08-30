@@ -56,6 +56,7 @@ export default function DoctorDashboardPage({ user, onLogout }) {
   const [visitSubmitting, setVisitSubmitting] = useState(false);
 
   // Profile & Password Update Forms
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: '', phone: '', experience: '' });
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -456,29 +457,29 @@ export default function DoctorDashboardPage({ user, onLogout }) {
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & UNCONGESTED) */}
-      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '270px', height: '100vh', position: 'sticky', top: 0, overflowY: 'auto' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & BEAUTIFULLY ANIMATED) */}
+      <aside className="unicare-sidebar">
         {/* Brand Header */}
-        <div className="d-flex align-items-center gap-2 px-2 py-2 mb-3 border-bottom pb-3">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '40px', height: '40px', backgroundColor: '#0d9488' }}>
-            <i className="bi bi-heart-pulse-fill fs-5"></i>
+        <div className="sidebar-brand-box">
+          <div className="sidebar-brand-icon">
+            <i className="bi bi-shield-plus"></i>
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.05rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare</h6>
-            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>DOCTOR PORTAL</small>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.1rem', letterSpacing: '0.3px' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.74rem', letterSpacing: '0.6px' }}>DOCTOR PORTAL</small>
           </div>
         </div>
 
         {/* Doctor Info & Hospital Context Box */}
-        <div className="p-3 rounded-3 mb-3 border bg-light">
-          <div className="fw-bold text-dark text-truncate">Dr. {doctorName}</div>
-          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.78rem' }}>{profile?.specialization || 'Clinical Specialist'}</small>
+        <div className="sidebar-context-card">
+          <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.95rem' }}>Dr. {doctorName}</div>
+          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.8rem' }}>{profile?.specialization || 'Clinical Specialist'}</small>
           
           {doctorHospitals.length > 1 ? (
             <div>
-              <label className="extra-small text-muted fw-semibold mb-1 d-block" style={{ fontSize: '0.7rem' }}>CURRENT HOSPITAL</label>
+              <label className="extra-small text-muted fw-semibold mb-1 d-block" style={{ fontSize: '0.68rem', letterSpacing: '0.4px' }}>FACILITY ASSIGNMENT</label>
               <select
-                className="form-select form-select-sm fw-bold border-teal text-teal rounded-3"
+                className="form-select form-select-sm fw-bold border-teal text-teal rounded-3 shadow-none"
                 value={hospitalId || ''}
                 onChange={(e) => handleSwitchHospital(Number(e.target.value))}
                 style={{ fontSize: '0.78rem', color: '#0d9488' }}
@@ -498,9 +499,9 @@ export default function DoctorDashboardPage({ user, onLogout }) {
         </div>
 
         {/* Main Navigation List */}
-        <nav className="nav nav-pills flex-column mb-auto gap-1">
-          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-1 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
-            Clinical Workspace
+        <nav className="d-flex flex-column mb-auto">
+          <div className="sidebar-section-title">
+            Clinical Operations
           </div>
 
           {[
@@ -516,92 +517,91 @@ export default function DoctorDashboardPage({ user, onLogout }) {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold transition-all ${
-                activeTab === item.id ? 'text-white shadow-sm' : 'text-secondary hover-bg-light'
-              }`}
-              style={{
-                backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
-                fontSize: '0.88rem'
-              }}
+              className={`sidebar-nav-link ${activeTab === item.id ? 'active' : ''}`}
             >
-              <i className={`bi ${item.icon} fs-6`}></i>
+              <div className="sidebar-nav-icon-box">
+                <i className={`bi ${item.icon}`}></i>
+              </div>
               <span className="flex-grow-1 text-truncate">{item.label}</span>
               {item.count > 0 && (
-                <span className={`badge rounded-pill extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                <span className="sidebar-count-badge">
                   {item.count}
                 </span>
               )}
             </button>
           ))}
-
-          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-3 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
-            Account & Preferences
-          </div>
-
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'profile' ? 'text-white' : 'text-secondary hover-bg-light'
-            }`}
-            style={{
-              backgroundColor: activeTab === 'profile' ? '#0d9488' : 'transparent',
-              fontSize: '0.88rem'
-            }}
-          >
-            <i className="bi bi-person fs-6"></i>
-            <span>Doctor Profile</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('password')}
-            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'password' ? 'text-white' : 'text-secondary hover-bg-light'
-            }`}
-            style={{
-              backgroundColor: activeTab === 'password' ? '#0d9488' : 'transparent',
-              fontSize: '0.88rem'
-            }}
-          >
-            <i className="bi bi-shield-lock fs-6"></i>
-            <span>Security & Password</span>
-          </button>
         </nav>
-
-        {/* Sidebar Footer Logout */}
-        <div className="pt-3 border-top mt-3">
-          <button
-            onClick={onLogout}
-            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold shadow-sm"
-          >
-            <i className="bi bi-box-arrow-right"></i>
-            <span>Sign Out</span>
-          </button>
-        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-grow-1 overflow-auto d-flex flex-column min-vh-100">
         {/* Top Header Bar */}
-        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center z-2">
+        <header className="portal-topbar d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-2">
             <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
               🏥 {displayHospital}
             </span>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
-            <div className="text-end">
-              <div className="fw-bold text-dark small">Dr. {doctorName}</div>
-              <small className="text-muted extra-small">{profile?.specialization || 'Clinical Specialist'}</small>
-            </div>
-            <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '36px', height: '36px', backgroundColor: '#0d9488' }}>
-              {doctorName ? doctorName.charAt(0).toUpperCase() : 'D'}
-            </div>
+          {/* Top Right Profile Avatar Dropdown */}
+          <div className="position-relative">
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2.5 border-0 shadow-none"
+              style={{ outline: 'none' }}
+            >
+              <div className="text-end d-none d-sm-block">
+                <div className="fw-bold text-dark small">Dr. {doctorName}</div>
+                <small className="text-muted extra-small">{profile?.specialization || 'Clinical Specialist'}</small>
+              </div>
+              <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+                {doctorName ? doctorName.charAt(0).toUpperCase() : 'D'}
+              </div>
+              <i className={`bi bi-chevron-${showProfileMenu ? 'up' : 'down'} text-muted extra-small ms-1`}></i>
+            </button>
+
+            {showProfileMenu && (
+              <div 
+                className="dropdown-menu dropdown-menu-end show shadow-lg border-0 rounded-4 p-2 mt-2" 
+                style={{ minWidth: '230px', zIndex: 1050, position: 'absolute', right: 0 }}
+              >
+                <div className="px-3 py-2 border-bottom mb-1 bg-light rounded-3">
+                  <div className="fw-bold text-dark small">Dr. {doctorName}</div>
+                  <small className="text-muted extra-small d-block text-truncate">{profile?.email || 'doctor@unicare.com'}</small>
+                  <span className="badge bg-teal-subtle text-teal mt-1 font-monospace extra-small" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                    DOC{doctorName ? '001' : ''}
+                  </span>
+                </div>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setActiveTab('profile'); setShowProfileMenu(false); }}
+                >
+                  <i className="bi bi-person text-teal fs-6"></i>
+                  <span>Doctor Profile</span>
+                </button>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setActiveTab('password'); setShowProfileMenu(false); }}
+                >
+                  <i className="bi bi-shield-lock text-teal fs-6"></i>
+                  <span>Security & Password</span>
+                </button>
+                <div className="dropdown-divider my-1"></div>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
+                  onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                >
+                  <i className="bi bi-box-arrow-right fs-6"></i>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Container Content */}
-        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5">
+        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5 animate-soft-entrance">
           {/* Banner Message */}
           {message && (
             <div className={`alert alert-${message.type} alert-dismissible fade show border-0 shadow-sm rounded-3 mb-4`} role="alert">

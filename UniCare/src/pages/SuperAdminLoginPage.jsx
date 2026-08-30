@@ -81,7 +81,7 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
             className="d-inline-flex align-items-center justify-content-center bg-white bg-opacity-10 rounded-circle mb-3 p-3 shadow-sm"
             style={{ width: '70px', height: '70px' }}
           >
-            <i className="bi bi-shield-lock-fill text-white fs-1"></i>
+            <i className="bi bi-shield-plus text-white fs-1"></i>
           </div>
           <h4 className="fw-bold mb-1 tracking-wide">UniCare Platform</h4>
           <p className="mb-0 text-white-50 small text-uppercase font-monospace">Super Admin Portal</p>

@@ -115,9 +115,14 @@ export default function RegisterPage({ setView }) {
 
             <div className="auth-card unicare-card p-3 p-md-4 shadow-lg border-0 rounded-4 bg-white">
               <div className="auth-card-header text-center mb-2">
-                <span className="badge px-3 py-1 rounded-pill mb-1" style={{ backgroundColor: '#e6f4f1', color: '#0d9488', fontSize: '0.78rem' }}>
-                  UniCare Network Registration
-                </span>
+                <div className="bg-teal-subtle text-teal rounded-circle d-inline-flex p-2 mb-2" style={{ backgroundColor: '#e6f4f1' }}>
+                  <i className="bi bi-shield-plus fs-3" style={{ color: '#0d9488' }}></i>
+                </div>
+                <div>
+                  <span className="badge px-3 py-1 rounded-pill mb-1" style={{ backgroundColor: '#e6f4f1', color: '#0d9488', fontSize: '0.78rem' }}>
+                    UniCare Network Registration
+                  </span>
+                </div>
                 <h3 className="fw-bold text-slate-800 fs-4 mb-1">Hospital Admin Registration</h3>
                 <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Create your administrator account and register your hospital.</p>
               </div>

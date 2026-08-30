@@ -18,6 +18,14 @@ function App() {
   const getInitialView = () => {
     const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/admin') || path.startsWith('/super-admin')) return 'landing';
+
+    const savedAdmin = localStorage.getItem('unicare_super_admin');
+    const savedView = sessionStorage.getItem('unicare_current_view');
+
+    if (savedAdmin && savedView === 'super-admin-dashboard') {
+      return 'super-admin-dashboard';
+    }
+
     const savedUser = localStorage.getItem('unicare_active_user');
     let parsedUser = null;
     if (savedUser) {
@@ -32,9 +40,8 @@ function App() {
         localStorage.removeItem('unicare_active_user');
       }
     }
-    const savedView = sessionStorage.getItem('unicare_current_view');
 
-    if (savedUser && savedView && ['hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard'].includes(savedView)) {
+    if (savedUser && savedView && ['hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard', 'super-admin-dashboard'].includes(savedView)) {
       return savedView;
     }
     if (parsedUser?.role === 'doctor') return 'doctor-dashboard';
@@ -112,7 +119,15 @@ function App() {
     sessionStorage.setItem('unicare_current_view', view);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8000/api/super-admin/auth/logout/', {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch {
+      // Ignore network errors on logout
+    }
     setCurrentUser(null);
     setActiveRole(null);
     localStorage.removeItem('unicare_active_user');
@@ -132,9 +147,18 @@ function App() {
     localStorage.setItem('unicare_super_admin', JSON.stringify(adminData));
     setAuthModal(null);
     setCurrentView('super-admin-dashboard');
+    sessionStorage.setItem('unicare_current_view', 'super-admin-dashboard');
   };
 
-  const handleSuperAdminLogout = () => {
+  const handleSuperAdminLogout = async () => {
+    try {
+      await fetch('http://localhost:8000/api/super-admin/logout/', {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch {
+      // Ignore network errors on logout
+    }
     setSuperAdminUser(null);
     localStorage.removeItem('unicare_super_admin');
     sessionStorage.removeItem('unicare_current_view');

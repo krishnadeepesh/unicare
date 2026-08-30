@@ -178,7 +178,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
             <div className="auth-card unicare-card p-3 p-md-4 shadow-lg border-0 rounded-4 bg-white">
               <div className="auth-card-header text-center mb-3">
                 <div className="bg-teal-subtle text-teal rounded-circle d-inline-flex p-2 mb-2" style={{ backgroundColor: '#e6f4f1' }}>
-                  <i className="bi bi-shield-lock fs-3" style={{ color: '#0d9488' }}></i>
+                  <i className="bi bi-shield-plus fs-3" style={{ color: '#0d9488' }}></i>
                 </div>
                 <h3 className="fw-bold text-slate-800 fs-4 mb-1">UniCare Login</h3>
                 <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Use your registered email address or phone number to access your portal.</p>
