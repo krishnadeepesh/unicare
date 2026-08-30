@@ -15,11 +15,21 @@ const RECOVERY_QUESTIONS = [
 export default function PatientPortalPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [appointments, setAppointments] = useState([]);
+  const [prescriptionsList, setPrescriptionsList] = useState([]);
+  const [labReportsList, setLabReportsList] = useState([]);
+  const [clinicalHistory, setClinicalHistory] = useState([]);
   const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [profile, setProfile] = useState(null);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showUploadReportModal, setShowUploadReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [uploadReportForm, setUploadReportForm] = useState({
+    report_type: 'Blood Test',
+    report_title: '',
+    report_file: ''
+  });
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
@@ -33,12 +43,11 @@ export default function PatientPortalPage({ user, onLogout }) {
     department_id: '',
     doctor_id: '',
     appointment_date: '',
-    appointment_time: '09:00',
-    reason: ''
+    appointment_time: '09:00'
   });
   const [message, setMessage] = useState(null);
 
-  useEffect(() => {
+  const loadPatientData = () => {
     fetch(`${API}/profile/`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
@@ -56,10 +65,32 @@ export default function PatientPortalPage({ user, onLogout }) {
       .then((d) => setAppointments(d.appointments || []))
       .catch((err) => console.error("Error loading appointments:", err));
 
+    fetch(`${API}/prescriptions/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setPrescriptionsList(d.prescriptions || []))
+      .catch((err) => console.error("Error loading prescriptions:", err));
+
+    fetch(`${API}/lab-reports/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setLabReportsList(d.reports || []))
+      .catch((err) => console.error("Error loading lab reports:", err));
+
+    const pUid = user?.health_id || user?.patient_uid || user?.patient_id;
+    if (pUid) {
+      fetch(`${API}/patient-history/?health_id=${encodeURIComponent(pUid)}`, { credentials: 'include' })
+        .then((r) => r.json())
+        .then((d) => setClinicalHistory(d.history || []))
+        .catch((err) => console.error("Error loading history:", err));
+    }
+
     fetch(`${API}/hospitals/?status=approved`)
       .then((r) => r.json())
       .then((d) => setHospitals(d.hospitals || []))
       .catch((err) => console.error("Error loading hospitals:", err));
+  };
+
+  useEffect(() => {
+    loadPatientData();
   }, []);
 
   useEffect(() => {
@@ -91,8 +122,7 @@ export default function PatientPortalPage({ user, onLogout }) {
           department_id: '',
           doctor_id: '',
           appointment_date: '',
-          appointment_time: '09:00',
-          reason: ''
+          appointment_time: '09:00'
         });
         const aRes = await fetch(`${API}/appointments/`, { credentials: 'include' });
         const aData = await aRes.json();
@@ -139,99 +169,144 @@ export default function PatientPortalPage({ user, onLogout }) {
     }
   };
 
+  const handleUploadPatientReport = async (e) => {
+    e.preventDefault();
+    setReportSubmitting(true);
+    try {
+      const res = await fetch(`${API}/lab-reports/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          report_type: uploadReportForm.report_type,
+          report_title: uploadReportForm.report_title,
+          report_file: uploadReportForm.report_file,
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: `Report ${data.report?.lab_report_uid || 'LAB001'} uploaded successfully!`, type: 'success' });
+        setUploadReportForm({ report_type: 'Blood Test', report_title: '', report_file: '' });
+        setShowUploadReportModal(false);
+        loadPatientData();
+      } else {
+        setMessage({ text: data.message || 'Failed to upload report.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error uploading report.', type: 'danger' });
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   const patientName = user?.name || user?.user_name || 'Patient';
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
-      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
-        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME, SPACIOUS & UNCONGESTED) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '270px', height: '100vh', position: 'sticky', top: 0, overflowY: 'auto' }}>
+        {/* Brand Header */}
+        <div className="d-flex align-items-center gap-2 px-2 py-2 mb-3 border-bottom pb-3">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '40px', height: '40px', backgroundColor: '#0d9488' }}>
             <i className="bi bi-heart-pulse-fill fs-5"></i>
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Patient</h6>
-            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Patient Access Portal</small>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.05rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>PATIENT ACCESS</small>
           </div>
         </div>
 
-        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
-          <div className="fw-bold text-dark small truncate">{patientName}</div>
-          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
-            ID: {user?.patient_uid || user?.health_id || 'N/A'}
+        {/* Patient Health ID Card */}
+        <div className="p-3 rounded-3 mb-3 border bg-light">
+          <div className="fw-bold text-dark text-truncate">{patientName}</div>
+          <div className="text-teal extra-small font-monospace fw-bold mt-1" style={{ color: '#0d9488', fontSize: '0.78rem' }}>
+            ID: {user?.patient_uid || user?.health_id || 'PTA001'}
           </div>
         </div>
 
+        {/* Navigation Links */}
         <nav className="nav nav-pills flex-column mb-auto gap-1">
+          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-1 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+            My Health Hub
+          </div>
+
           {[
             { id: 'dashboard', icon: 'bi-speedometer2', label: 'Dashboard' },
             { id: 'appointments', icon: 'bi-calendar-event', label: 'My Appointments', count: appointments.length },
             { id: 'records', icon: 'bi-folder2-open', label: 'Medical Records' },
             { id: 'prescriptions', icon: 'bi-capsule', label: 'Prescriptions' },
-            { id: 'reports', icon: 'bi-file-earmark-medical', label: 'Reports' },
+            { id: 'reports', icon: 'bi-file-earmark-medical', label: 'Lab Reports' },
           ].map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-                activeTab === item.id ? 'text-white' : 'text-slate-700'
+              className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold transition-all ${
+                activeTab === item.id ? 'text-white shadow-sm' : 'text-secondary hover-bg-light'
               }`}
               style={{
                 backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
-                color: activeTab === item.id ? '#ffffff' : '#334155'
+                fontSize: '0.88rem'
               }}
             >
-              <i className={`bi ${item.icon}`}></i> {item.label}
+              <i className={`bi ${item.icon} fs-6`}></i>
+              <span className="flex-grow-1 text-truncate">{item.label}</span>
               {item.count > 0 && (
-                <span className={`badge rounded-pill ms-auto extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                <span className={`badge rounded-pill extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
                   {item.count}
                 </span>
               )}
             </button>
           ))}
 
-          <hr className="my-2 text-muted opacity-25" />
+          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-3 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+            Account Settings
+          </div>
 
           <button
             onClick={() => setActiveTab('profile')}
-            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'profile' ? 'text-white' : 'text-slate-700'
+            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'profile' ? 'text-white' : 'text-secondary hover-bg-light'
             }`}
             style={{
               backgroundColor: activeTab === 'profile' ? '#0d9488' : 'transparent',
-              color: activeTab === 'profile' ? '#ffffff' : '#334155'
+              fontSize: '0.88rem'
             }}
           >
-            <i className="bi bi-person"></i> My Profile
+            <i className="bi bi-person fs-6"></i>
+            <span>My Profile</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('security'); setShowSecurityModal(true); }}
-            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'security' ? 'text-white' : 'text-slate-700'
+            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'security' ? 'text-white' : 'text-secondary hover-bg-light'
             }`}
             style={{
               backgroundColor: activeTab === 'security' ? '#0d9488' : 'transparent',
-              color: activeTab === 'security' ? '#ffffff' : '#334155'
+              fontSize: '0.88rem'
             }}
           >
-            <i className="bi bi-shield-lock"></i> Security & Password
+            <i className="bi bi-shield-lock fs-6"></i>
+            <span>Security & Recovery</span>
           </button>
         </nav>
 
-        <div className="pt-2 border-top mt-2">
+        {/* Sidebar Footer Logout */}
+        <div className="pt-3 border-top mt-3">
           <button
             onClick={onLogout}
-            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold shadow-sm"
           >
-            <i className="bi bi-box-arrow-right"></i> Logout
+            <i className="bi bi-box-arrow-right"></i>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-grow-1 overflow-auto d-flex flex-column">
-        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+      <main className="flex-grow-1 overflow-auto d-flex flex-column min-vh-100">
+        {/* Top Header Bar */}
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center z-2">
           <div className="d-flex align-items-center gap-2">
             <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
               🏥 UniCare Healthcare Network
@@ -243,11 +318,14 @@ export default function PatientPortalPage({ user, onLogout }) {
               <div className="fw-bold text-dark small">{patientName}</div>
               <small className="text-muted font-monospace extra-small">ID: {user?.patient_uid || user?.health_id || 'N/A'}</small>
             </div>
+            <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '36px', height: '36px', backgroundColor: '#0d9488' }}>
+              {patientName ? patientName.charAt(0).toUpperCase() : 'P'}
+            </div>
           </div>
         </header>
 
-      {/* MAIN CONTAINER */}
-      <div className="container-fluid max-w-7xl py-4 flex-grow-1">
+        {/* Main Content Body */}
+        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5">
         {/* Banner Message */}
         {message && (
           <div className={`alert alert-${message.type} alert-dismissible fade show border-0 shadow-sm rounded-3 mb-4`} role="alert">
@@ -543,15 +621,13 @@ export default function PatientPortalPage({ user, onLogout }) {
                             </option>
                           ))}
                       </select>
-                    </div>
-
-                    {/* Date & Time */}
-                    <div className="row g-2 mb-3">
+                    </div>                    {/* Date & Time */}
+                    <div className="row g-2 mb-4">
                       <div className="col-6">
                         <label className="form-label fw-semibold small text-secondary">Date *</label>
                         <input
                           type="date"
-                          className="form-control rounded-2"
+                          className="form-control rounded-3 py-2"
                           required
                           min={new Date().toISOString().split('T')[0]}
                           value={form.appointment_date}
@@ -562,7 +638,7 @@ export default function PatientPortalPage({ user, onLogout }) {
                         <label className="form-label fw-semibold small text-secondary">Time *</label>
                         <input
                           type="time"
-                          className="form-control rounded-2"
+                          className="form-control rounded-3 py-2"
                           required
                           value={form.appointment_time}
                           onChange={(e) => setForm({ ...form, appointment_time: e.target.value })}
@@ -570,25 +646,12 @@ export default function PatientPortalPage({ user, onLogout }) {
                       </div>
                     </div>
 
-                    {/* Reason */}
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold small text-secondary">Reason *</label>
-                      <input
-                        type="text"
-                        className="form-control rounded-2"
-                        placeholder="Symptoms or reason for visit"
-                        required
-                        value={form.reason}
-                        onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                      />
-                    </div>
-
                     <button
                       type="submit"
-                      className="btn w-100 fw-bold py-2 rounded-3 text-white shadow-sm"
+                      className="btn w-100 fw-bold py-2.5 rounded-pill text-white shadow-sm mt-2"
                       style={{ backgroundColor: '#0d9488' }}
                     >
-                      <i className="bi bi-calendar-check-fill me-1"></i> Confirm Appointment
+                      <i className="bi bi-calendar-check-fill me-1"></i> Confirm & Book Appointment
                     </button>
                   </form>
                 </div>
@@ -667,64 +730,202 @@ export default function PatientPortalPage({ user, onLogout }) {
           </div>
         )}
 
-        {/* MEDICAL RECORDS & PRESCRIPTIONS & REPORTS VIEWS */}
-        {['records', 'prescriptions', 'reports'].includes(activeTab) && (
+        {/* MEDICAL RECORDS VIEW */}
+        {activeTab === 'records' && (
           <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
-            <h4 className="fw-bold text-dark text-capitalize mb-1">
-              <i className="bi bi-journal-medical text-teal me-2" style={{ color: '#0d9488' }}></i>My {activeTab === 'records' ? 'Medical Records' : activeTab === 'prescriptions' ? 'Prescriptions' : 'Diagnostic Reports'}
-            </h4>
-            <p className="text-muted small mb-4">View your complete authorized clinical consultation records and physician notes.</p>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h4 className="fw-bold text-dark mb-1">
+                  <i className="bi bi-journal-medical text-teal me-2" style={{ color: '#0d9488' }}></i>Unified Medical Records
+                </h4>
+                <p className="text-muted small mb-0">Your complete cross-hospital consultation history across all UniCare partner facilities.</p>
+              </div>
+              <span className="badge bg-light text-teal border px-3 py-2 font-monospace" style={{ color: '#0d9488' }}>
+                Health ID: {user?.health_id || user?.patient_uid || 'PTA001'}
+              </span>
+            </div>
 
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
                 <thead className="table-light">
                   <tr>
-                    <th className="ps-4">
-                      {activeTab === 'records' ? 'Visit ID' : activeTab === 'prescriptions' ? 'Prescription ID' : 'Report ID'}
-                    </th>
+                    <th className="ps-4">Visit ID</th>
                     <th>Date & Time</th>
                     <th>Hospital</th>
                     <th>Doctor</th>
                     <th>Diagnosis / Reason</th>
-                    <th>Status</th>
+                    <th>Clinical Notes & Treatment</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {appointments.filter(a => activeTab === 'records' ? true : a.status === 'Completed').map((a, idx) => (
-                    <tr key={a.appointment_id}>
+                  {(clinicalHistory.length ? clinicalHistory : appointments.filter(a => a.status === 'Completed')).map((item, idx) => (
+                    <tr key={idx}>
                       <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
-                        {activeTab === 'records'
-                          ? (a.visit_uid || `VIS${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)
-                          : activeTab === 'prescriptions'
-                          ? (a.prescription_uid || `PRE${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)
-                          : (a.report_uid || `LAB${String(a.appointment_id || (idx + 1)).padStart(3, '0')}`)}
+                        {item.visit_uid || item.id || `VIS${String(item.visit_id || item.appointment_id || (idx + 1)).padStart(3, '0')}`}
                       </td>
                       <td className="fw-semibold text-dark">
-                        <div>{a.date}</div>
-                        <small className="text-muted">{a.time}</small>
+                        <div>{item.visited_at || item.date}</div>
+                        {item.time && <small className="text-muted">{item.time}</small>}
                       </td>
                       <td>
-                        <div className="fw-bold text-dark">{a.hospital}</div>
-                        <small className="text-muted">{a.department}</small>
+                        <div className="fw-bold text-dark">{item.hospital_name || item.hospital || 'UniCare Medical Center'}</div>
                       </td>
                       <td>
-                        <div className="fw-medium">{a.doctor}</div>
+                        <div className="fw-medium">{item.doctor_name || item.doctor || 'Dr. Practitioner'}</div>
                       </td>
                       <td>
-                        <div className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{a.reason || 'Routine Checkup'}</div>
+                        <div className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{item.diagnosis || item.reason || 'General Health Consultation'}</div>
                       </td>
                       <td>
-                        <span className={`badge rounded-pill px-3 py-1 ${a.status === 'Completed' ? 'bg-success' : 'bg-primary'}`}>
-                          {a.status}
-                        </span>
+                        <div className="small text-secondary">{item.medical_notes || 'Consultation completed satisfactorily.'}</div>
                       </td>
                     </tr>
                   ))}
-                  {!appointments.length && (
+                  {!clinicalHistory.length && !appointments.filter(a => a.status === 'Completed').length && (
                     <tr>
                       <td colSpan="6" className="text-center text-muted py-5">
                         <i className="bi bi-journal-x d-block fs-2 mb-2 text-secondary"></i>
-                        No records logged yet.
+                        No medical records logged yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* PRESCRIPTIONS VIEW */}
+        {activeTab === 'prescriptions' && (
+          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h4 className="fw-bold text-dark mb-1">
+                  <i className="bi bi-capsule text-teal me-2" style={{ color: '#0d9488' }}></i>My Digital Prescriptions
+                </h4>
+                <p className="text-muted small mb-0">Active and past medications prescribed by your authorized doctors.</p>
+              </div>
+              <span className="badge bg-light text-teal border px-3 py-2 font-monospace" style={{ color: '#0d9488' }}>
+                {prescriptionsList.length} Prescriptions
+              </span>
+            </div>
+
+            <div className="row g-4">
+              {prescriptionsList.map((p, idx) => (
+                <div className="col-12" key={idx}>
+                  <div className="card border rounded-4 shadow-sm p-3 bg-white">
+                    <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3 pb-2 border-bottom">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="badge bg-teal text-white font-monospace fs-6 px-2.5 py-1" style={{ backgroundColor: '#0d9488' }}>
+                          {p.prescription_uid || p.id || `PRE${String(p.prescription_id || (idx + 1)).padStart(3, '0')}`}
+                        </span>
+                        <div>
+                          <strong className="text-dark d-block">Issued by: {p.doctor_name || 'Dr. Practitioner'}</strong>
+                          <small className="text-muted">{p.hospital_name || 'UniCare Partner Facility'} &bull; Date: {p.date}</small>
+                        </div>
+                      </div>
+                      <span className="badge bg-success-subtle text-success rounded-pill px-3 py-1.5 fw-bold">Active Prescription</span>
+                    </div>
+
+                    <div className="table-responsive mb-3">
+                      <table className="table table-sm table-bordered align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Medication Name</th>
+                            <th>Dosage</th>
+                            <th>Frequency</th>
+                            <th>Duration</th>
+                            <th>Special Instructions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {p.medicines && p.medicines.length ? (
+                            p.medicines.map((m, mIdx) => (
+                              <tr key={mIdx}>
+                                <td className="fw-bold text-dark">{m.medicine_name}</td>
+                                <td>{m.dosage || '500mg'}</td>
+                                <td><span className="badge bg-light text-dark border">{m.frequency || 'Twice daily'}</span></td>
+                                <td>{m.duration || '5 days'}</td>
+                                <td className="text-secondary small">{m.instruction || 'Take after meals'}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="5" className="text-muted">Standard prescribed medication instructions.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {p.remarks && (
+                      <div className="p-2.5 bg-light rounded-3 small text-secondary">
+                        <strong className="text-dark">Doctor Remarks:</strong> {p.remarks}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {!prescriptionsList.length && (
+                <div className="col-12 text-center text-muted py-5">
+                  <i className="bi bi-capsule d-block fs-1 mb-2 text-secondary"></i>
+                  No digital prescriptions found on record.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* DIAGNOSTIC REPORTS VIEW */}
+        {activeTab === 'reports' && (
+          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h4 className="fw-bold text-dark mb-1">
+                  <i className="bi bi-file-earmark-medical text-teal me-2" style={{ color: '#0d9488' }}></i>Diagnostic & Lab Reports
+                </h4>
+                <p className="text-muted small mb-0">View test results, lab investigations, or upload personal health reports.</p>
+              </div>
+              <button
+                className="btn btn-teal text-white btn-sm rounded-pill fw-bold px-3 shadow-sm"
+                style={{ backgroundColor: '#0d9488' }}
+                onClick={() => setShowUploadReportModal(true)}
+              >
+                <i className="bi bi-cloud-arrow-up me-1"></i> Upload Test Report
+              </button>
+            </div>
+
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="ps-4">Report ID</th>
+                    <th>Category</th>
+                    <th>Report Title</th>
+                    <th>Date Uploaded</th>
+                    <th>Diagnostic Lab / Center</th>
+                    <th>Observations & Findings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {labReportsList.map((r, idx) => (
+                    <tr key={idx}>
+                      <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                        {r.lab_report_uid || r.id || `LAB${String(r.report_id || (idx + 1)).padStart(3, '0')}`}
+                      </td>
+                      <td><span className="badge bg-light text-primary border">{r.report_type}</span></td>
+                      <td className="fw-bold text-dark">{r.report_title}</td>
+                      <td className="small text-muted">{r.uploaded_at || 'Recently'}</td>
+                      <td>{r.hospital_name || 'UniCare Diagnostic Network'}</td>
+                      <td className="small text-secondary">{r.report_file || 'Normal parameters verified.'}</td>
+                    </tr>
+                  ))}
+                  {!labReportsList.length && (
+                    <tr>
+                      <td colSpan="6" className="text-center text-muted py-5">
+                        <i className="bi bi-file-earmark-x d-block fs-2 mb-2 text-secondary"></i>
+                        No diagnostic reports uploaded yet. Click <strong>Upload Test Report</strong> to add one.
                       </td>
                     </tr>
                   )}
@@ -877,6 +1078,75 @@ export default function PatientPortalPage({ user, onLogout }) {
                   <button className="btn text-white btn-sm fw-bold w-100 rounded-3 mt-2" style={{ backgroundColor: '#0d9488' }}>
                     Update Security Settings
                   </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UPLOAD DIAGNOSTIC REPORT MODAL */}
+      {showUploadReportModal && (
+        <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold fs-5 mb-0">
+                  <i className="bi bi-cloud-arrow-up me-2"></i>Upload Diagnostic Test Report
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowUploadReportModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <form onSubmit={handleUploadPatientReport}>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Report Category *</label>
+                    <select
+                      className="form-select"
+                      value={uploadReportForm.report_type}
+                      onChange={(e) => setUploadReportForm({ ...uploadReportForm, report_type: e.target.value })}
+                    >
+                      <option value="Blood Test">Blood Test (CBC, Lipid, HbA1c)</option>
+                      <option value="Radiology">Radiology (X-Ray, Ultrasound, CT, MRI)</option>
+                      <option value="Pathology">Pathology / Biopsy</option>
+                      <option value="Urine Analysis">Urine Analysis</option>
+                      <option value="Cardiology">Cardiology (ECG, Echo, Stress Test)</option>
+                      <option value="General Diagnostics">General Diagnostic Report</option>
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Report / Investigation Title *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      placeholder="e.g. Annual Blood Sugar & Lipid Profile"
+                      value={uploadReportForm.report_title}
+                      onChange={(e) => setUploadReportForm({ ...uploadReportForm, report_title: e.target.value })}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Report Observations / Notes / Parameter Values *</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      required
+                      placeholder="Enter the lab findings, test summary, or remarks (e.g. Fasting Glucose 95 mg/dL, Total Cholesterol 180 mg/dL)..."
+                      value={uploadReportForm.report_file}
+                      onChange={(e) => setUploadReportForm({ ...uploadReportForm, report_file: e.target.value })}
+                    ></textarea>
+                  </div>
+                  <div className="d-flex justify-content-end gap-2">
+                    <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setShowUploadReportModal(false)}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-teal text-white rounded-pill px-4 fw-bold" style={{ backgroundColor: '#0d9488' }} disabled={reportSubmitting}>
+                      {reportSubmitting ? 'Uploading...' : 'Save & Link to Health ID'}
+                    </button>
+                  </div>
                 </form>
               </div>
             </div>

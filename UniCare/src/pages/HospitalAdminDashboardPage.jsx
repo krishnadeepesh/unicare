@@ -297,46 +297,55 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         </div>
       )}
 
-      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
-      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
-        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & UNCONGESTED) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '270px', height: '100vh', position: 'sticky', top: 0, overflowY: 'auto' }}>
+        {/* Brand Header */}
+        <div className="d-flex align-items-center gap-2 px-2 py-2 mb-3 border-bottom pb-3">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '40px', height: '40px', backgroundColor: '#0d9488' }}>
             <i className="bi bi-hospital fs-5"></i>
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Admin</h6>
-            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Hospital Admin</small>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.05rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>HOSPITAL ADMIN</small>
           </div>
         </div>
 
-        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
-          <div className="fw-bold text-dark small truncate">{currentHospitalName}</div>
-          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+        {/* Hospital Card */}
+        <div className="p-3 rounded-3 mb-3 border bg-light">
+          <div className="fw-bold text-dark text-truncate">{currentHospitalName}</div>
+          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.78rem' }}>Admin: {username}</small>
+          <div className="badge bg-white text-teal border px-2.5 py-1.5 rounded-2 font-monospace w-100 text-truncate text-start" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
             ID: {currentHospitalUid}
           </div>
         </div>
 
+        {/* Navigation Links */}
         <nav className="nav nav-pills flex-column mb-auto gap-1">
+          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-1 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+            Administration
+          </div>
+
           {[
             { id: 'home', icon: 'bi-speedometer2', label: 'Dashboard' },
-            { id: 'doctors', icon: 'bi-person-badge', label: 'Doctors', count: doctorsList.length },
-            { id: 'receptionists', icon: 'bi-person-workspace', label: 'Receptionists / Staff', count: receptionistsList.length },
+            { id: 'doctors', icon: 'bi-person-badge', label: 'Doctor Management', count: doctorsList.length },
+            { id: 'receptionists', icon: 'bi-person-workspace', label: 'Staff & Receptionists', count: receptionistsList.length },
             { id: 'departments', icon: 'bi-diagram-3', label: 'Departments', count: departmentsList.length },
           ].map(item => (
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id)}
-              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-                activeSection === item.id ? 'text-white' : 'text-slate-700'
+              className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold transition-all ${
+                activeSection === item.id ? 'text-white shadow-sm' : 'text-secondary hover-bg-light'
               }`}
               style={{
                 backgroundColor: activeSection === item.id ? '#0d9488' : 'transparent',
-                color: activeSection === item.id ? '#ffffff' : '#334155'
+                fontSize: '0.88rem'
               }}
             >
-              <i className={`bi ${item.icon}`}></i> {item.label}
+              <i className={`bi ${item.icon} fs-6`}></i>
+              <span className="flex-grow-1 text-truncate">{item.label}</span>
               {item.count > 0 && (
-                <span className={`badge rounded-pill ms-auto extra-small ${activeSection === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeSection === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                <span className={`badge rounded-pill extra-small ${activeSection === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeSection === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
                   {item.count}
                 </span>
               )}
@@ -344,19 +353,22 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
           ))}
         </nav>
 
-        <div className="pt-2 border-top mt-2">
+        {/* Sidebar Footer Logout */}
+        <div className="pt-3 border-top mt-3">
           <button
             onClick={onLogout}
-            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold shadow-sm"
           >
-            <i className="bi bi-box-arrow-right"></i> Logout
+            <i className="bi bi-box-arrow-right"></i>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-grow-1 overflow-auto d-flex flex-column">
-        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+      <main className="flex-grow-1 overflow-auto d-flex flex-column min-vh-100">
+        {/* Top Header Bar */}
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center z-2">
           <div className="d-flex align-items-center gap-2">
             <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
               🏥 {currentHospitalName} ({currentHospitalUid})
@@ -368,10 +380,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
               <div className="fw-bold text-dark small">{username}</div>
               <small className="text-muted extra-small">Hospital Administrator</small>
             </div>
+            <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '36px', height: '36px', backgroundColor: '#0d9488' }}>
+              {username ? username.charAt(0).toUpperCase() : 'A'}
+            </div>
           </div>
         </header>
 
-        <div className="container-fluid py-4 flex-grow-1">
+        {/* Main Content Body */}
+        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5">
         {!isApproved ? (
           <div className="row justify-content-center"><div className="col-lg-8">
             <div className={`alert ${registrationStatus === 'Rejected' ? 'alert-danger' : 'alert-warning'} border-0 rounded-4 shadow-sm p-4 mb-4`}>

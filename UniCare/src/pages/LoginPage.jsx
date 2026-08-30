@@ -193,13 +193,13 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
 
               <form onSubmit={handleSubmit}>
                 {/* Email / Username Field */}
-                <div className="mb-2.5">
+                <div className="mb-3">
                   <label className="form-label fw-semibold text-slate-700 small mb-1">Email or Phone Number</label>
                   <div className="input-group">
-                    <span className="input-group-text bg-light text-muted border-end-0"><i className="bi bi-person"></i></span>
+                    <span className="input-group-text bg-light text-muted border-end-0 px-3"><i className="bi bi-person fs-6"></i></span>
                     <input 
                       type="text" 
-                      className="form-control border-start-0 ps-0" 
+                      className="form-control border-start-0 py-2.5 ps-1"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required 
@@ -208,23 +208,23 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                 </div>
 
                 {/* Password Field */}
-                <div className="mb-2.5">
+                <div className="mb-4">
                   <div className="d-flex justify-content-between align-items-center mb-1">
                     <label className="form-label fw-semibold text-slate-700 small mb-0">Password</label>
                     <button 
                       type="button" 
                       className="btn btn-link p-0 text-teal text-decoration-none extra-small fw-semibold"
-                      style={{ fontSize: '0.8rem' }}
+                      style={{ fontSize: '0.8rem', color: '#0d9488' }}
                       onClick={() => setShowForgotModal(true)}
                     >
                       Forgot Password?
                     </button>
                   </div>
                   <div className="input-group">
-                    <span className="input-group-text bg-light text-muted border-end-0"><i className="bi bi-lock"></i></span>
+                    <span className="input-group-text bg-light text-muted border-end-0 px-3"><i className="bi bi-lock fs-6"></i></span>
                     <input 
                       type="password" 
-                      className="form-control border-start-0 ps-0" 
+                      className="form-control border-start-0 py-2.5 ps-1" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required 
@@ -232,36 +232,40 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                   </div>
                 </div>
 
-                {/* Login Button */}
-                <button 
-                  type="submit" 
-                  className="btn btn-primary-unicare w-100 py-2.5 fs-6 rounded-3 mt-2.5 shadow-sm"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Authenticating...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-box-arrow-in-right me-2"></i>
-                      Login
-                    </>
-                  )}
-                </button>
+                {/* Login Button with clear spacing */}
+                <div className="pt-2">
+                  <button 
+                    type="submit" 
+                    className="btn btn-teal w-100 py-3 fs-6 rounded-pill fw-bold text-white shadow-sm"
+                    style={{ backgroundColor: '#0d9488', letterSpacing: '0.3px' }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Authenticating...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-box-arrow-in-right me-2"></i>
+                        Sign In to UniCare
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
 
               {/* Bottom Registration Callout */}
-              <div className="text-center mt-3 pt-2 border-top">
-                <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>
+              <div className="text-center mt-4 pt-3 border-top">
+                <p className="text-muted mb-0" style={{ fontSize: '0.875rem' }}>
                   New to UniCare?{' '}
                   <button 
                     type="button"
                     className="btn btn-link p-0 fw-bold text-teal text-decoration-none ms-1"
+                    style={{ color: '#0d9488' }}
                     onClick={() => setView('register')}
                   >
-                    Register
+                    Register Account
                   </button>
                 </p>
               </div>

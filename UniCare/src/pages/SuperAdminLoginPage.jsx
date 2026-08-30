@@ -103,17 +103,18 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
 
           <form onSubmit={handleSubmit} noValidate className={validated ? 'was-validated' : ''}>
             {/* Email Field */}
-            <div className="mb-4">
+            <div className="mb-3">
               <label className="form-label text-secondary fw-semibold small mb-1">
                 Admin Email <span className="text-danger">*</span>
               </label>
               <div className="input-group">
-                <span className="input-group-text bg-light border-end-0 text-secondary">
+                <span className="input-group-text bg-light border-end-0 text-secondary px-3">
                   <i className="bi bi-envelope"></i>
                 </span>
                 <input
                   type="email"
-                  className={`form-control border-start-0 bg-light ${validated && !email.trim() ? 'is-invalid' : ''}`}
+                  placeholder="admin@unicare.com"
+                  className={`form-control border-start-0 bg-light py-2.5 ${validated && !email.trim() ? 'is-invalid' : ''}`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -130,12 +131,13 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
                 Password <span className="text-danger">*</span>
               </label>
               <div className="input-group">
-                <span className="input-group-text bg-light border-end-0 text-secondary">
+                <span className="input-group-text bg-light border-end-0 text-secondary px-3">
                   <i className="bi bi-lock"></i>
                 </span>
                 <input
                   type="password"
-                  className={`form-control border-start-0 bg-light ${validated && !password.trim() ? 'is-invalid' : ''}`}
+                  placeholder="Enter administrator password"
+                  className={`form-control border-start-0 bg-light py-2.5 ${validated && !password.trim() ? 'is-invalid' : ''}`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -147,24 +149,26 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              className="btn btn-primary w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)', border: 'none' }}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                  Authenticating...
-                </>
-              ) : (
-                <>
-                  <span>Login to Super Admin</span>
-                  <i className="bi bi-arrow-right-short fs-5"></i>
-                </>
-              )}
-            </button>
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="btn btn-primary w-100 py-3 rounded-pill fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)', border: 'none' }}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In to Super Admin</span>
+                    <i className="bi bi-arrow-right-short fs-5"></i>
+                  </>
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </div>

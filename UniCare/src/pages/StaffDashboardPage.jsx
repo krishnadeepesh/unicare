@@ -443,26 +443,34 @@ const RECOVERY_QUESTIONS = [
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* FIXED LEFT SIDEBAR (LIGHT THEME) */}
-      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '260px' }}>
-        <div className="d-flex align-items-center gap-2 px-2 py-3 mb-3 border-bottom">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
+      {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & UNCONGESTED) */}
+      <aside className="bg-white border-end d-flex flex-column flex-shrink-0 p-3 shadow-sm" style={{ width: '270px', height: '100vh', position: 'sticky', top: 0, overflowY: 'auto' }}>
+        {/* Brand Header */}
+        <div className="d-flex align-items-center gap-2 px-2 py-2 mb-3 border-bottom pb-3">
+          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ width: '40px', height: '40px', backgroundColor: '#0d9488' }}>
             <i className="bi bi-person-badge-fill fs-5"></i>
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare Desk</h6>
-            <small className="text-teal fw-semibold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>Receptionist Portal</small>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.05rem', letterSpacing: '0.3px', color: '#0f172a' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.75rem', color: '#0d9488' }}>RECEPTION DESK</small>
           </div>
         </div>
 
-        <div className="p-2.5 rounded-3 mb-3 border" style={{ backgroundColor: '#f8fafc' }}>
-          <div className="fw-bold text-dark small truncate">{displayName}</div>
-          <div className="text-teal extra-small font-monospace fw-semibold" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+        {/* Staff & Hospital Card */}
+        <div className="p-3 rounded-3 mb-3 border bg-light">
+          <div className="fw-bold text-dark text-truncate">{displayName}</div>
+          <small className="text-muted d-block text-truncate mb-2" style={{ fontSize: '0.78rem' }}>Desk Admin & Registrar</small>
+          <div className="badge bg-white text-teal border px-2.5 py-1.5 rounded-2 font-monospace w-100 text-truncate text-start" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
             🏥 {displayHospital}
           </div>
         </div>
 
+        {/* Navigation Links */}
         <nav className="nav nav-pills flex-column mb-auto gap-1">
+          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-1 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+            Front Desk Operations
+          </div>
+
           {[
             { id: 'dashboard', icon: 'bi-speedometer2', label: 'Dashboard' },
             { id: 'registration', icon: 'bi-person-plus', label: 'Patient Registration' },
@@ -474,65 +482,73 @@ const RECOVERY_QUESTIONS = [
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-                activeTab === item.id ? 'text-white' : 'text-slate-700'
+              className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold transition-all ${
+                activeTab === item.id ? 'text-white shadow-sm' : 'text-secondary hover-bg-light'
               }`}
               style={{
                 backgroundColor: activeTab === item.id ? '#0d9488' : 'transparent',
-                color: activeTab === item.id ? '#ffffff' : '#334155'
+                fontSize: '0.88rem'
               }}
             >
-              <i className={`bi ${item.icon}`}></i> {item.label}
+              <i className={`bi ${item.icon} fs-6`}></i>
+              <span className="flex-grow-1 text-truncate">{item.label}</span>
               {item.count > 0 && (
-                <span className={`badge rounded-pill ms-auto extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
+                <span className={`badge rounded-pill extra-small ${activeTab === item.id ? 'bg-white text-teal' : 'bg-teal-subtle text-teal'}`} style={{ backgroundColor: activeTab === item.id ? '#ffffff' : '#e6f4f1', color: '#0d9488' }}>
                   {item.count}
                 </span>
               )}
             </button>
           ))}
 
-          <hr className="my-2 text-muted opacity-25" />
+          <div className="extra-small text-muted fw-bold text-uppercase px-3 pt-3 pb-1" style={{ fontSize: '0.68rem', letterSpacing: '0.5px' }}>
+            Staff Profile
+          </div>
 
           <button
             onClick={() => { setActiveTab('profile'); setShowProfileModal(true); setProfileTab('info'); }}
-            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'profile' ? 'text-white' : 'text-slate-700'
+            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'profile' ? 'text-white' : 'text-secondary hover-bg-light'
             }`}
             style={{
               backgroundColor: activeTab === 'profile' ? '#0d9488' : 'transparent',
-              color: activeTab === 'profile' ? '#ffffff' : '#334155'
+              fontSize: '0.88rem'
             }}
           >
-            <i className="bi bi-person"></i> My Profile
+            <i className="bi bi-person fs-6"></i>
+            <span>Staff Profile</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('password'); setShowProfileModal(true); setProfileTab('security'); }}
-            className={`nav-link text-start d-flex align-items-center gap-2 py-2 px-3 rounded-3 border-0 fw-semibold ${
-              activeTab === 'password' ? 'text-white' : 'text-slate-700'
+            className={`nav-link text-start d-flex align-items-center gap-2.5 py-2.5 px-3 rounded-3 border-0 fw-semibold ${
+              activeTab === 'password' ? 'text-white' : 'text-secondary hover-bg-light'
             }`}
             style={{
               backgroundColor: activeTab === 'password' ? '#0d9488' : 'transparent',
-              color: activeTab === 'password' ? '#ffffff' : '#334155'
+              fontSize: '0.88rem'
             }}
           >
-            <i className="bi bi-shield-lock"></i> Change Password
+            <i className="bi bi-shield-lock fs-6"></i>
+            <span>Security & Password</span>
           </button>
         </nav>
 
-        <div className="pt-2 border-top mt-2">
+        {/* Sidebar Footer Logout */}
+        <div className="pt-3 border-top mt-3">
           <button
             onClick={onLogout}
-            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
+            className="btn btn-outline-danger btn-sm w-100 rounded-3 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold shadow-sm"
           >
-            <i className="bi bi-box-arrow-right"></i> Logout
+            <i className="bi bi-box-arrow-right"></i>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-grow-1 overflow-auto d-flex flex-column">
-        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center">
+      <main className="flex-grow-1 overflow-auto d-flex flex-column min-vh-100">
+        {/* Top Header Bar */}
+        <header className="bg-white border-bottom shadow-sm py-2.5 px-4 sticky-top d-flex justify-content-between align-items-center z-2">
           <div className="d-flex align-items-center gap-2">
             <span className="badge bg-teal-subtle text-teal px-3 py-1.5 rounded-pill fw-bold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
               🏥 {displayHospital}
@@ -542,13 +558,16 @@ const RECOVERY_QUESTIONS = [
           <div className="d-flex align-items-center gap-3">
             <div className="text-end">
               <div className="fw-bold text-dark small">{displayName}</div>
-              <small className="text-muted extra-small">Receptionist & Desk Admin</small>
+              <small className="text-muted extra-small">Desk Admin</small>
+            </div>
+            <div className="rounded-circle bg-teal text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: '36px', height: '36px', backgroundColor: '#0d9488' }}>
+              {displayName ? displayName.charAt(0).toUpperCase() : 'R'}
             </div>
           </div>
         </header>
 
-      {/* DASHBOARD BODY */}
-      <div className="container-fluid max-w-7xl py-4 flex-grow-1">
+        {/* Main Content Body */}
+        <div className="container-fluid max-w-7xl py-4 flex-grow-1 px-lg-5">
         {/* Banner Alert Messages */}
         {message && (
           <div className={`alert alert-${message.type} alert-dismissible fade show border-0 shadow-sm rounded-3 mb-4`} role="alert">
@@ -1201,12 +1220,12 @@ const RECOVERY_QUESTIONS = [
                     </div>
                   </div>
 
-                  <div className="row g-3 mb-3">
+                  <div className="row g-3 mb-4">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold small text-muted">Step 3: Appointment Date *</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control py-2"
                         required
                         min={new Date().toISOString().split('T')[0]}
                         value={bookingDate}
@@ -1217,7 +1236,7 @@ const RECOVERY_QUESTIONS = [
                     <div className="col-md-6">
                       <label className="form-label fw-semibold small text-muted">Step 4: Available Time Slot *</label>
                       <select
-                        className="form-select"
+                        className="form-select py-2"
                         required
                         value={bookingTime}
                         onChange={(e) => setBookingTime(e.target.value)}
@@ -1229,28 +1248,18 @@ const RECOVERY_QUESTIONS = [
                     </div>
                   </div>
 
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small text-muted">Reason for Visit</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. General checkup / Consultation"
-                      value={bookingReason}
-                      onChange={(e) => setBookingReason(e.target.value)}
-                    />
-                  </div>
-
                   <div className="modal-footer border-0 p-0 pt-3">
                     <button
                       type="button"
-                      className="btn btn-secondary rounded-3 px-4"
+                      className="btn btn-secondary rounded-pill px-4"
                       onClick={() => setShowReceptionistOverlay(false)}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="btn btn-warning rounded-3 px-4 fw-bold text-dark"
+                      className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
+                      style={{ backgroundColor: '#0d9488' }}
                       disabled={bookingSubmitting}
                     >
                       {bookingSubmitting ? 'Booking...' : 'Confirm & Book Appointment'}

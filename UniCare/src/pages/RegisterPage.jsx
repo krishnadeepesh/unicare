@@ -138,16 +138,17 @@ export default function RegisterPage({ setView }) {
 
               <form onSubmit={handleRegister}>
                 {/* Section 1: Account Credentials */}
-                <h4 className="small fw-bold text-teal text-uppercase mb-2 border-bottom pb-1" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
-                  <i className="bi bi-person-badge me-1.5"></i>Account Credentials
-                </h4>
+                <h5 className="small fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
+                  <i className="bi bi-person-badge me-2"></i>Account Credentials
+                </h5>
 
-                <div className="row g-2 mb-2">
+                <div className="row g-3 mb-4">
                   <div className="col-md-4">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Full Name *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Full Name *</label>
                     <input 
                       type="text" 
-                      className="form-control form-control-sm" 
+                      className="form-control py-2" 
+                      placeholder="e.g. Dr. John Doe"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required 
@@ -155,10 +156,11 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-4">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Email Address *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Email Address *</label>
                     <input
                       type="email"
-                      className="form-control form-control-sm"
+                      className="form-control py-2"
+                      placeholder="admin@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -166,10 +168,11 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-4">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Phone Number *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Phone Number *</label>
                     <input
                       type="tel"
-                      className="form-control form-control-sm"
+                      className="form-control py-2"
+                      placeholder="9876543210"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       pattern="[0-9+()\-\s]{10,20}"
@@ -180,10 +183,11 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Password (Min 8 chars, letter & number) *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Password (Min 8 chars, letter & number) *</label>
                     <input
                       type="password"
-                      className="form-control form-control-sm"
+                      className="form-control py-2"
+                      placeholder="Create secure password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       minLength="8"
@@ -192,10 +196,11 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Confirm Password *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Confirm Password *</label>
                     <input
                       type="password"
-                      className="form-control form-control-sm"
+                      className="form-control py-2"
+                      placeholder="Repeat password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       minLength="8"
@@ -205,15 +210,15 @@ export default function RegisterPage({ setView }) {
                 </div>
 
                 {/* Section 2: Account Recovery Setup */}
-                <h4 className="small fw-bold text-teal text-uppercase mb-2 border-bottom pb-1 mt-1" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
-                  <i className="bi bi-shield-lock me-1.5"></i>Account Recovery Setup
-                </h4>
+                <h5 className="small fw-bold text-teal text-uppercase mb-3 border-bottom pb-2" style={{ color: '#0d9488', letterSpacing: '0.5px' }}>
+                  <i className="bi bi-shield-lock me-2"></i>Account Security & Recovery
+                </h5>
 
-                <div className="row g-2 mb-2">
+                <div className="row g-3 mb-4">
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Recovery Question *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Recovery Question *</label>
                     <select
-                      className="form-select form-select-sm"
+                      className="form-select py-2"
                       value={recoveryQuestion}
                       onChange={(e) => setRecoveryQuestion(e.target.value)}
                       required
@@ -226,40 +231,43 @@ export default function RegisterPage({ setView }) {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold text-slate-700 extra-small mb-1">Recovery Answer *</label>
+                    <label className="form-label fw-semibold text-slate-700 small mb-1">Recovery Answer *</label>
                     <input
                       type="text"
-                      className="form-control form-control-sm"
+                      className="form-control py-2"
                       value={recoveryAnswer}
                       onChange={(e) => setRecoveryAnswer(e.target.value)}
-                      placeholder="Enter secret answer"
+                      placeholder="Enter your secret answer"
                       maxLength="100"
                       required
                     />
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  className="btn btn-primary-unicare w-100 py-2.5 fs-6 rounded-3 shadow-sm mt-2"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Submitting Registration...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-check-circle me-2"></i>
-                      Create Administrator Account
-                    </>
-                  )}
-                </button>
+                <div className="pt-2">
+                  <button 
+                    type="submit" 
+                    className="btn btn-teal text-white w-100 py-3 fs-6 rounded-pill fw-bold shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Submitting Registration...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-check-circle me-2"></i>
+                        Create Administrator Account
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
 
               {/* Bottom Login Link */}
-              <div className="text-center mt-2.5 pt-2 border-top">
+              <div className="text-center mt-4 pt-3 border-top">
                 <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>
                   Already registered?{' '}
                   <button 

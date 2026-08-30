@@ -62,6 +62,8 @@ urlpatterns = [
     path('appointments/options/', workflows.booking_options, name='booking_options'),
     path('appointments/', workflows.appointments, name='appointments'),
     path('visits/', workflows.visits, name='visits'),
+    path('prescriptions/', workflows.prescriptions, name='prescriptions'),
+    path('lab-reports/', workflows.lab_reports, name='lab_reports'),
 
     # Analytics
     path('analytics/', views.analytics_data, name='analytics_data'),

@@ -82,11 +82,59 @@ def ensure_workflow_schema():
             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='doctor_experience'""")
         if not cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE tbl_doctor ADD COLUMN doctor_experience VARCHAR(100) NULL")
-        # Ensure tbl_doctor.hospital_id exists
-        cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='hospital_id'""")
-        if not cursor.fetchone()[0]:
-            cursor.execute("ALTER TABLE tbl_doctor ADD COLUMN hospital_id INT NULL AFTER user_id")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_prescription (
+            prescription_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NULL, doctor_id INT NULL,
+            hospital_id INT NULL, appointment_id INT NULL, visit_id INT NULL, record_id INT NULL,
+            prescription_date DATE NULL, remarks TEXT NULL, prescription_share_flag TINYINT(1) DEFAULT 1,
+            prescription_is_active TINYINT(1) DEFAULT 1, prescription_created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_prescription_item (
+            prescription_item_id INT AUTO_INCREMENT PRIMARY KEY, prescription_id INT NOT NULL,
+            medicine_name VARCHAR(100) NOT NULL, medicine_dosage VARCHAR(50) NULL,
+            medicine_frequency VARCHAR(50) NULL, medicine_duration VARCHAR(50) NULL, medicine_instruction TEXT NULL
+        )""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_lab_report (
+            lab_report_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NULL, doctor_id INT NULL,
+            hospital_id INT NULL, appointment_id INT NULL, record_id INT NULL,
+            report_type VARCHAR(100) NOT NULL, report_title VARCHAR(150) NOT NULL, report_file LONGTEXT NULL,
+            report_share_flag TINYINT(1) DEFAULT 1, report_is_active TINYINT(1) DEFAULT 1,
+            report_uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        # Ensure tbl_prescription and tbl_lab_report support columns exist
+        _ensure_columns(cursor, 'tbl_prescription', {
+            'patient_id': 'INT NULL',
+            'doctor_id': 'INT NULL',
+            'hospital_id': 'INT NULL',
+            'appointment_id': 'INT NULL',
+            'visit_id': 'INT NULL',
+            'record_id': 'INT NULL',
+            'prescription_date': 'DATE NULL',
+            'remarks': 'TEXT NULL',
+            'prescription_share_flag': 'TINYINT(1) DEFAULT 1',
+            'prescription_is_active': 'TINYINT(1) DEFAULT 1',
+            'prescription_created_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+        })
+        _ensure_columns(cursor, 'tbl_prescription_item', {
+            'prescription_id': 'INT NOT NULL',
+            'medicine_name': 'VARCHAR(100) NOT NULL',
+            'medicine_dosage': 'VARCHAR(50) NULL',
+            'medicine_frequency': 'VARCHAR(50) NULL',
+            'medicine_duration': 'VARCHAR(50) NULL',
+            'medicine_instruction': 'TEXT NULL',
+        })
+        _ensure_columns(cursor, 'tbl_lab_report', {
+            'patient_id': 'INT NULL',
+            'doctor_id': 'INT NULL',
+            'hospital_id': 'INT NULL',
+            'appointment_id': 'INT NULL',
+            'record_id': 'INT NULL',
+            'report_type': 'VARCHAR(100) NOT NULL',
+            'report_title': 'VARCHAR(150) NOT NULL',
+            'report_file': 'LONGTEXT NULL',
+            'report_share_flag': 'TINYINT(1) DEFAULT 1',
+            'report_is_active': 'TINYINT(1) DEFAULT 1',
+            'report_uploaded_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+        })
 
 
 def session_user(request):
@@ -982,3 +1030,258 @@ def visits(request):
         )
 
     return JsonResponse({'status': 'success', 'message': 'Patient visit saved successfully.'})
+
+
+@csrf_exempt
+def prescriptions(request):
+    """Complete digital prescription workflow for Doctor and Patient."""
+    user, error = require_roles(request, 'doctor', 'patient')
+    if error:
+        return error
+    ensure_workflow_schema()
+
+    if request.method == 'GET':
+        patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
+        params = []
+        where = []
+        if user['role'] == 'patient':
+            where.append("p.patient_id = %s")
+            params.append(user['patient_id'])
+        elif user['role'] == 'doctor':
+            if patient_param:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+                    pr = cursor.fetchone()
+                    if pr:
+                        target_pid = pr[0]
+                        cursor.execute("SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1", [target_pid, user['doctor_id'], user['hospital_id']])
+                        if not cursor.fetchone():
+                            return JsonResponse({'status': 'error', 'message': 'Not authorized to view prescriptions for this patient.'}, status=403)
+                        where.append("p.patient_id = %s")
+                        params.append(target_pid)
+                    else:
+                        return JsonResponse({'status': 'success', 'prescriptions': []})
+            else:
+                where.append("p.doctor_id = %s AND p.hospital_id = %s")
+                params.extend([user['doctor_id'], user['hospital_id']])
+
+        where_clause = " WHERE " + " AND ".join(where) if where else ""
+        sql = f"""
+            SELECT p.prescription_id, p.patient_id, p.doctor_id, p.hospital_id, p.appointment_id, p.visit_id,
+                   p.prescription_date, p.remarks, pt.patient_name, pt.patient_uid, du.user_name, h.hospital_name,
+                   p.prescription_created_at
+            FROM tbl_prescription p
+            LEFT JOIN tbl_patient pt ON pt.patient_id = p.patient_id
+            LEFT JOIN tbl_doctor d ON d.doctor_id = p.doctor_id
+            LEFT JOIN tbl_user du ON du.user_id = d.user_id
+            LEFT JOIN tbl_hospital h ON h.hospital_id = p.hospital_id
+            {where_clause}
+            ORDER BY p.prescription_id DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            presc_list = []
+            for r in rows:
+                presc_id = r[0]
+                cursor.execute(
+                    "SELECT medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction"
+                    " FROM tbl_prescription_item WHERE prescription_id = %s",
+                    [presc_id]
+                )
+                med_rows = cursor.fetchall()
+                medicines = [
+                    {
+                        'medicine_name': m[0],
+                        'dosage': m[1] or '',
+                        'frequency': m[2] or '',
+                        'duration': m[3] or '',
+                        'instruction': m[4] or '',
+                    }
+                    for m in med_rows
+                ]
+                presc_list.append({
+                    'prescription_id': presc_id,
+                    'id': f"PRE{presc_id:03d}",
+                    'prescription_uid': f"PRE{presc_id:03d}",
+                    'patient_id': r[1],
+                    'patient_name': r[8] or '',
+                    'patient_uid': r[9] or f"PTA{r[1]:03d}",
+                    'health_id': r[9] or f"PTA{r[1]:03d}",
+                    'doctor_name': r[10] or 'Dr. Practitioner',
+                    'hospital_name': r[11] or 'UniCare Partner Hospital',
+                    'appointment_id': r[4],
+                    'appointment_uid': f"APT{r[4]:03d}" if r[4] else 'N/A',
+                    'visit_id': r[5],
+                    'visit_uid': f"VIS{r[5]:03d}" if r[5] else 'N/A',
+                    'date': str(r[6] or (r[12].strftime('%Y-%m-%d') if r[12] else '')),
+                    'remarks': r[7] or '',
+                    'medicines': medicines,
+                })
+        return JsonResponse({'status': 'success', 'prescriptions': presc_list})
+
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    if user['role'] != 'doctor':
+        return JsonResponse({'status': 'error', 'message': 'Only doctors can write and issue prescriptions.'}, status=403)
+
+    data = payload(request)
+    patient_param = data.get('patient_id') or data.get('health_id')
+    raw_appointment_id = data.get('appointment_id')
+    raw_visit_id = data.get('visit_id')
+    remarks = (data.get('remarks') or '').strip()
+    medicines = data.get('medicines') or []
+
+    if not patient_param:
+        return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
+    if not medicines or not isinstance(medicines, list):
+        return JsonResponse({'status': 'error', 'message': 'At least one medicine item is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+        patient_id = p_row[0]
+
+        # Verify doctor is authorized for this patient
+        cursor.execute("SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1", [patient_id, user['doctor_id'], user['hospital_id']])
+        if not cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': 'You are not authorized to issue prescriptions for this patient.'}, status=403)
+
+        app_id = int(raw_appointment_id) if raw_appointment_id and str(raw_appointment_id).isdigit() else None
+        vis_id = int(raw_visit_id) if raw_visit_id and str(raw_visit_id).isdigit() else None
+
+        cursor.execute(
+            "INSERT INTO tbl_prescription (patient_id, doctor_id, hospital_id, appointment_id, visit_id, prescription_date, remarks, prescription_share_flag, prescription_is_active)"
+            " VALUES (%s, %s, %s, %s, %s, CURRENT_DATE(), %s, 1, 1)",
+            [patient_id, user['doctor_id'], user['hospital_id'], app_id, vis_id, remarks]
+        )
+        presc_id = cursor.lastrowid
+
+        for m in medicines:
+            m_name = (m.get('medicine_name') or m.get('name') or '').strip()
+            if m_name:
+                cursor.execute(
+                    "INSERT INTO tbl_prescription_item (prescription_id, medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction)"
+                    " VALUES (%s, %s, %s, %s, %s, %s)",
+                    [presc_id, m_name, (m.get('dosage') or '').strip(), (m.get('frequency') or '').strip(), (m.get('duration') or '').strip(), (m.get('instruction') or '').strip()]
+                )
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Digital prescription generated successfully.',
+        'prescription': {
+            'prescription_id': presc_id,
+            'id': f"PRE{presc_id:03d}",
+            'prescription_uid': f"PRE{presc_id:03d}",
+        }
+    })
+
+
+@csrf_exempt
+def lab_reports(request):
+    """Complete diagnostic and laboratory report management workflow."""
+    user, error = require_roles(request, 'doctor', 'patient')
+    if error:
+        return error
+    ensure_workflow_schema()
+
+    if request.method == 'GET':
+        patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
+        params = []
+        where = []
+        if user['role'] == 'patient':
+            where.append("l.patient_id = %s")
+            params.append(user['patient_id'])
+        elif user['role'] == 'doctor':
+            if patient_param:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+                    pr = cursor.fetchone()
+                    if pr:
+                        target_pid = pr[0]
+                        cursor.execute("SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1", [target_pid, user['doctor_id'], user['hospital_id']])
+                        if not cursor.fetchone():
+                            return JsonResponse({'status': 'error', 'message': 'Not authorized to view lab reports for this patient.'}, status=403)
+                        where.append("l.patient_id = %s")
+                        params.append(target_pid)
+                    else:
+                        return JsonResponse({'status': 'success', 'reports': []})
+            else:
+                where.append("l.hospital_id = %s")
+                params.append(user['hospital_id'])
+
+        where_clause = " WHERE " + " AND ".join(where) if where else ""
+        sql = f"""
+            SELECT l.lab_report_id, l.patient_id, l.hospital_id, l.report_type, l.report_title, l.report_file,
+                   l.report_uploaded_at, pt.patient_name, pt.patient_uid, h.hospital_name
+            FROM tbl_lab_report l
+            LEFT JOIN tbl_patient pt ON pt.patient_id = l.patient_id
+            LEFT JOIN tbl_hospital h ON h.hospital_id = l.hospital_id
+            {where_clause}
+            ORDER BY l.lab_report_id DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            reports_list = [
+                {
+                    'report_id': r[0],
+                    'id': f"LAB{r[0]:03d}",
+                    'lab_report_uid': f"LAB{r[0]:03d}",
+                    'patient_id': r[1],
+                    'patient_name': r[7] or '',
+                    'patient_uid': r[8] or f"PTA{r[1]:03d}",
+                    'health_id': r[8] or f"PTA{r[1]:03d}",
+                    'hospital_name': r[9] or 'UniCare Diagnostic Lab',
+                    'report_type': r[3] or 'Diagnostic Test',
+                    'report_title': r[4] or 'Laboratory Report',
+                    'report_file': r[5] or '',
+                    'uploaded_at': r[6].strftime('%Y-%m-%d %H:%M') if hasattr(r[6], 'strftime') else str(r[6] or ''),
+                }
+                for r in rows
+            ]
+        return JsonResponse({'status': 'success', 'reports': reports_list})
+
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    data = payload(request)
+    patient_param = data.get('patient_id') or data.get('health_id') or (user['patient_id'] if user['role'] == 'patient' else None)
+    report_type = (data.get('report_type') or 'Diagnostic Test').strip()
+    report_title = (data.get('report_title') or data.get('title') or '').strip()
+    report_file = (data.get('report_file') or data.get('file') or data.get('results') or '').strip()
+    hospital_id = data.get('hospital_id') or user.get('hospital_id')
+
+    if not report_title:
+        return JsonResponse({'status': 'error', 'message': 'Report title is required.'}, status=400)
+    if not patient_param:
+        return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+        patient_id = p_row[0]
+
+        cursor.execute(
+            "INSERT INTO tbl_lab_report (patient_id, hospital_id, report_type, report_title, report_file, report_share_flag, report_is_active)"
+            " VALUES (%s, %s, %s, %s, %s, 1, 1)",
+            [patient_id, hospital_id, report_type, report_title, report_file]
+        )
+        report_id = cursor.lastrowid
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Laboratory diagnostic report saved successfully.',
+        'report': {
+            'report_id': report_id,
+            'id': f"LAB{report_id:03d}",
+            'lab_report_uid': f"LAB{report_id:03d}",
+            'report_type': report_type,
+            'report_title': report_title,
+        }
+    })

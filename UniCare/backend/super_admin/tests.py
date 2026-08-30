@@ -240,3 +240,87 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
         self.assertEqual(len(hist_res.json()['history']), 1)
         self.assertEqual(hist_res.json()['history'][0]['diagnosis'], 'Seasonal Allergies')
 
+    def test_doctor_digital_prescription_flow(self):
+        # 1. Doctor login
+        self.client.post(
+            '/api/super-admin/auth/login/',
+            data=json.dumps({'identifier': 'doctor_temp@test.com', 'password': 'TempPass123!'}),
+            content_type='application/json'
+        )
+
+        # 2. Setup appointment
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM tbl_doctor WHERE user_id=%s", [self.doctor_user_id])
+            doc_id = cursor.fetchone()[0]
+            cursor.execute("SELECT patient_id FROM tbl_patient WHERE user_id=%s", [self.patient_user_id])
+            pat_id = cursor.fetchone()[0]
+            cursor.execute("""
+                INSERT INTO tbl_appointment (patient_id, hospital_id, doctor_id, appointment_date, appointment_time, appointment_status)
+                VALUES (%s, 9000, %s, '2026-08-30', '11:00', 'Confirmed')
+            """, [pat_id, doc_id])
+
+        # 3. Issue prescription
+        presc_res = self.client.post(
+            '/api/super-admin/prescriptions/',
+            data=json.dumps({
+                'patient_id': 'PTT001',
+                'remarks': 'Take with water after lunch',
+                'medicines': [
+                    {
+                        'medicine_name': 'Amoxicillin',
+                        'dosage': '500mg',
+                        'frequency': 'Twice daily',
+                        'duration': '5 days',
+                        'instruction': 'After food'
+                    }
+                ]
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(presc_res.status_code, 200)
+        data = presc_res.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertTrue(data['prescription']['prescription_uid'].startswith('PRE'))
+
+        # 4. Patient logs in and fetches prescriptions
+        self.client.post(
+            '/api/super-admin/auth/login/',
+            data=json.dumps({'identifier': 'patient_temp@test.com', 'password': 'TempPass123!'}),
+            content_type='application/json'
+        )
+        patient_presc = self.client.get('/api/super-admin/prescriptions/')
+        self.assertEqual(patient_presc.status_code, 200)
+        p_data = patient_presc.json()
+        self.assertEqual(p_data['status'], 'success')
+        self.assertEqual(len(p_data['prescriptions']), 1)
+        self.assertEqual(p_data['prescriptions'][0]['medicines'][0]['medicine_name'], 'Amoxicillin')
+
+    def test_patient_and_doctor_lab_reports_flow(self):
+        # 1. Patient login and upload lab report
+        self.client.post(
+            '/api/super-admin/auth/login/',
+            data=json.dumps({'identifier': 'patient_temp@test.com', 'password': 'TempPass123!'}),
+            content_type='application/json'
+        )
+        upload_res = self.client.post(
+            '/api/super-admin/lab-reports/',
+            data=json.dumps({
+                'report_type': 'Blood Test',
+                'report_title': 'Complete Blood Count (CBC)',
+                'report_file': 'Hemoglobin 14.5 g/dL, Normal range',
+                'hospital_id': 9000
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(upload_res.status_code, 200)
+        u_data = upload_res.json()
+        self.assertEqual(u_data['status'], 'success')
+        self.assertTrue(u_data['report']['lab_report_uid'].startswith('LAB'))
+
+        # 2. Patient reads own reports
+        p_reports = self.client.get('/api/super-admin/lab-reports/')
+        self.assertEqual(p_reports.status_code, 200)
+        self.assertEqual(len(p_reports.json()['reports']), 1)
+        self.assertEqual(p_reports.json()['reports'][0]['report_title'], 'Complete Blood Count (CBC)')
+
+
