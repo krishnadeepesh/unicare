@@ -39,6 +39,15 @@ export default function PatientPortalPage({ user, onLogout }) {
     recovery_answer: ''
   });
   const [passwordMsg, setPasswordMsg] = useState(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
+
+  // Date Range (Today to 20 Days in Advance)
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const maxBookingDate = new Date();
+  maxBookingDate.setDate(maxBookingDate.getDate() + 20);
+  const maxBookingDateStr = maxBookingDate.toISOString().split('T')[0];
+
   const [form, setForm] = useState({
     hospital_id: '',
     department_id: '',
@@ -93,6 +102,20 @@ export default function PatientPortalPage({ user, onLogout }) {
   useEffect(() => {
     loadPatientData();
   }, []);
+
+  // Clear notification messages on page/tab navigation
+  useEffect(() => {
+    setMessage(null);
+    setPasswordMsg(null);
+  }, [activeTab]);
+
+  // Auto-dismiss notification after 5 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     if (!form.hospital_id) return;
@@ -160,8 +183,12 @@ export default function PatientPortalPage({ user, onLogout }) {
       const data = await res.json();
       if (res.ok) {
         setPasswordMsg({ text: 'Password and security recovery settings updated successfully!', type: 'success' });
+        setWarningDismissed(true);
         setPasswordForm(prev => ({ ...prev, current_password: '', new_password: '', confirm_password: '', recovery_answer: '' }));
-        setProfile(prev => prev ? ({ ...prev, must_change_password: false, has_recovery_question: true }) : null);
+        setProfile(prev => prev ? ({ ...prev, must_change_password: 0, has_recovery_question: true }) : null);
+        if (user) {
+          user.must_change_password = 0;
+        }
       } else {
         setPasswordMsg({ text: data.message || 'Could not update password.', type: 'danger' });
       }
@@ -338,7 +365,7 @@ export default function PatientPortalPage({ user, onLogout }) {
         )}
 
         {/* Temporary Password & Security Recovery Warning Banner */}
-        {(profile?.must_change_password || user?.must_change_password || !profile?.has_recovery_question) && (
+        {!warningDismissed && (profile?.must_change_password || user?.must_change_password || (!profile?.has_recovery_question && profile !== null)) && (
           <div className="alert alert-warning border-warning shadow-sm mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 rounded-3 gap-3">
             <div className="d-flex align-items-center gap-3">
               <i className="bi bi-shield-exclamation fs-2 text-warning"></i>
@@ -629,7 +656,8 @@ export default function PatientPortalPage({ user, onLogout }) {
                           type="date"
                           className="form-control rounded-3 py-2"
                           required
-                          min={new Date().toISOString().split('T')[0]}
+                          min={todayStr}
+                          max={maxBookingDateStr}
                           value={form.appointment_date}
                           onChange={(e) => setForm({ ...form, appointment_date: e.target.value })}
                         />

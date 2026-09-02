@@ -55,6 +55,18 @@ export default function StaffDashboardPage({ user, onLogout }) {
     emergency_contact: ''
   });
   const [registerResult, setRegisterResult] = useState(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
+  const [apptFilter, setApptFilter] = useState('all');
+  const [apptDateFilter, setApptDateFilter] = useState('all');
+  const [apptSearch, setApptSearch] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+
+  // Date Range (Today to 20 Days in Advance)
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const maxBookingDate = new Date();
+  maxBookingDate.setDate(maxBookingDate.getDate() + 20);
+  const maxBookingDateStr = maxBookingDate.toISOString().split('T')[0];
 
 const RECOVERY_QUESTIONS = [
   "What is the name of your best friend?",
@@ -120,6 +132,20 @@ const RECOVERY_QUESTIONS = [
   useEffect(() => {
     loadData();
   }, []);
+
+  // Clear notification messages on page/tab navigation
+  useEffect(() => {
+    setMessage(null);
+    setPasswordMsg(null);
+  }, [activeTab]);
+
+  // Auto-dismiss notification after 5 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Close live suggestions on outside click
   useEffect(() => {
@@ -296,30 +322,34 @@ const RECOVERY_QUESTIONS = [
     }
 
     try {
+      const payload = {
+        ...patientForm,
+        password: patientForm.password || 'Patient@123'
+      };
       const res = await fetch(`${API}/patients/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(patientForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
         const p = data.patient;
         setRegisterResult(p);
         setMessage({
-          text: data.existing ? 'Existing patient record found and linked!' : 'New patient registered successfully!',
+          text: data.existing ? `Existing patient record found and linked (${p.patient_uid || p.health_id})!` : `New patient registered successfully! Assigned Health ID: ${p.patient_uid || p.health_id}`,
           type: 'success'
         });
         setPatientForm({
           name: '', email: '', phone: '', password: '', date_of_birth: '',
           gender: 'Male', blood_group: 'A+', address: '', emergency_contact: ''
         });
-        if (p) handleSelectPatient(p);
+        loadData();
       } else {
         setMessage({ text: data.message || 'Failed to register patient.', type: 'danger' });
       }
     } catch (err) {
-      setMessage({ text: 'Network error registering patient.', type: 'danger' });
+      setMessage({ text: 'Failed to connect to registration service. Please check your session.', type: 'danger' });
     }
   };
 
@@ -415,6 +445,7 @@ const RECOVERY_QUESTIONS = [
       const data = await res.json();
       if (res.ok) {
         setPasswordMsg({ text: 'Password and security recovery details updated successfully!', type: 'success' });
+        setWarningDismissed(true);
         setPasswordForm(prev => ({
           ...prev,
           current_password: '',
@@ -423,7 +454,10 @@ const RECOVERY_QUESTIONS = [
           recovery_answer: ''
         }));
         if (profile) {
-          setProfile({ ...profile, must_change_password: false, has_recovery_question: true });
+          setProfile({ ...profile, must_change_password: 0, has_recovery_question: true });
+        }
+        if (user) {
+          user.must_change_password = 0;
         }
         loadData();
       } else {
@@ -580,7 +614,7 @@ const RECOVERY_QUESTIONS = [
         )}
 
         {/* Temporary Password & Security Recovery Warning Banner */}
-        {(profile?.must_change_password || user?.must_change_password || !profile?.has_recovery_question) && (
+        {!warningDismissed && (profile?.must_change_password || user?.must_change_password || (!profile?.has_recovery_question && profile !== null)) && (
           <div className="alert alert-warning border-warning shadow-sm mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 rounded-3 gap-3">
             <div className="d-flex align-items-center gap-3">
               <i className="bi bi-shield-exclamation fs-2 text-warning"></i>
@@ -593,474 +627,232 @@ const RECOVERY_QUESTIONS = [
             </div>
             <button
               className="btn btn-warning btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
-              onClick={() => setShowProfileModal(true)}
+              onClick={() => { setShowProfileModal(true); setProfileTab('security'); }}
             >
               <i className="bi bi-key me-1"></i> Change Password & Recovery
             </button>
           </div>
         )}
 
-        {/* Dashboard Header Bar */}
-        <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-            <div>
-              <span className="badge bg-teal-subtle text-teal px-3 py-1 rounded-pill fw-medium small mb-2 d-inline-block" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                <i className="bi bi-geo-alt me-1"></i> {displayHospital}
-              </span>
-              <h3 className="fw-bold text-dark mb-1">
-                {isDoctor ? `Dr. ${displayName}` : displayName}'s Workspace
-              </h3>
-              <p className="text-muted small mb-0">
-                Logged in as <strong className="text-dark">{roleName}</strong> at <strong>{displayHospital}</strong>
-              </p>
-            </div>
-
-            {/* Quick Stat Cards (CLICKABLE) */}
-            <div className="d-flex flex-wrap gap-2">
-              <div 
-                className="bg-light border rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
-                style={{ minWidth: '90px', cursor: 'pointer' }}
-                onClick={() => setActiveTab('appointments')}
-                title="Click to view all appointments"
-              >
-                <span className="text-muted small d-block" style={{ fontSize: '0.72rem' }}>Total</span>
-                <span className="fw-bold text-dark fs-5">{totalApps}</span>
-              </div>
-              <div 
-                className="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
-                style={{ minWidth: '90px', cursor: 'pointer' }}
-                onClick={() => setActiveTab('queue')}
-                title="Click to view queue"
-              >
-                <span className="text-warning-emphasis small d-block" style={{ fontSize: '0.72rem' }}>Pending</span>
-                <span className="fw-bold text-warning-emphasis fs-5">{pendingApps}</span>
-              </div>
-              <div 
-                className="bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
-                style={{ minWidth: '90px', cursor: 'pointer' }}
-                onClick={() => setActiveTab('appointments')}
-                title="Click to view confirmed appointments"
-              >
-                <span className="text-primary small d-block" style={{ fontSize: '0.72rem' }}>Confirmed</span>
-                <span className="fw-bold text-primary fs-5">{confirmedApps}</span>
-              </div>
-              <div 
-                className="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
-                style={{ minWidth: '90px', cursor: 'pointer' }}
-                onClick={() => setActiveTab('appointments')}
-                title="Click to view completed visits"
-              >
-                <span className="text-success small d-block" style={{ fontSize: '0.72rem' }}>Completed</span>
-                <span className="fw-bold text-success fs-5">{completedApps}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Action Navigation Grid */}
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-md-3">
-            <button
-              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
-              onClick={() => setActiveTab('registration')}
-            >
-              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center" style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}>
-                <i className="bi bi-person-plus-fill"></i>
-              </div>
-              <span className="fw-bold text-dark small">Register Patient</span>
-              <small className="text-muted">Generate Global Health ID</small>
-            </button>
-          </div>
-          <div className="col-6 col-md-3">
-            <button
-              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
-              onClick={() => setActiveTab('appointments')}
-            >
-              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-primary" style={{ width: '38px', height: '38px' }}>
-                <i className="bi bi-calendar2-check-fill"></i>
-              </div>
-              <span className="fw-bold text-dark small">Appointments</span>
-              <small className="text-muted">Manage scheduled visits</small>
-            </button>
-          </div>
-          <div className="col-6 col-md-3">
-            <button
-              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
-              onClick={() => setActiveTab('queue')}
-            >
-              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-warning" style={{ width: '38px', height: '38px' }}>
-                <i className="bi bi-clock-history"></i>
-              </div>
-              <span className="fw-bold text-dark small">Hospital Queue</span>
-              <small className="text-muted">Live patient waitlist</small>
-            </button>
-          </div>
-          <div className="col-6 col-md-3">
-            <button
-              className="btn btn-white w-100 p-3 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2"
-              onClick={() => { setActiveTab('password'); setShowProfileModal(true); setProfileTab('security'); }}
-            >
-              <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-danger" style={{ width: '38px', height: '38px' }}>
-                <i className="bi bi-shield-lock-fill"></i>
-              </div>
-              <span className="fw-bold text-dark small">Security Settings</span>
-              <small className="text-muted">Change password & recovery</small>
-            </button>
-          </div>
-        </div>
-
-        {/* SEARCH BAR WITH LIVE SUGGESTIONS */}
-        <div className="card border-0 shadow-sm rounded-4 mb-4 p-4" ref={searchContainerRef}>
-          <h5 className="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
-            <i className="bi bi-search text-teal"></i>
-            <span>{isDoctor ? 'Doctor Patient Search' : 'Receptionist Global Patient Search'}</span>
-          </h5>
-          <p className="text-muted small mb-3">
-            {isDoctor
-              ? 'Search by Patient Name or Health ID (PTA001). Live suggestions show ONLY patients having appointments with you at this hospital.'
-              : 'Search by Patient Name, Health ID (PTA001), or Phone. Live suggestions show ALL registered UniCare patients.'}
-          </p>
-
-          <div className="position-relative">
-            <div className="input-group input-group-lg">
-              <span className="input-group-text bg-light border-end-0">
-                {isSearching ? (
-                  <span className="spinner-border spinner-border-sm text-teal" role="status"></span>
-                ) : (
-                  <i className="bi bi-person-search text-muted"></i>
-                )}
-              </span>
-              <input
-                type="text"
-                className="form-control border-start-0 fs-6"
-                placeholder={isDoctor ? 'Type patient name or Health ID e.g. PTA001...' : 'Type patient name, Health ID e.g. PTA001, or phone number...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
-              />
-            </div>
-
-            {/* LIVE SUGGESTIONS DROPDOWN */}
-            {showSuggestions && (
-              <div className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 z-3 overflow-hidden">
-                <div className="p-2 bg-light border-bottom text-muted small fw-bold d-flex justify-content-between">
-                  <span>LIVE MATCHING PATIENTS</span>
-                  <span>{suggestions.length} Found</span>
-                </div>
-                <div className="list-group list-group-flush max-h-60 overflow-auto" style={{ maxHeight: '300px' }}>
-                  {suggestions.map((p) => (
-                    <button
-                      key={p.patient_id}
-                      type="button"
-                      className="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center"
-                      onClick={() => handleSelectPatient(p)}
-                    >
-                      <div>
-                        <div className="fw-bold text-dark d-flex align-items-center gap-2">
-                          <span>{p.name}</span>
-                          <span className="badge bg-teal-subtle text-teal font-monospace px-2 py-0.5" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                            {p.patient_uid || p.health_id}
-                          </span>
-                        </div>
-                        <small className="text-muted">
-                          <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}
-                        </small>
-                      </div>
-                      <span className="btn btn-sm btn-outline-teal rounded-pill px-3">
-                        {isDoctor ? 'Open Record' : 'Confirm & Book'}
-                      </span>
-                    </button>
-                  ))}
-                  {!suggestions.length && (
-                    <div className="p-4 text-center text-muted small">
-                      No matching patients found.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* MAIN CONTENT ROW */}
-        <div className="row g-4">
-          {/* LEFT COLUMN: Receptionist Patient Registration / Doctor Patient History */}
-          <div className="col-lg-5 col-xl-4">
-            {!isDoctor ? (
-              <div className="card border-0 shadow-sm rounded-4 mb-4">
-                <div className="card-header bg-teal text-white p-3 border-0 d-flex align-items-center gap-2" style={{ backgroundColor: '#0d9488' }}>
-                  <i className="bi bi-person-plus-fill fs-5"></i>
-                  <h5 className="fw-bold mb-0 text-white">Patient Registration</h5>
-                </div>
-                <div className="card-body p-4">
-                  <p className="text-muted small mb-3">
-                    Register patient into UniCare. Global Health ID (PTA001) is automatically generated. Existing patients will link automatically.
+        {/* 1. DASHBOARD OVERVIEW TAB */}
+        {activeTab === 'dashboard' && (
+          <div>
+            {/* Dashboard Header Bar */}
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div>
+                  <span className="badge bg-teal-subtle text-teal px-3 py-1 rounded-pill fw-medium small mb-2 d-inline-block" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                    <i className="bi bi-geo-alt me-1"></i> {displayHospital}
+                  </span>
+                  <h3 className="fw-bold text-dark mb-1">
+                    Front Desk Reception Overview
+                  </h3>
+                  <p className="text-muted small mb-0">
+                    Welcome back, <strong className="text-dark">{displayName}</strong> &bull; Active Desk Registrar at <strong>{displayHospital}</strong>
                   </p>
+                </div>
 
-                  <form onSubmit={handleRegisterPatient}>
-                    <div className="mb-2.5">
-                      <label className="form-label fw-semibold small text-secondary mb-1">Full Name *</label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm rounded-2"
-                        required
-                        value={patientForm.name}
-                        onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })}
-                      />
-                    </div>
-                    <div className="row g-2 mb-2.5">
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Email</label>
-                        <input
-                          type="email"
-                          className="form-control form-control-sm rounded-2"
-                          value={patientForm.email}
-                          onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Phone *</label>
-                        <input
-                          type="tel"
-                          className="form-control form-control-sm rounded-2"
-                          required
-                          pattern="[0-9+()\-\s]{10,15}"
-                          title="Enter a valid 10-digit phone number"
-                          maxLength="15"
-                          value={patientForm.phone}
-                          onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="row g-2 mb-2.5">
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Date of Birth *</label>
-                        <input
-                          type="date"
-                          className="form-control form-control-sm rounded-2"
-                          required
-                          max={new Date().toISOString().split('T')[0]}
-                          value={patientForm.date_of_birth}
-                          onChange={(e) => setPatientForm({ ...patientForm, date_of_birth: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Gender *</label>
-                        <select
-                          className="form-select form-select-sm rounded-2"
-                          value={patientForm.gender}
-                          onChange={(e) => setPatientForm({ ...patientForm, gender: e.target.value })}
-                        >
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="row g-2 mb-2.5">
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Blood Group</label>
-                        <select
-                          className="form-select form-select-sm rounded-2"
-                          value={patientForm.blood_group}
-                          onChange={(e) => setPatientForm({ ...patientForm, blood_group: e.target.value })}
-                        >
-                          <option value="A+">A+</option><option value="A-">A-</option>
-                          <option value="B+">B+</option><option value="B-">B-</option>
-                          <option value="AB+">AB+</option><option value="AB-">AB-</option>
-                          <option value="O+">O+</option><option value="O-">O-</option>
-                        </select>
-                      </div>
-                      <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Emergency Contact</label>
-                        <input
-                          type="tel"
-                          className="form-control form-control-sm rounded-2"
-                          value={patientForm.emergency_contact}
-                          onChange={(e) => setPatientForm({ ...patientForm, emergency_contact: e.target.value })}
-                          pattern="[0-9+()\-\s]{10,15}"
-                          title="Enter a valid 10-digit phone number"
-                          maxLength="15"
-                        />
-                      </div>
-                    </div>
-                    <div className="mb-2.5">
-                      <label className="form-label fw-semibold small text-secondary mb-1">Address</label>
-                      <textarea
-                        rows="2"
-                        className="form-control form-control-sm rounded-2"
-                        value={patientForm.address}
-                        onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
-                      ></textarea>
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold small text-secondary mb-1">Password *</label>
-                      <input
-                        type="password"
-                        className="form-control form-control-sm rounded-2"
-                        placeholder="Min 8 chars"
-                        minLength="8"
-                        required
-                        value={patientForm.password}
-                        onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="btn w-100 fw-bold py-2 rounded-3 text-white shadow-sm"
-                      style={{ backgroundColor: '#0d9488' }}
-                    >
-                      <i className="bi bi-person-check-fill me-1"></i> Complete Patient Registration
-                    </button>
-                  </form>
-
-                  {registerResult && (
-                    <div className="mt-3 p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 text-center">
-                      <small className="text-success fw-bold d-block mb-1">Assigned Global Health ID</small>
-                      <span className="fs-4 fw-bold font-monospace text-dark bg-white px-3 py-1 rounded border shadow-sm d-inline-block">
-                        {registerResult.patient_uid || registerResult.health_id}
-                      </span>
-                    </div>
-                  )}
+                {/* Quick Stat Cards (CLICKABLE) */}
+                <div className="d-flex flex-wrap gap-2">
+                  <div 
+                    className="bg-light border rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                    style={{ minWidth: '95px', cursor: 'pointer' }}
+                    onClick={() => setActiveTab('appointments')}
+                    title="Click to view all appointments"
+                  >
+                    <span className="text-muted small d-block" style={{ fontSize: '0.72rem' }}>Total Visits</span>
+                    <span className="fw-bold text-dark fs-5">{totalApps}</span>
+                  </div>
+                  <div 
+                    className="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                    style={{ minWidth: '95px', cursor: 'pointer' }}
+                    onClick={() => setActiveTab('queue')}
+                    title="Click to view live queue"
+                  >
+                    <span className="text-warning-emphasis small d-block" style={{ fontSize: '0.72rem' }}>In Queue</span>
+                    <span className="fw-bold text-warning-emphasis fs-5">{pendingApps}</span>
+                  </div>
+                  <div 
+                    className="bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                    style={{ minWidth: '95px', cursor: 'pointer' }}
+                    onClick={() => { setActiveTab('appointments'); setApptFilter('Confirmed'); }}
+                    title="Click to view confirmed appointments"
+                  >
+                    <span className="text-primary small d-block" style={{ fontSize: '0.72rem' }}>Confirmed</span>
+                    <span className="fw-bold text-primary fs-5">{confirmedApps}</span>
+                  </div>
+                  <div 
+                    className="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 px-3 text-center cursor-pointer hover-teal" 
+                    style={{ minWidth: '95px', cursor: 'pointer' }}
+                    onClick={() => { setActiveTab('appointments'); setApptFilter('Completed'); }}
+                    title="Click to view completed visits"
+                  >
+                    <span className="text-success small d-block" style={{ fontSize: '0.72rem' }}>Completed</span>
+                    <span className="fw-bold text-success fs-5">{completedApps}</span>
+                  </div>
                 </div>
               </div>
-            ) : (
-              /* Doctor View: Selected Patient & Medical History */
-              <div className="card border-0 shadow-sm rounded-4 mb-4">
-                <div className="card-header bg-white p-3 border-bottom d-flex align-items-center gap-2">
-                  <i className="bi bi-file-earmark-medical text-teal fs-5"></i>
-                  <h5 className="fw-bold mb-0 text-dark">Patient Clinical History</h5>
+            </div>
+
+            {/* Quick Operations Launchpad Grid */}
+            <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
+              <i className="bi bi-grid-fill text-teal"></i>
+              <span>Front Desk Operations</span>
+            </h6>
+
+            <div className="row g-3 mb-4">
+              <div className="col-12 col-sm-6 col-lg-3">
+                <button
+                  className="btn btn-white w-100 p-3.5 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2 h-100 bg-white"
+                  onClick={() => setActiveTab('registration')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', backgroundColor: '#0d9488' }}>
+                    <i className="bi bi-person-plus-fill fs-5"></i>
+                  </div>
+                  <div>
+                    <span className="fw-bold text-dark d-block">Register Patient</span>
+                    <small className="text-muted">Issue Global Health ID (PTA001)</small>
+                  </div>
+                </button>
+              </div>
+
+              <div className="col-12 col-sm-6 col-lg-3">
+                <button
+                  className="btn btn-white w-100 p-3.5 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2 h-100 bg-white"
+                  onClick={() => setActiveTab('appointments')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-primary" style={{ width: '42px', height: '42px' }}>
+                    <i className="bi bi-calendar2-check-fill fs-5"></i>
+                  </div>
+                  <div>
+                    <span className="fw-bold text-dark d-block">Appointments</span>
+                    <small className="text-muted">Book & manage scheduled visits</small>
+                  </div>
+                </button>
+              </div>
+
+              <div className="col-12 col-sm-6 col-lg-3">
+                <button
+                  className="btn btn-white w-100 p-3.5 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2 h-100 bg-white"
+                  onClick={() => setActiveTab('queue')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-warning text-dark" style={{ width: '42px', height: '42px' }}>
+                    <i className="bi bi-clock-history fs-5"></i>
+                  </div>
+                  <div>
+                    <span className="fw-bold text-dark d-block">Hospital Queue</span>
+                    <small className="text-muted">Live patient waitlist & check-in</small>
+                  </div>
+                </button>
+              </div>
+
+              <div className="col-12 col-sm-6 col-lg-3">
+                <button
+                  className="btn btn-white w-100 p-3.5 rounded-4 border shadow-sm text-start hover-teal d-flex flex-column gap-2 h-100 bg-white"
+                  onClick={() => setActiveTab('patients')}
+                >
+                  <div className="rounded-3 p-2 text-white d-inline-flex align-items-center justify-content-center bg-teal text-white" style={{ width: '42px', height: '42px', backgroundColor: '#0284c7' }}>
+                    <i className="bi bi-people-fill fs-5"></i>
+                  </div>
+                  <div>
+                    <span className="fw-bold text-dark d-block">Patients Directory</span>
+                    <small className="text-muted">Find registered patients & records</small>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* QUICK SEARCH BAR WITH LIVE SUGGESTIONS */}
+            <div className="card border-0 shadow-sm rounded-4 mb-4 p-4" ref={searchContainerRef}>
+              <h6 className="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+                <i className="bi bi-search text-teal"></i>
+                <span>Fast Patient Lookup & Instant Booking</span>
+              </h6>
+              <p className="text-muted small mb-3">
+                Search by Patient Name, Health ID (e.g. PTA001), or Phone number for quick lookup or appointment booking.
+              </p>
+
+              <div className="position-relative">
+                <div className="input-group input-group-lg">
+                  <span className="input-group-text bg-light border-end-0">
+                    {isSearching ? (
+                      <span className="spinner-border spinner-border-sm text-teal" role="status"></span>
+                    ) : (
+                      <i className="bi bi-person-search text-muted"></i>
+                    )}
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0 fs-6"
+                    placeholder="Type patient name, Health ID (e.g. PTA001), or phone number..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
+                  />
                 </div>
-                <div className="card-body p-4">
-                  {selectedPatient ? (
-                    <div>
-                      <div className="p-3 bg-light rounded-3 border mb-3">
-                        <div className="d-flex justify-content-between align-items-start">
+
+                {/* LIVE SUGGESTIONS DROPDOWN */}
+                {showSuggestions && (
+                  <div className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 z-3 overflow-hidden">
+                    <div className="p-2 bg-light border-bottom text-muted small fw-bold d-flex justify-content-between">
+                      <span>MATCHING REGISTERED PATIENTS</span>
+                      <span>{suggestions.length} Found</span>
+                    </div>
+                    <div className="list-group list-group-flush max-h-60 overflow-auto" style={{ maxHeight: '280px' }}>
+                      {suggestions.map((p) => (
+                        <button
+                          key={p.patient_id}
+                          type="button"
+                          className="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center"
+                          onClick={() => handleSelectPatient(p)}
+                        >
                           <div>
-                            <h5 className="fw-bold text-dark mb-1">{selectedPatient.name}</h5>
-                            <span className="badge bg-teal-subtle text-teal font-monospace" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                              {selectedPatient.patient_uid || selectedPatient.health_id}
-                            </span>
-                          </div>
-                          <span className="badge bg-secondary">{selectedPatient.gender}</span>
-                        </div>
-                        <div className="small text-muted mt-2">
-                          <i className="bi bi-telephone me-1"></i>{selectedPatient.phone || 'N/A'} &bull; DOB: {selectedPatient.date_of_birth || 'N/A'}
-                        </div>
-                      </div>
-
-                      <h6 className="fw-bold text-dark mb-2">Past Medical Visits ({patientHistory.length})</h6>
-                      <div className="overflow-auto max-h-60" style={{ maxHeight: '250px' }}>
-                        {patientHistory.map((v) => (
-                          <div key={v.visit_id} className="p-3 border rounded-3 mb-2 bg-white">
-                            <div className="d-flex justify-content-between small text-muted mb-1">
-                              <span><i className="bi bi-person-badge me-1"></i>Dr. {v.doctor_name}</span>
-                              <span>{v.visited_at}</span>
+                            <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                              <span>{p.name}</span>
+                              <span className="badge bg-teal-subtle text-teal font-monospace px-2 py-0.5" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                                {p.patient_uid || p.health_id}
+                              </span>
                             </div>
-                            <div className="fw-semibold text-primary mb-1">Diagnosis: {v.diagnosis}</div>
-                            <small className="text-secondary d-block">{v.medical_notes}</small>
+                            <small className="text-muted">
+                              <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}
+                            </small>
                           </div>
-                        ))}
-                        {!patientHistory.length && (
-                          <div className="text-center text-muted small py-3">
-                            No prior clinical visit records found.
-                          </div>
-                        )}
-                      </div>
+                          <span className="btn btn-sm btn-outline-teal rounded-pill px-3">
+                            Confirm & Book
+                          </span>
+                        </button>
+                      ))}
+                      {!suggestions.length && (
+                        <div className="p-4 text-center text-muted small">
+                          No matching patients found. Click <strong className="text-teal cursor-pointer" onClick={() => setActiveTab('registration')}>Register Patient</strong> to add them.
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-5 text-muted small">
-                      Select a patient from search suggestions or appointment list to view clinical history.
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* RIGHT COLUMN: Appointments & Action Panels */}
-          <div className="col-lg-7 col-xl-8">
-            {/* Doctor View: Record Patient Visit Form */}
-            {isDoctor && selectedPatient && (
-              <div className="card border-0 shadow-sm rounded-4 mb-4 border-top border-teal border-4">
-                <div className="card-header bg-white p-3 border-bottom d-flex align-items-center gap-2">
-                  <i className="bi bi-journal-medical text-teal fs-5"></i>
-                  <h5 className="fw-bold mb-0 text-dark">Record Clinical Visit for {selectedPatient.name}</h5>
-                </div>
-                <div className="card-body p-4">
-                  <form onSubmit={handleSaveVisit}>
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold small text-muted">Linked Appointment *</label>
-                      <select
-                        className="form-select"
-                        required
-                        value={visitForm.appointment_id}
-                        onChange={(e) => setVisitForm({ ...visitForm, appointment_id: e.target.value })}
-                      >
-                        <option value="">-- Select Scheduled Appointment --</option>
-                        {appointments
-                          .filter(a => (a.health_id === selectedPatient.health_id || a.health_id === selectedPatient.patient_uid) && a.status !== 'Completed')
-                          .map(a => (
-                            <option key={a.appointment_id} value={a.appointment_id}>
-                              {a.date} at {a.time} — {a.reason || 'Consultation'}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold small text-muted">Diagnosis *</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. Hypertension Grade 1"
-                        required
-                        value={visitForm.diagnosis}
-                        onChange={(e) => setVisitForm({ ...visitForm, diagnosis: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold small text-muted">Medical Notes & Clinical Observations</label>
-                      <textarea
-                        rows="3"
-                        className="form-control"
-                        placeholder="Clinical observations, medication details, recommendations..."
-                        value={visitForm.medical_notes}
-                        onChange={(e) => setVisitForm({ ...visitForm, medical_notes: e.target.value })}
-                      ></textarea>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="btn fw-bold px-4 text-white rounded-3 shadow-sm"
-                      style={{ backgroundColor: '#0d9488' }}
-                      disabled={visitSubmitting}
-                    >
-                      {visitSubmitting ? 'Saving...' : 'Complete & Save Visit Record'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Appointments Table */}
+            {/* TODAY'S RECENT APPOINTMENTS FEED */}
             <div className="card border-0 shadow-sm rounded-4">
-              <div className="card-header bg-white p-3 border-bottom d-flex justify-content-between align-items-center">
+              <div className="card-header bg-white p-3.5 border-bottom d-flex justify-content-between align-items-center">
                 <div className="d-flex align-items-center gap-2">
-                  <i className="bi bi-calendar3 text-teal fs-5"></i>
-                  <h5 className="fw-bold mb-0 text-dark">
-                    {isDoctor ? 'My Scheduled Appointments' : `${displayHospital} Appointments`}
-                  </h5>
+                  <i className="bi bi-calendar-check text-teal fs-5"></i>
+                  <h6 className="fw-bold mb-0 text-dark">Recent Front Desk Activity & Today's Schedule</h6>
                 </div>
-                <span className="badge bg-secondary rounded-pill">{appointments.length} Records</span>
+                <button
+                  className="btn btn-sm btn-outline-teal rounded-pill px-3"
+                  onClick={() => setActiveTab('appointments')}
+                >
+                  View All Appointments <i className="bi bi-arrow-right ms-1"></i>
+                </button>
               </div>
               <div className="card-body p-0">
                 <div className="table-responsive">
                   <table className="table table-hover align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                        <th className="ps-4">Appt ID</th>
+                        <th className="ps-4">Appt UID</th>
                         <th>Date & Time</th>
                         <th>Patient</th>
                         <th>Doctor</th>
@@ -1069,7 +861,7 @@ const RECOVERY_QUESTIONS = [
                       </tr>
                     </thead>
                     <tbody>
-                      {appointments.map((a) => (
+                      {appointments.slice(0, 5).map((a) => (
                         <tr key={a.appointment_id}>
                           <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
                             {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
@@ -1101,15 +893,15 @@ const RECOVERY_QUESTIONS = [
                               className="btn btn-sm btn-outline-teal rounded-pill"
                               onClick={() => handleSelectPatient({ patient_id: a.patient_id, health_id: a.health_id, name: a.patient })}
                             >
-                              {isDoctor ? 'Record Visit' : 'View Details'}
+                              View Details
                             </button>
                           </td>
                         </tr>
                       ))}
                       {!appointments.length && (
                         <tr>
-                          <td colSpan="5" className="text-center text-muted py-4">
-                            No appointments scheduled for {displayHospital}.
+                          <td colSpan="6" className="text-center text-muted py-4">
+                            No appointments found for this facility.
                           </td>
                         </tr>
                       )}
@@ -1119,7 +911,517 @@ const RECOVERY_QUESTIONS = [
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* 2. DEDICATED PATIENT REGISTRATION TAB */}
+        {activeTab === 'registration' && (
+          <div className="row justify-content-center">
+            <div className="col-xl-9 col-lg-10">
+              <div className="card border-0 shadow-sm rounded-4">
+                <div className="card-header bg-teal text-white p-3.5 border-0 d-flex justify-content-between align-items-center" style={{ backgroundColor: '#0d9488' }}>
+                  <div className="d-flex align-items-center gap-2">
+                    <i className="bi bi-person-plus-fill fs-5"></i>
+                    <h5 className="fw-bold mb-0 text-white">Patient Registration Form</h5>
+                  </div>
+                  <span className="badge bg-white text-teal font-monospace px-3 py-1 rounded-pill" style={{ color: '#0d9488' }}>
+                    Auto Global UID (PTA001)
+                  </span>
+                </div>
+                <div className="card-body p-4 p-md-5">
+                  <p className="text-muted small mb-4">
+                    Register a patient into UniCare. A permanent <strong>Global Patient Health ID (PTA001)</strong> will be automatically generated. If the patient already exists by Phone or Email, their global record will be seamlessly linked.
+                  </p>
+
+                  <form onSubmit={handleRegisterPatient}>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Full Legal Name *</label>
+                        <input
+                          type="text"
+                          className="form-control rounded-3 py-2"
+                          placeholder="e.g. Jane Doe"
+                          required
+                          value={patientForm.name}
+                          onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Phone Number *</label>
+                        <input
+                          type="tel"
+                          className="form-control rounded-3 py-2"
+                          placeholder="10-digit mobile number"
+                          required
+                          pattern="[0-9+()\-\s]{10,15}"
+                          title="Enter a valid 10-digit phone number"
+                          maxLength="15"
+                          value={patientForm.phone}
+                          onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Email Address</label>
+                        <input
+                          type="email"
+                          className="form-control rounded-3 py-2"
+                          placeholder="e.g. patient@example.com"
+                          value={patientForm.email}
+                          onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Date of Birth *</label>
+                        <input
+                          type="date"
+                          className="form-control rounded-3 py-2"
+                          required
+                          max={todayStr}
+                          value={patientForm.date_of_birth}
+                          onChange={(e) => setPatientForm({ ...patientForm, date_of_birth: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Gender *</label>
+                        <select
+                          className="form-select rounded-3 py-2"
+                          value={patientForm.gender}
+                          onChange={(e) => setPatientForm({ ...patientForm, gender: e.target.value })}
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Blood Group</label>
+                        <select
+                          className="form-select rounded-3 py-2"
+                          value={patientForm.blood_group}
+                          onChange={(e) => setPatientForm({ ...patientForm, blood_group: e.target.value })}
+                        >
+                          <option value="A+">A+</option><option value="A-">A-</option>
+                          <option value="B+">B+</option><option value="B-">B-</option>
+                          <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                          <option value="O+">O+</option><option value="O-">O-</option>
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Emergency Contact Number</label>
+                        <input
+                          type="tel"
+                          className="form-control rounded-3 py-2"
+                          placeholder="10-digit emergency phone"
+                          value={patientForm.emergency_contact}
+                          onChange={(e) => setPatientForm({ ...patientForm, emergency_contact: e.target.value })}
+                          pattern="[0-9+()\-\s]{10,15}"
+                          title="Enter a valid 10-digit phone number"
+                          maxLength="15"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small text-secondary mb-1">Residential Address</label>
+                      <textarea
+                        rows="2"
+                        className="form-control rounded-3"
+                        placeholder="Street, City, Postal Code"
+                        value={patientForm.address}
+                        onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
+                      ></textarea>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold small text-secondary mb-1">Patient Portal Temporary Password (Optional)</label>
+                      <input
+                        type="password"
+                        className="form-control rounded-3 py-2"
+                        placeholder="Leave blank to auto-assign default (Patient@123)"
+                        value={patientForm.password}
+                        onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })}
+                      />
+                      <small className="text-muted">Defaults to <code>Patient@123</code> if left empty. Patient will be prompted to change it upon first login.</small>
+                    </div>
+
+                    <div className="d-flex gap-3">
+                      <button
+                        type="submit"
+                        className="btn fw-bold px-4 py-2.5 rounded-3 text-white shadow-sm flex-grow-1"
+                        style={{ backgroundColor: '#0d9488' }}
+                      >
+                        <i className="bi bi-person-check-fill me-2"></i> Register Patient & Generate Health ID
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-light border px-4 py-2.5 rounded-3"
+                        onClick={() => setActiveTab('dashboard')}
+                      >
+                        Back to Overview
+                      </button>
+                    </div>
+                  </form>
+
+                  {registerResult && (
+                    <div className="mt-4 p-4 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-4 text-center">
+                      <i className="bi bi-check-circle-fill text-success fs-2 mb-2 d-block"></i>
+                      <h5 className="fw-bold text-dark mb-1">Patient Registered & Linked!</h5>
+                      <div className="mb-3">
+                        <span className="fs-3 fw-bold font-monospace text-teal bg-white px-4 py-1.5 rounded-3 border shadow-sm d-inline-block" style={{ color: '#0d9488' }}>
+                          {registerResult.patient_uid || registerResult.health_id}
+                        </span>
+                      </div>
+                      <p className="text-muted small mb-3">
+                        Patient <strong>{registerResult.name}</strong> is now registered across the UniCare healthcare network.
+                      </p>
+                      <button
+                        className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
+                        style={{ backgroundColor: '#0d9488' }}
+                        onClick={() => handleSelectPatient(registerResult)}
+                      >
+                        <i className="bi bi-calendar-plus me-1"></i> Book Appointment for this Patient
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. DEDICATED APPOINTMENTS TAB */}
+        {activeTab === 'appointments' && (
+          <div>
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div>
+                  <h4 className="fw-bold text-dark mb-1">Appointments Management</h4>
+                  <p className="text-muted small mb-0">
+                    Schedule, confirm, and track patient consultations across departments at <strong>{displayHospital}</strong>
+                  </p>
+                </div>
+                <button
+                  className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
+                  style={{ backgroundColor: '#0d9488' }}
+                  onClick={() => {
+                    loadBookingOptions();
+                    if (distinctPatients?.length) setSelectedPatient(distinctPatients[0]);
+                    setShowReceptionistOverlay(true);
+                  }}
+                >
+                  <i className="bi bi-calendar-plus me-1"></i> Book New Appointment
+                </button>
+              </div>
+
+              {/* Filters Toolbar */}
+              <div className="row g-3 mt-2 pt-2 border-top">
+                <div className="col-md-4">
+                  <div className="input-group">
+                    <span className="input-group-text bg-light border-end-0"><i className="bi bi-search text-muted"></i></span>
+                    <input
+                      type="text"
+                      className="form-control border-start-0"
+                      placeholder="Filter by Patient, Health ID, Doctor..."
+                      value={apptSearch}
+                      onChange={(e) => setApptSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="btn-group w-100" role="group">
+                    {['all', 'Pending', 'Confirmed', 'Completed'].map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        className={`btn btn-sm ${apptFilter === st ? 'btn-teal text-white' : 'btn-outline-secondary'}`}
+                        style={apptFilter === st ? { backgroundColor: '#0d9488' } : {}}
+                        onClick={() => setApptFilter(st)}
+                      >
+                        {st === 'all' ? 'All Status' : st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <select
+                    className="form-select"
+                    value={apptDateFilter}
+                    onChange={(e) => setApptDateFilter(e.target.value)}
+                  >
+                    <option value="all">All Dates</option>
+                    <option value="today">Today's Visits ({todayStr})</option>
+                    <option value="upcoming">Next 20 Days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Appointments Table */}
+            <div className="card border-0 shadow-sm rounded-4">
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th className="ps-4">Appt UID</th>
+                        <th>Date & Time</th>
+                        <th>Patient</th>
+                        <th>Doctor</th>
+                        <th>Status</th>
+                        <th className="text-end pe-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appointments
+                        .filter(a => {
+                          if (apptFilter !== 'all' && a.status !== apptFilter) return false;
+                          if (apptDateFilter === 'today' && a.date !== todayStr) return false;
+                          if (apptDateFilter === 'upcoming' && (a.date < todayStr || a.date > maxBookingDateStr)) return false;
+                          if (apptSearch.trim()) {
+                            const q = apptSearch.toLowerCase();
+                            const match = (a.patient || '').toLowerCase().includes(q) ||
+                                          (a.patient_uid || a.health_id || '').toLowerCase().includes(q) ||
+                                          (a.doctor || '').toLowerCase().includes(q) ||
+                                          (a.appointment_uid || a.apt_uid || '').toLowerCase().includes(q);
+                            if (!match) return false;
+                          }
+                          return true;
+                        })
+                        .map((a) => (
+                          <tr key={a.appointment_id}>
+                            <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                              {a.appointment_uid || a.apt_uid || `APT${String(a.appointment_id).padStart(3, '0')}`}
+                            </td>
+                            <td className="fw-semibold text-dark">
+                              <div>{a.date}</div>
+                              <small className="text-muted">{a.time}</small>
+                            </td>
+                            <td>
+                              <div className="fw-bold text-dark">{a.patient}</div>
+                              <small className="text-muted font-monospace">{a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}</small>
+                            </td>
+                            <td>{a.doctor}</td>
+                            <td>
+                              <span
+                                className={`badge rounded-pill px-3 py-1.5 ${
+                                  a.status === 'Completed'
+                                    ? 'bg-success'
+                                    : a.status === 'Confirmed'
+                                    ? 'bg-primary'
+                                    : 'bg-warning text-dark'
+                                }`}
+                              >
+                                {a.status}
+                              </span>
+                            </td>
+                            <td className="text-end pe-4">
+                              <button
+                                className="btn btn-sm btn-outline-teal rounded-pill"
+                                onClick={() => handleSelectPatient({ patient_id: a.patient_id, health_id: a.health_id, name: a.patient })}
+                              >
+                                Manage
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      {!appointments.length && (
+                        <tr>
+                          <td colSpan="6" className="text-center text-muted py-5">
+                            No appointments found matching your filter criteria.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. DEDICATED QUEUE TAB */}
+        {activeTab === 'queue' && (
+          <div>
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <h4 className="fw-bold text-dark mb-1">Front Desk Live Waitlist & Hospital Queue</h4>
+                  <p className="text-muted small mb-0">
+                    Real-time front desk queue management for patients awaiting consultation at <strong>{displayHospital}</strong>
+                  </p>
+                </div>
+                <span className="badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill">
+                  {appointments.filter(a => a.status === 'Pending' || a.status === 'Confirmed').length} Patients in Line
+                </span>
+              </div>
+            </div>
+
+            <div className="row g-4">
+              {appointments
+                .filter(a => a.status === 'Pending' || a.status === 'Confirmed')
+                .map((a, idx) => (
+                  <div key={a.appointment_id} className="col-md-6 col-lg-4">
+                    <div className="card border-0 shadow-sm rounded-4 h-100">
+                      <div className="card-body p-4 d-flex flex-column justify-content-between">
+                        <div>
+                          <div className="d-flex justify-content-between align-items-start mb-3">
+                            <span className="badge bg-light text-dark border font-monospace px-2.5 py-1">
+                              TOKEN #{idx + 1}
+                            </span>
+                            <span className={`badge rounded-pill px-3 py-1 ${a.status === 'Confirmed' ? 'bg-primary' : 'bg-warning text-dark'}`}>
+                              {a.status}
+                            </span>
+                          </div>
+                          <h5 className="fw-bold text-dark mb-1">{a.patient}</h5>
+                          <span className="badge bg-teal-subtle text-teal font-monospace mb-2" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                            {a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}
+                          </span>
+                          <div className="small text-muted mb-3">
+                            <div><i className="bi bi-person-badge me-1"></i>Doctor: {a.doctor}</div>
+                            <div><i className="bi bi-clock me-1"></i>Slot: {a.date} at {a.time}</div>
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-outline-teal btn-sm w-100 rounded-pill"
+                          onClick={() => handleSelectPatient({ patient_id: a.patient_id, health_id: a.health_id, name: a.patient })}
+                        >
+                          Check In / Update
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              {!appointments.filter(a => a.status === 'Pending' || a.status === 'Confirmed').length && (
+                <div className="col-12">
+                  <div className="card border-0 shadow-sm rounded-4 p-5 text-center text-muted">
+                    <i className="bi bi-check2-circle text-success fs-1 mb-2"></i>
+                    <h5 className="fw-bold text-dark">Queue is Currently Clear</h5>
+                    <p className="small mb-0">No patients are currently waiting in the queue.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 5. DEDICATED PATIENTS DIRECTORY TAB */}
+        {activeTab === 'patients' && (
+          <div>
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div>
+                  <h4 className="fw-bold text-dark mb-1">Global Patients Directory</h4>
+                  <p className="text-muted small mb-0">
+                    Lookup patient records and book consultations across all participating hospitals.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
+                  style={{ backgroundColor: '#0d9488' }}
+                  onClick={() => setActiveTab('registration')}
+                >
+                  <i className="bi bi-person-plus me-1"></i> Register New Patient
+                </button>
+              </div>
+
+              <div className="mt-3">
+                <input
+                  type="text"
+                  className="form-control form-control-lg rounded-3 fs-6"
+                  placeholder="Filter directory by patient name, Global Health ID (e.g. PTA001), phone..."
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="row g-3">
+              {suggestions.length > 0 ? (
+                suggestions.map((p) => (
+                  <div key={p.patient_id} className="col-md-6 col-lg-4">
+                    <div className="card border-0 shadow-sm rounded-4 p-3.5 h-100 d-flex flex-column justify-content-between bg-white">
+                      <div>
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <h6 className="fw-bold text-dark mb-0">{p.name}</h6>
+                          <span className="badge bg-teal-subtle text-teal font-monospace" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                            {p.patient_uid || p.health_id}
+                          </span>
+                        </div>
+                        <div className="small text-muted mb-3">
+                          <div><i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'}</div>
+                          <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}</div>
+                          {p.blood_group && <div><i className="bi bi-droplet me-1"></i>Blood Group: {p.blood_group}</div>}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-outline-teal btn-sm rounded-pill w-100"
+                        onClick={() => handleSelectPatient(p)}
+                      >
+                        <i className="bi bi-calendar-plus me-1"></i> Book Consultation
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="col-12">
+                  <div className="card border-0 shadow-sm rounded-4 p-5 text-center text-muted">
+                    <i className="bi bi-people fs-1 text-secondary mb-2"></i>
+                    <h6 className="fw-bold text-dark">Use the Search Bar or Register a Patient</h6>
+                    <p className="small mb-0">Type in the search box above to instantly find registered patients by Name, Phone, or Global Health ID.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6. DEDICATED REPORTS TAB */}
+        {activeTab === 'reports' && (
+          <div>
+            <div className="bg-white rounded-4 shadow-sm border p-4 mb-4">
+              <h4 className="fw-bold text-dark mb-1">Front Desk Reports & Statistics</h4>
+              <p className="text-muted small mb-0">
+                Operational metrics and appointment statistics for <strong>{displayHospital}</strong>
+              </p>
+            </div>
+
+            <div className="row g-4">
+              <div className="col-md-3">
+                <div className="card border-0 shadow-sm rounded-4 p-4 text-center bg-white">
+                  <span className="text-muted small fw-bold">TOTAL APPOINTMENTS</span>
+                  <span className="fs-2 fw-bold text-dark my-2">{totalApps}</span>
+                  <small className="text-muted">Lifetime hospital consultations</small>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="card border-0 shadow-sm rounded-4 p-4 text-center bg-white">
+                  <span className="text-warning-emphasis small fw-bold">WAITING IN QUEUE</span>
+                  <span className="fs-2 fw-bold text-warning-emphasis my-2">{pendingApps}</span>
+                  <small className="text-muted">Pending front desk check-in</small>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="card border-0 shadow-sm rounded-4 p-4 text-center bg-white">
+                  <span className="text-primary small fw-bold">CONFIRMED VISITS</span>
+                  <span className="fs-2 fw-bold text-primary my-2">{confirmedApps}</span>
+                  <small className="text-muted">Ready for doctor consultation</small>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="card border-0 shadow-sm rounded-4 p-4 text-center bg-white">
+                  <span className="text-success small fw-bold">COMPLETED VISITS</span>
+                  <span className="fs-2 fw-bold text-success my-2">{completedApps}</span>
+                  <small className="text-muted">Clinical records finalized</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* RECEPTIONIST APPOINTMENT CONFIRMATION OVERLAY MODAL */}
@@ -1227,7 +1529,8 @@ const RECOVERY_QUESTIONS = [
                         type="date"
                         className="form-control py-2"
                         required
-                        min={new Date().toISOString().split('T')[0]}
+                        min={todayStr}
+                        max={maxBookingDateStr}
                         value={bookingDate}
                         onChange={(e) => setBookingDate(e.target.value)}
                       />

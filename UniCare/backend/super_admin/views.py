@@ -1747,6 +1747,19 @@ def staff_login(request):
         row = cursor.fetchone()
     if not row or not verify_password_and_upgrade(row[0], password, row[5]):
         return JsonResponse({'status': 'error', 'message': 'Invalid email/username or password.'}, status=401)
+    
+    role_str = 'doctor' if row[2] == 2 else 'receptionist'
+    request.session['unicare_user_id'] = row[0]
+    request.session['unicare_role'] = role_str
+    request.session['unicare_hospital_id'] = row[1]
+    if role_str == 'doctor':
+        with connection.cursor() as d_cursor:
+            d_cursor.execute("SELECT doctor_id FROM tbl_doctor WHERE user_id=%s LIMIT 1", [row[0]])
+            d_row = d_cursor.fetchone()
+            if d_row:
+                request.session['unicare_doctor_id'] = d_row[0]
+    request.session.modified = True
+
     return JsonResponse({
         'status': 'success', 
         'staff': {

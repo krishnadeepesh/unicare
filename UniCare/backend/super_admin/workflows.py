@@ -560,7 +560,9 @@ def register_patient(request):
                 }
             })
 
-        if len(password) < 8:
+        if not password:
+            password = 'Patient@123'
+        elif len(password) < 8:
             return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
         if not dob:
             return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
