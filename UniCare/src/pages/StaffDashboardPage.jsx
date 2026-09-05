@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 
 const API = 'http://localhost:8000/api/super-admin';
 
-export default function StaffDashboardPage({ user, onLogout }) {
+export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   const isDoctor = user?.role === 'doctor' || user?.role === 'Doctor';
   const roleName = isDoctor ? 'Doctor' : 'Receptionist';
 
@@ -481,7 +481,12 @@ const RECOVERY_QUESTIONS = [
       {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & BEAUTIFULLY ANIMATED) */}
       <aside className="unicare-sidebar">
         {/* Brand Header */}
-        <div className="sidebar-brand-box">
+        <div 
+          className="sidebar-brand-box" 
+          onClick={() => onNavigateHome && onNavigateHome()} 
+          title="Return to UniCare Homepage"
+          style={{ cursor: 'pointer' }}
+        >
           <div className="sidebar-brand-icon">
             <i className="bi bi-shield-plus"></i>
           </div>
@@ -587,6 +592,13 @@ const RECOVERY_QUESTIONS = [
                   <i className="bi bi-shield-lock text-teal fs-6"></i>
                   <span>Security & Password</span>
                 </button>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setShowProfileMenu(false); onNavigateHome && onNavigateHome(); }}
+                >
+                  <i className="bi bi-house-door text-teal fs-6" style={{ color: '#0d9488' }}></i>
+                  <span>Return to Homepage</span>
+                </button>
                 <div className="dropdown-divider my-1"></div>
                 <button 
                   className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
@@ -626,7 +638,8 @@ const RECOVERY_QUESTIONS = [
               </div>
             </div>
             <button
-              className="btn btn-warning btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
+              className="btn btn-teal text-white btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
+              style={{ backgroundColor: '#0d9488' }}
               onClick={() => { setShowProfileModal(true); setProfileTab('security'); }}
             >
               <i className="bi bi-key me-1"></i> Change Password & Recovery

@@ -1,6 +1,33 @@
 import React from 'react';
 
-export default function LandingPage({ setView, onOpenAuth }) {
+export default function LandingPage({ setView, onOpenAuth, currentUser }) {
+  const getDashboardView = (user) => {
+    if (!user) return 'landing';
+    if (user.role === 'doctor') return 'doctor-dashboard';
+    if (user.role === 'receptionist') return 'receptionist-dashboard';
+    if (user.role === 'patient' || user.role === 'Patient') return 'patient-dashboard';
+    if (user.role === 'super-admin' || user.is_superuser) return 'super-admin-dashboard';
+    if (user.type === 'hospital' || user.role === 'hospital-admin' || user.role === 'Hospital Administrator') return 'hospital-admin-dashboard';
+    if (user.type === 'staff') return 'hospital-role-select';
+    return 'patient-dashboard';
+  };
+
+  const getUserName = (user) => {
+    if (!user) return '';
+    if (user.role === 'doctor') return `Dr. ${user.name || user.username || 'Doctor'}`;
+    return user.name || user.hospital_name || user.username || 'User';
+  };
+
+  const getRoleBadge = (user) => {
+    if (!user) return '';
+    if (user.role === 'doctor') return 'Doctor';
+    if (user.role === 'receptionist') return 'Receptionist';
+    if (user.role === 'patient' || user.role === 'Patient') return 'Patient';
+    if (user.role === 'super-admin' || user.is_superuser) return 'Super Admin';
+    if (user.type === 'hospital' || user.role === 'hospital-admin') return 'Hospital Admin';
+    return 'Authenticated';
+  };
+
   const features = [
     {
       title: 'Hospital Management',
@@ -67,9 +94,17 @@ export default function LandingPage({ setView, onOpenAuth }) {
             
             {/* Content Overlay */}
             <div className="hero-careplus-content animate-slide-up">
-              <span className="badge px-3 py-2 rounded-pill mb-3" style={{ background: 'rgba(13, 148, 136, 0.12)', color: '#0d9488', border: '1px solid rgba(13, 148, 136, 0.3)', fontWeight: 600, fontSize: '0.85rem' }}>
-                <i className="bi bi-shield-check me-1"></i> Next-Gen Healthcare Platform
-              </span>
+              {currentUser ? (
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <span className="badge px-3 py-2 rounded-pill shadow-sm" style={{ background: 'rgba(13, 148, 136, 0.15)', color: '#0d9488', border: '1px solid rgba(13, 148, 136, 0.35)', fontWeight: 700, fontSize: '0.85rem' }}>
+                    <i className="bi bi-person-check-fill me-1"></i> Active Session: {getUserName(currentUser)} ({getRoleBadge(currentUser)})
+                  </span>
+                </div>
+              ) : (
+                <span className="badge px-3 py-2 rounded-pill mb-3" style={{ background: 'rgba(13, 148, 136, 0.12)', color: '#0d9488', border: '1px solid rgba(13, 148, 136, 0.3)', fontWeight: 600, fontSize: '0.85rem' }}>
+                  <i className="bi bi-shield-check me-1"></i> Next-Gen Healthcare Platform
+                </span>
+              )}
               <h1 className="display-4 fw-extrabold mb-3 text-slate-900" style={{ letterSpacing: '-1px', lineHeight: '1.15', color: '#0f172a' }}>
                 Smarter Healthcare Starts With <span style={{ color: '#0d9488' }}>UniCare.</span>
               </h1>
@@ -77,13 +112,23 @@ export default function LandingPage({ setView, onOpenAuth }) {
                 UniCare is a secure healthcare management platform that helps hospitals manage operations, patients, doctors, and medical records efficiently through a centralized system.
               </p>
               <div className="d-flex flex-wrap gap-3">
-                <button 
-                  className="btn btn-teal-pill"
-                  onClick={() => onOpenAuth ? onOpenAuth('login') : setView('login')}
-                >
-                  <span>Get Started</span>
-                  <i className="bi bi-arrow-right"></i>
-                </button>
+                {currentUser ? (
+                  <button 
+                    className="btn btn-teal-pill"
+                    onClick={() => setView(getDashboardView(currentUser))}
+                  >
+                    <span>Return to Dashboard</span>
+                    <i className="bi bi-arrow-right"></i>
+                  </button>
+                ) : (
+                  <button 
+                    className="btn btn-teal-pill"
+                    onClick={() => onOpenAuth ? onOpenAuth('login') : setView('login')}
+                  >
+                    <span>Get Started</span>
+                    <i className="bi bi-arrow-right"></i>
+                  </button>
+                )}
                 <a 
                   href="#features" 
                   className="btn btn-teal-outline"
@@ -220,7 +265,7 @@ export default function LandingPage({ setView, onOpenAuth }) {
                       <textarea className="form-control" rows="4" required></textarea>
                     </div>
                     <div className="col-12">
-                      <button type="submit" className="btn btn-primary-unicare w-100">Send Message</button>
+                      <button type="submit" className="btn btn-teal text-white w-100 py-3 rounded-pill fw-bold shadow-sm" style={{ backgroundColor: '#0d9488' }}>Send Message</button>
                     </div>
                   </div>
                 </form>
@@ -231,7 +276,7 @@ export default function LandingPage({ setView, onOpenAuth }) {
       </section>
 
       {/* CTA Section */}
-      <section className="py-6 bg-primary text-white position-relative overflow-hidden" style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #1e3a8a 100%)' }}>
+      <section className="py-6 text-white position-relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)' }}>
         <div className="container py-lg-4 text-center position-relative" style={{ zIndex: 2 }}>
           <h2 className="display-5 fw-extrabold mb-3 text-white">Manage Healthcare Smarter with UniCare</h2>
           <p className="lead text-white-50 max-w-2xl mx-auto mb-4" style={{ fontSize: '1.15rem' }}>
@@ -239,9 +284,9 @@ export default function LandingPage({ setView, onOpenAuth }) {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <button 
-              className="btn btn-light px-4 py-3 fw-bold text-primary shadow" 
+              className="btn btn-light px-4 py-3 fw-bold shadow rounded-pill" 
               onClick={() => onOpenAuth ? onOpenAuth('register') : setView('register')}
-              style={{ borderRadius: '8px' }}
+              style={{ color: '#0d9488' }}
             >
               Get Started Now
             </button>

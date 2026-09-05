@@ -1,17 +1,100 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 export default function DigitalHealthCard({ patient }) {
+  const cardRef = useRef(null);
+
   if (!patient) return null;
 
-  // Handler to trigger print
+  // Handler to trigger print of ONLY the health card
   const handlePrint = (e) => {
     e.preventDefault();
-    window.print();
+    if (!cardRef.current) {
+      window.print();
+      return;
+    }
+
+    // Create an isolated hidden iframe for printing ONLY the health card
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow.document;
+
+    // Collect all active stylesheets and styles so the card looks identical
+    let stylesHtml = '';
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+      stylesHtml += node.outerHTML;
+    });
+
+    const cardHtml = cardRef.current.outerHTML;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>UniCare Digital Health Card - ${patient.name || patient.fullName || 'Patient'}</title>
+          ${stylesHtml}
+          <style>
+            @page {
+              size: auto;
+              margin: 15mm;
+            }
+            body {
+              margin: 0;
+              padding: 24px;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              background-color: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .health-card {
+              box-shadow: none !important;
+              margin: 0 auto !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${cardHtml}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Focus and print only the iframe content
+    setTimeout(() => {
+      printFrame.contentWindow.focus();
+      printFrame.contentWindow.print();
+      setTimeout(() => {
+        if (document.body.contains(printFrame)) {
+          document.body.removeChild(printFrame);
+        }
+      }, 1500);
+    }, 350);
   };
 
   return (
     <div className="d-flex flex-column align-items-center gap-3">
-      <div className="health-card animate-fade-in text-start">
+      <div 
+        ref={cardRef}
+        id="health-card-printable"
+        className="health-card animate-fade-in text-start"
+      >
         {/* Top Header */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div className="d-flex align-items-center gap-2">
@@ -90,12 +173,12 @@ export default function DigitalHealthCard({ patient }) {
 
       {/* Action triggers */}
       <button 
-        className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 mt-1 px-3 py-2 no-print" 
+        className="btn btn-outline-teal btn-sm d-flex align-items-center gap-2 mt-1 px-3 py-2 no-print" 
         onClick={handlePrint}
-        style={{ borderRadius: '8px' }}
+        style={{ borderRadius: '8px', color: '#0d9488', borderColor: '#0d9488' }}
       >
         <i className="bi bi-printer"></i>
-        <span>Print Health Card</span>
+        <span className="fw-semibold">Print Health Card</span>
       </button>
     </div>
   );

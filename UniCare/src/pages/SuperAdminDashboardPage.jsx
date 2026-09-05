@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://localhost:8000/api/super-admin';
 
-function SuperAdminDashboardPage({ adminUser, onLogout }) {
+function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [adminName, setAdminName] = useState(adminUser?.admin_name || 'superadmin');
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -317,7 +317,12 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
       {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & BEAUTIFULLY ANIMATED) */}
       <aside className="unicare-sidebar">
         {/* Brand Header */}
-        <div className="sidebar-brand-box">
+        <div 
+          className="sidebar-brand-box" 
+          onClick={() => onNavigateHome && onNavigateHome()} 
+          title="Return to UniCare Homepage"
+          style={{ cursor: 'pointer' }}
+        >
           <div className="sidebar-brand-icon">
             <i className="bi bi-shield-plus"></i>
           </div>
@@ -414,6 +419,13 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                   <i className="bi bi-person-badge text-teal fs-6"></i>
                   <span>Profile Settings</span>
                 </button>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setShowProfileMenu(false); onNavigateHome && onNavigateHome(); }}
+                >
+                  <i className="bi bi-house-door text-teal fs-6" style={{ color: '#0d9488' }}></i>
+                  <span>Return to Homepage</span>
+                </button>
                 <div className="dropdown-divider my-1"></div>
                 <button 
                   className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
@@ -472,7 +484,8 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
               </div>
               <button 
                 onClick={() => setActiveTab('requests')}
-                className="btn btn-warning text-dark btn-sm rounded-pill fw-bold px-3 py-1.5"
+                className="btn btn-teal text-white btn-sm rounded-pill fw-bold px-3 py-1.5 shadow-sm"
+                style={{ backgroundColor: '#0d9488' }}
               >
                 Review Requests <i className="bi bi-arrow-right ms-1"></i>
               </button>
@@ -602,13 +615,13 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                 <div className="col-md-6">
                   <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
                     <div className="d-flex align-items-center gap-3">
-                      <div className="bg-primary bg-opacity-10 p-3 rounded-3 text-primary">
+                      <div className="rounded-3 p-3 text-teal" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
                         <i className="bi bi-clock-history fs-2"></i>
                       </div>
                       <div>
                         <h5 className="fw-bold mb-1">Review Pending Requests</h5>
                         <p className="text-muted small mb-2">Review and approve new hospital registration applications.</p>
-                        <button onClick={() => setActiveTab('requests')} className="btn btn-primary btn-sm rounded-3">
+                        <button onClick={() => setActiveTab('requests')} className="btn btn-teal text-white btn-sm rounded-3 shadow-sm" style={{ backgroundColor: '#0d9488' }}>
                           View Pending ({stats.pending_hospitals})
                         </button>
                       </div>
@@ -618,13 +631,13 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                 <div className="col-md-6">
                   <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
                     <div className="d-flex align-items-center gap-3">
-                      <div className="bg-success bg-opacity-10 p-3 rounded-3 text-success">
+                      <div className="rounded-3 p-3 text-teal" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
                         <i className="bi bi-hospital fs-2"></i>
                       </div>
                       <div>
                         <h5 className="fw-bold mb-1">Manage All Hospitals</h5>
                         <p className="text-muted small mb-2">Search, edit, toggle active state, or add new hospital profiles.</p>
-                        <button onClick={() => setActiveTab('hospitals')} className="btn btn-success btn-sm rounded-3">
+                        <button onClick={() => setActiveTab('hospitals')} className="btn btn-teal text-white btn-sm rounded-3 shadow-sm" style={{ backgroundColor: '#0d9488' }}>
                           Manage Hospitals
                         </button>
                       </div>
@@ -643,7 +656,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                   <h5 className="fw-bold text-dark mb-1">Pending Hospital Registration Requests</h5>
                   <p className="text-muted small mb-0">Hospitals waiting for Super Admin review & approval.</p>
                 </div>
-                <button onClick={fetchHospitalRequests} className="btn btn-outline-primary btn-sm rounded-pill">
+                <button onClick={fetchHospitalRequests} className="btn btn-outline-teal btn-sm rounded-pill">
                   <i className="bi bi-arrow-repeat me-1"></i> Refresh Requests
                 </button>
               </div>
@@ -684,14 +697,15 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                             <div className="btn-group btn-group-sm">
                               <button 
                                 onClick={() => { setDetailHospital(r); setShowDetailModal(true); }}
-                                className="btn btn-outline-info"
+                                className="btn btn-outline-teal"
                                 title="View Details"
                               >
                                 <i className="bi bi-eye"></i> Details
                               </button>
                               <button 
                                 onClick={() => handleRequestAction(r.hospital_id, 'approve')}
-                                className="btn btn-success"
+                                className="btn btn-teal text-white"
+                                style={{ backgroundColor: '#0d9488' }}
                               >
                                 <i className="bi bi-check-lg me-1"></i> Approve
                               </button>
@@ -732,7 +746,8 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                     });
                     setShowAddModal(true);
                   }}
-                  className="btn btn-primary rounded-3 fw-bold d-flex align-items-center gap-2"
+                  className="btn btn-teal text-white rounded-3 fw-bold d-flex align-items-center gap-2 shadow-sm"
+                  style={{ backgroundColor: '#0d9488' }}
                 >
                   <i className="bi bi-plus-circle-fill"></i> Add New Hospital
                 </button>
@@ -828,7 +843,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                             <div className="btn-group btn-group-sm">
                               <button 
                                 onClick={() => openEditModal(h)}
-                                className="btn btn-outline-primary"
+                                className="btn btn-outline-teal"
                                 title="Edit Hospital"
                               >
                                 <i className="bi bi-pencil-square"></i> Edit
@@ -860,7 +875,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                     <h5 className="fw-bold text-dark mb-1">Analytics & System Metrics</h5>
                     <p className="text-muted small mb-0">System totals across hospitals, doctors, patients, and appointments.</p>
                   </div>
-                  <button onClick={fetchAnalytics} className="btn btn-outline-primary btn-sm rounded-pill">
+                  <button onClick={fetchAnalytics} className="btn btn-outline-teal btn-sm rounded-pill">
                     <i className="bi bi-arrow-repeat me-1"></i> Refresh Analytics
                   </button>
                 </div>
@@ -1071,7 +1086,8 @@ function SuperAdminDashboardPage({ adminUser, onLogout }) {
                   </button>
                   <button 
                     type="submit" 
-                    className="btn btn-primary rounded-3 px-4 fw-bold"
+                    className="btn btn-teal text-white rounded-3 px-4 fw-bold shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
                     disabled={formSubmitting}
                   >
                     {formSubmitting ? 'Saving...' : (showEditModal ? 'Update Hospital' : 'Add Hospital')}

@@ -1,6 +1,21 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 export default function CustomNavbar({ currentView, setView, currentUser, onLogout, onOpenAuth }) {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    if (showProfileMenu) {
+      document.addEventListener('click', handleOutsideClick);
+    }
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [showProfileMenu]);
+
   const scrollToSection = (id) => {
     if (currentView !== 'landing') {
       setView('landing');
@@ -12,6 +27,49 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
+  };
+
+  const getDashboardView = (user) => {
+    if (!user) return 'landing';
+    if (user.role === 'doctor') return 'doctor-dashboard';
+    if (user.role === 'receptionist') return 'receptionist-dashboard';
+    if (user.role === 'patient' || user.role === 'Patient') return 'patient-dashboard';
+    if (user.role === 'super-admin' || user.is_superuser) return 'super-admin-dashboard';
+    if (user.type === 'hospital' || user.role === 'hospital-admin' || user.role === 'Hospital Administrator') return 'hospital-admin-dashboard';
+    if (user.type === 'staff') return 'hospital-role-select';
+    return 'patient-dashboard';
+  };
+
+  const getRoleLabel = (user) => {
+    if (!user) return '';
+    if (user.role === 'doctor') return 'Doctor';
+    if (user.role === 'receptionist') return 'Receptionist';
+    if (user.role === 'patient' || user.role === 'Patient') return 'Patient';
+    if (user.role === 'super-admin' || user.is_superuser) return 'Super Admin';
+    if (user.type === 'hospital' || user.role === 'hospital-admin' || user.role === 'Hospital Administrator') return 'Hospital Admin';
+    return 'Active Session';
+  };
+
+  const getUserDisplayName = (user) => {
+    if (!user) return '';
+    if (user.role === 'doctor') return `Dr. ${user.name || user.username || 'Doctor'}`;
+    return user.name || user.hospital_name || user.username || 'My Account';
+  };
+
+  const getUserInitial = (user) => {
+    if (!user) return 'U';
+    const name = user.name || user.hospital_name || user.username || '';
+    return name ? name.charAt(0).toUpperCase() : 'U';
+  };
+
+  const getRoleIcon = (user) => {
+    if (!user) return 'bi-person-circle';
+    if (user.role === 'doctor') return 'bi-stethoscope';
+    if (user.role === 'receptionist') return 'bi-person-badge';
+    if (user.role === 'patient' || user.role === 'Patient') return 'bi-heart-pulse';
+    if (user.role === 'super-admin' || user.is_superuser) return 'bi-shield-check';
+    if (user.type === 'hospital' || user.role === 'hospital-admin') return 'bi-hospital';
+    return 'bi-person-circle';
   };
 
   return (
@@ -86,31 +144,88 @@ export default function CustomNavbar({ currentView, setView, currentUser, onLogo
           {/* Right Action buttons */}
           <div className="d-flex align-items-center gap-2">
             {currentUser ? (
-              <>
+              <div className="d-flex align-items-center gap-2" ref={dropdownRef}>
+                {/* Return to Dashboard shortcut button */}
                 <button 
-                  className="btn btn-outline-teal px-3 py-2 fs-7 d-flex align-items-center gap-1"
+                  className="btn btn-outline-teal px-3 py-2 fs-7 d-flex align-items-center gap-1.5 fw-semibold"
                   onClick={() => {
-                    const targetView = 
-                      currentUser.role === 'doctor' ? 'doctor-dashboard' :
-                      currentUser.role === 'receptionist' ? 'receptionist-dashboard' :
-                      currentUser.role === 'patient' || currentUser.role === 'Patient' ? 'patient-dashboard' :
-                      currentUser.type === 'hospital' || currentUser.role === 'hospital-admin' ? 'hospital-admin-dashboard' :
-                      'patient-dashboard';
-                    setView(targetView);
+                    setShowProfileMenu(false);
+                    setView(getDashboardView(currentUser));
                   }}
+                  title="Return to your active dashboard"
                 >
-                  <i className={`bi ${currentUser.role === 'doctor' ? 'bi-stethoscope' : currentUser.type === 'hospital' ? 'bi-hospital' : 'bi-person-circle'}`}></i>
+                  <i className={`bi ${getRoleIcon(currentUser)}`}></i>
                   <span>Dashboard</span>
                 </button>
-                <button 
-                  className="btn btn-light text-danger px-3 py-2 fs-7"
-                  onClick={onLogout}
-                  title="Logout"
-                >
-                  <i className="bi bi-box-arrow-right me-1"></i>
-                  Logout
-                </button>
-              </>
+
+                {/* Profile avatar dropdown menu */}
+                <div className="position-relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 border-0 shadow-none"
+                    style={{ outline: 'none' }}
+                    aria-label="User session menu"
+                  >
+                    <div 
+                      className="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" 
+                      style={{ width: '38px', height: '38px', backgroundColor: '#0d9488' }}
+                    >
+                      {getUserInitial(currentUser)}
+                    </div>
+                    <div className="text-start d-none d-md-block" style={{ lineHeight: '1.2' }}>
+                      <div className="fw-bold text-dark small text-truncate" style={{ maxWidth: '140px' }}>
+                        {getUserDisplayName(currentUser)}
+                      </div>
+                      <small className="extra-small fw-semibold" style={{ color: '#0d9488' }}>
+                        {getRoleLabel(currentUser)}
+                      </small>
+                    </div>
+                    <i className={`bi bi-chevron-${showProfileMenu ? 'up' : 'down'} text-muted extra-small ms-0.5`}></i>
+                  </button>
+
+                  {showProfileMenu && (
+                    <div 
+                      className="dropdown-menu dropdown-menu-end show shadow-lg border-0 rounded-4 p-2 mt-2" 
+                      style={{ minWidth: '220px', zIndex: 1050, position: 'absolute', right: 0 }}
+                    >
+                      <div className="px-3 py-2 border-bottom mb-1 bg-light rounded-3">
+                        <div className="fw-bold text-dark small">{getUserDisplayName(currentUser)}</div>
+                        <small className="text-muted extra-small d-block text-truncate">
+                          {currentUser.email || currentUser.user_email || 'Active Session'}
+                        </small>
+                        <span className="badge bg-teal-subtle text-teal mt-1 extra-small" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                          {getRoleLabel(currentUser)} Session Active
+                        </span>
+                      </div>
+
+                      <button 
+                        className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setView(getDashboardView(currentUser));
+                        }}
+                      >
+                        <i className={`bi ${getRoleIcon(currentUser)} text-teal fs-6`} style={{ color: '#0d9488' }}></i>
+                        <span>Go to Dashboard</span>
+                      </button>
+
+                      <div className="dropdown-divider my-1"></div>
+
+                      <button 
+                        className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onLogout();
+                        }}
+                      >
+                        <i className="bi bi-box-arrow-right fs-6"></i>
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               <button 
                 className={`btn btn-teal-pill px-4 py-2 ${currentView === 'login' ? 'active' : ''}`} 

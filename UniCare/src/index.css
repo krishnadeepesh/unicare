@@ -284,58 +284,104 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.5rem;
 }
 
-/* Premium Buttons */
+/* ==========================================================================
+   GLOBAL BUTTON STYLES - UNICARE MAIN THEMED COLOR (#0d9488)
+   ========================================================================== */
+
+/* Primary Action Buttons */
+.btn-primary,
+.btn-teal,
 .btn-primary-unicare {
-  background: linear-gradient(135deg, var(--primary-color), #3b82f6);
-  color: var(--white);
-  border: none;
+  background-color: #0d9488 !important;
+  background-image: none !important;
+  border-color: #0d9488 !important;
+  color: #ffffff !important;
   font-weight: 600;
-  padding: 0.75rem 1.75rem;
   border-radius: var(--border-radius-sm);
   transition: var(--transition-smooth);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
 }
 
-.btn-primary-unicare:hover {
-  background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
-  color: var(--white);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active,
+.btn-teal:hover,
+.btn-teal:focus,
+.btn-teal:active,
+.btn-primary-unicare:hover,
+.btn-primary-unicare:focus,
+.btn-primary-unicare:active {
+  background-color: #0f766e !important;
+  background-image: none !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.35) !important;
 }
 
+/* Secondary Action Unicare (Themed Gradient) */
 .btn-secondary-unicare {
-  background: linear-gradient(135deg, var(--secondary-color), var(--accent-color));
-  color: var(--white);
-  border: none;
+  background: linear-gradient(135deg, #0d9488 0%, #00bba7 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
   font-weight: 600;
   padding: 0.75rem 1.75rem;
   border-radius: var(--border-radius-sm);
   transition: var(--transition-smooth);
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25) !important;
 }
 
-.btn-secondary-unicare:hover {
-  background: linear-gradient(135deg, var(--secondary-hover), var(--secondary-color));
-  color: var(--white);
+.btn-secondary-unicare:hover,
+.btn-secondary-unicare:focus,
+.btn-secondary-unicare:active {
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+  color: #ffffff !important;
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.3);
+  box-shadow: 0 8px 20px rgba(13, 148, 136, 0.35) !important;
 }
 
+/* Outline Buttons (Primary & Teal) */
+.btn-outline-primary,
+.btn-outline-teal,
 .btn-outline-unicare {
-  background: transparent;
-  color: var(--primary-color);
-  border: 2px solid var(--primary-color);
+  color: #0d9488 !important;
+  border: 1.5px solid #0d9488 !important;
+  background-color: transparent !important;
   font-weight: 600;
-  padding: 0.625rem 1.625rem;
   border-radius: var(--border-radius-sm);
   transition: var(--transition-smooth);
 }
 
-.btn-outline-unicare:hover {
-  background-color: var(--primary-color);
-  color: var(--white);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active,
+.btn-outline-teal:hover,
+.btn-outline-teal:focus,
+.btn-outline-teal:active,
+.btn-outline-unicare:hover,
+.btn-outline-unicare:focus,
+.btn-outline-unicare:active {
+  background-color: #0d9488 !important;
+  border-color: #0d9488 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25) !important;
+}
+
+/* Clean Neutral Secondary / Light buttons */
+.btn-light.border,
+.btn-secondary {
+  background-color: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  transition: var(--transition-smooth);
+}
+
+.btn-light.border:hover,
+.btn-secondary:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  border-color: #94a3b8;
 }
 
 /* Badge Styling */
@@ -900,4 +946,51 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-3px);
   box-shadow: 0 14px 28px -6px rgba(15, 23, 42, 0.07), 0 8px 12px -4px rgba(15, 23, 42, 0.03);
   border-color: #e2e8f0;
+}
+
+/* ==========================================================================
+   PRINT ISOLATION - ONLY PRINT DIGITAL HEALTH CARD
+   ========================================================================== */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  #health-card-printable,
+  #health-card-printable * {
+    visibility: visible !important;
+  }
+
+  #health-card-printable {
+    position: fixed !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    max-width: 450px !important;
+    width: 450px !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
+/* Theme Teal Utility Buttons */
+.btn-outline-teal {
+  color: #0d9488 !important;
+  border-color: #0d9488 !important;
+  background-color: transparent !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-outline-teal:hover {
+  color: #ffffff !important;
+  background-color: #0d9488 !important;
+  border-color: #0d9488 !important;
 }

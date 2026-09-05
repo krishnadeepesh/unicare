@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const API_BASE_URL = 'http://localhost:8000/api/super-admin';
 
-function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
+function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout, onNavigateHome }) {
   const hospitalName = hospitalInfo?.name || hospitalInfo?.hospital_name || 'Hospital';
 
   // Doctor Login Modal & Profile State
@@ -109,8 +109,25 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
   }
 
   return (
-    <div className="py-5 bg-light min-vh-100 d-flex align-items-center justify-content-center">
-      <div className="container" style={{ maxWidth: '960px' }}>
+    <div className="py-5 bg-light min-vh-100 d-flex flex-column align-items-center justify-content-center position-relative">
+      {/* Top Bar Navigation */}
+      <div className="w-100 position-absolute top-0 start-0 p-3 px-4 d-flex justify-content-between align-items-center">
+        <button 
+          className="btn btn-outline-teal btn-sm rounded-pill px-3 py-1.5 fw-semibold d-flex align-items-center gap-1.5"
+          onClick={() => onNavigateHome && onNavigateHome()}
+        >
+          <i className="bi bi-arrow-left"></i>
+          <span>Return to Homepage</span>
+        </button>
+        <button 
+          className="btn btn-light text-danger btn-sm rounded-pill px-3 py-1.5 fw-semibold border"
+          onClick={onLogout}
+        >
+          <i className="bi bi-box-arrow-right me-1"></i>
+          <span>Sign Out</span>
+        </button>
+      </div>
+      <div className="container mt-4" style={{ maxWidth: '960px' }}>
         
         {/* Welcome Header */}
         <div className="text-center mb-5 animate-slide-down">
@@ -143,7 +160,8 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
                 </div>
                 <button
                   onClick={() => setShowDoctorLoginModal(true)}
-                  className="btn btn-primary w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  className="btn btn-teal text-white w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  style={{ backgroundColor: '#0d9488' }}
                 >
                   <span>Login as Doctor</span>
                   <i className="bi bi-arrow-right"></i>
@@ -156,10 +174,10 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
 
           {/* Card 3: Login as Receptionist */}
           <div className="col-md-4">
-            <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all overflow-hidden border-top border-4 border-warning">
+            <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all overflow-hidden border-top border-4" style={{ borderTopColor: '#0d9488' }}>
               <div className="card-body p-4 text-center d-flex flex-column justify-content-between">
                 <div>
-                  <div className="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-4" style={{ width: '76px', height: '76px' }}>
+                  <div className="rounded-circle d-inline-flex align-items-center justify-content-center mb-4" style={{ width: '76px', height: '76px', backgroundColor: '#e6f4f1', color: '#0d9488' }}>
                     <i className="bi bi-person-badge-fill fs-1"></i>
                   </div>
                   <h4 className="fw-bold text-dark mb-2">Receptionist</h4>
@@ -169,7 +187,8 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
                 </div>
                 <button
                   onClick={() => onSelectRole('receptionist')}
-                  className="btn btn-warning w-100 py-2.5 rounded-3 fw-bold text-dark shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  className="btn btn-teal text-white w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  style={{ backgroundColor: '#0d9488' }}
                 >
                   <span>Login as Receptionist</span>
                   <i className="bi bi-arrow-right"></i>
@@ -259,7 +278,8 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout }) {
                   </button>
                   <button 
                     type="submit" 
-                    className="btn btn-primary rounded-3 px-4 fw-bold"
+                    className="btn btn-teal text-white rounded-3 px-4 fw-bold shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
                     disabled={loadingDocLogin}
                   >
                     {loadingDocLogin ? 'Authenticating...' : 'Login to Doctor Portal'}

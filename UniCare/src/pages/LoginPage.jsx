@@ -303,7 +303,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                     </div>
                     <div className="d-flex justify-content-end gap-2 mt-3">
                       <button type="button" className="btn btn-secondary btn-sm px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
-                      <button type="submit" className="btn btn-primary btn-sm px-4 rounded-pill" disabled={resetLoading}>
+                      <button type="submit" className="btn btn-teal text-white btn-sm px-4 rounded-pill shadow-sm" style={{ backgroundColor: '#0d9488' }} disabled={resetLoading}>
                         {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Checking...</> : 'Continue'}
                       </button>
                     </div>
@@ -358,7 +358,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                     </div>
                     <div className="d-flex justify-content-end gap-2 mt-3">
                       <button type="button" className="btn btn-secondary btn-sm px-4 rounded-pill" onClick={closeForgotModal}>Close</button>
-                      <button type="submit" className="btn btn-primary btn-sm px-4 rounded-pill" disabled={resetLoading}>
+                      <button type="submit" className="btn btn-teal text-white btn-sm px-4 rounded-pill shadow-sm" style={{ backgroundColor: '#0d9488' }} disabled={resetLoading}>
                         {resetLoading ? <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Verifying...</> : 'Reset Password'}
                       </button>
                     </div>
@@ -374,7 +374,8 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                     <p className="small mb-4">{resetMessage}</p>
                     <button
                       type="button"
-                      className="btn btn-primary px-4 rounded-pill"
+                      className="btn btn-teal text-white px-4 rounded-pill shadow-sm"
+                      style={{ backgroundColor: '#0d9488' }}
                       onClick={() => {
                         closeForgotModal();
                         setPassword('');

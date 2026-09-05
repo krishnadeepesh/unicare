@@ -74,7 +74,7 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
         <div 
           className="p-4 text-center text-white" 
           style={{ 
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)' 
+            background: 'linear-gradient(135deg, #0f172a 0%, #0d9488 100%)' 
           }}
         >
           <div 
@@ -152,8 +152,8 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
             <div className="pt-2">
               <button
                 type="submit"
-                className="btn btn-primary w-100 py-3 rounded-pill fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
-                style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)', border: 'none' }}
+                className="btn btn-teal text-white w-100 py-3 rounded-pill fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                style={{ backgroundColor: '#0d9488', border: 'none' }}
                 disabled={loading}
               >
                 {loading ? (

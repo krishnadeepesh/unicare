@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE_URL = 'http://localhost:8000/api/super-admin';
 
-function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout }) {
+function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout, onNavigateHome }) {
   const initialHospitalName = hospitalInfo?.name || hospitalInfo?.hospital_name || 'Hospital Admin';
   const initialHospitalId = hospitalInfo?.hospital_id || hospitalInfo?.id;
   
@@ -301,7 +301,12 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       {/* FIXED LEFT SIDEBAR (LIGHT THEME, ROOMY & BEAUTIFULLY ANIMATED) */}
       <aside className="unicare-sidebar">
         {/* Brand Header */}
-        <div className="sidebar-brand-box">
+        <div 
+          className="sidebar-brand-box" 
+          onClick={() => onNavigateHome && onNavigateHome()} 
+          title="Return to UniCare Homepage"
+          style={{ cursor: 'pointer' }}
+        >
           <div className="sidebar-brand-icon">
             <i className="bi bi-shield-plus"></i>
           </div>
@@ -398,6 +403,13 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   <i className="bi bi-speedometer2 text-teal fs-6"></i>
                   <span>Admin Dashboard</span>
                 </button>
+                <button 
+                  className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-dark small fw-medium"
+                  onClick={() => { setShowProfileMenu(false); onNavigateHome && onNavigateHome(); }}
+                >
+                  <i className="bi bi-house-door text-teal fs-6" style={{ color: '#0d9488' }}></i>
+                  <span>Return to Homepage</span>
+                </button>
                 <div className="dropdown-divider my-1"></div>
                 <button 
                   className="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2.5 text-danger small fw-semibold"
@@ -439,10 +451,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         </div>
 
         <div className="bg-white rounded-4 shadow-sm border p-3 mb-4 d-flex flex-wrap gap-2">
-          <button onClick={() => setActiveSection('home')} className={`btn ${activeSection === 'home' ? 'btn-dark' : 'btn-outline-dark'} rounded-3`}><i className="bi bi-grid me-2"></i>Dashboard</button>
-          <button onClick={() => setActiveSection('doctors')} className={`btn ${activeSection === 'doctors' ? 'btn-primary' : 'btn-outline-primary'} rounded-3`}><i className="bi bi-person-badge me-2"></i>Doctor Management</button>
-          <button onClick={() => setActiveSection('receptionists')} className={`btn ${activeSection === 'receptionists' ? 'btn-warning' : 'btn-outline-warning'} rounded-3`}><i className="bi bi-person-workspace me-2"></i>Receptionist Management</button>
-          <button onClick={() => setActiveSection('departments')} className={`btn ${activeSection === 'departments' ? 'btn-success' : 'btn-outline-success'} rounded-3`}><i className="bi bi-diagram-3 me-2"></i>Department Management</button>
+          <button onClick={() => setActiveSection('home')} className={`btn ${activeSection === 'home' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'home' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-grid me-2"></i>Dashboard</button>
+          <button onClick={() => setActiveSection('doctors')} className={`btn ${activeSection === 'doctors' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'doctors' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-person-badge me-2"></i>Doctor Management</button>
+          <button onClick={() => setActiveSection('receptionists')} className={`btn ${activeSection === 'receptionists' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'receptionists' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-person-workspace me-2"></i>Receptionist Management</button>
+          <button onClick={() => setActiveSection('departments')} className={`btn ${activeSection === 'departments' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'departments' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-diagram-3 me-2"></i>Department Management</button>
         </div>
 
         {/* SECTION 1: DASHBOARD HOME (PROFILE & STATS & CARDS) */}
@@ -548,14 +560,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
             {/* Quick Action Navigation Grid */}
             <div className="card border-0 rounded-4 shadow-sm bg-white p-4 mb-4">
-              <h5 className="fw-bold text-dark mb-3"><i className="bi bi-lightning-charge-fill text-warning me-2"></i>Quick Administrative Actions</h5>
+              <h5 className="fw-bold text-dark mb-3"><i className="bi bi-lightning-charge-fill text-teal me-2" style={{ color: '#0d9488' }}></i>Quick Administrative Actions</h5>
               <div className="row g-3">
                 <div className="col-md-4">
                   <button 
-                    className="btn btn-outline-primary w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
+                    className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('doctors'); openDoctorModal(); }}
                   >
-                    <i className="bi bi-person-plus-fill fs-3"></i>
+                    <i className="bi bi-person-plus-fill fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Register Doctor</div>
                       <small className="text-muted">Add doctor with login credentials</small>
@@ -564,10 +576,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                 </div>
                 <div className="col-md-4">
                   <button 
-                    className="btn btn-outline-warning w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3 text-dark"
+                    className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('receptionists'); setShowReceptionistModal(true); }}
                   >
-                    <i className="bi bi-person-workspace fs-3 text-warning"></i>
+                    <i className="bi bi-person-workspace fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Add Receptionist</div>
                       <small className="text-muted">Create desk staff account</small>
@@ -576,10 +588,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                 </div>
                 <div className="col-md-4">
                   <button 
-                    className="btn btn-outline-success w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
+                    className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('departments'); setShowDepartmentModal(true); }}
                   >
-                    <i className="bi bi-diagram-3-fill fs-3"></i>
+                    <i className="bi bi-diagram-3-fill fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Create Department</div>
                       <small className="text-muted">Add medical specialty unit</small>
@@ -602,7 +614,8 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
               </div>
               <button 
                 onClick={() => openDoctorModal()}
-                className="btn btn-primary rounded-3 fw-bold d-flex align-items-center gap-2"
+                className="btn btn-teal text-white rounded-3 fw-bold d-flex align-items-center gap-2 shadow-sm"
+                style={{ backgroundColor: '#0d9488' }}
               >
                 <i className="bi bi-plus-circle-fill"></i> Register New Doctor
               </button>
@@ -616,11 +629,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             ) : doctorsList.length === 0 ? (
               <div className="text-center py-5 bg-light rounded-4">
                 <i className="bi bi-person-badge text-muted" style={{ fontSize: '3.5rem' }}></i>
-                <h5 className="fw-bold mt-3 text-secondary">No Doctors Registered</h5>
                 <p className="text-muted small mb-3">Click the button above to register your first doctor.</p>
                 <button 
                   onClick={() => openDoctorModal()}
-                  className="btn btn-outline-primary btn-sm rounded-pill"
+                  className="btn btn-outline-teal btn-sm rounded-pill"
                 >
                   + Add First Doctor
                 </button>
@@ -641,13 +653,13 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   <tbody>
                     {doctorsList.map((doc) => (
                       <tr key={doc.doctor_id || doc.id}>
-                        <td><code className="fw-bold text-primary">{doc.doc_uid || doc.id}</code></td>
+                        <td><code className="fw-bold text-teal" style={{ color: '#0d9488' }}>{doc.doc_uid || doc.id}</code></td>
                         <td className="fw-bold text-dark">{doc.name}</td>
                         <td>{doc.email}</td>
                         <td>{doc.phone || 'N/A'}</td>
-                        <td><span className="badge bg-info-subtle text-info-emphasis">{doc.department || doc.specialization}</span></td>
+                        <td><span className="badge bg-teal-subtle text-teal" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>{doc.department || doc.specialization}</span></td>
                         <td className="text-end">
-                          <button onClick={() => openDoctorModal(doc)} className="btn btn-outline-primary btn-sm me-2" title="Edit Doctor"><i className="bi bi-pencil"></i> Edit</button>
+                          <button onClick={() => openDoctorModal(doc)} className="btn btn-outline-teal btn-sm me-2" title="Edit Doctor"><i className="bi bi-pencil"></i> Edit</button>
                           <button 
                             onClick={() => handleDeleteDoctor(doc.doctor_id || doc.id, doc.doc_uid || doc.id)}
                             className="btn btn-outline-danger btn-sm"
@@ -668,7 +680,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         {/* SECTION 3: RECEPTIONIST MANAGEMENT VIEW */}
         {activeSection === 'receptionists' && (
           <div className="card border-0 rounded-4 shadow-sm bg-white p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4"><div><h5 className="fw-bold mb-1">Receptionist Management</h5><p className="text-muted small mb-0">Create, edit, and remove reception desk accounts.</p></div><button className="btn btn-warning" onClick={() => { setEditingReceptionist(null); setReceptionistForm({ name: '', email: '', phone: '' }); setShowReceptionistModal(true); }}><i className="bi bi-plus-circle me-2"></i>Add Receptionist</button></div>
+            <div className="d-flex justify-content-between align-items-center mb-4"><div><h5 className="fw-bold mb-1">Receptionist Management</h5><p className="text-muted small mb-0">Create, edit, and remove reception desk accounts.</p></div><button className="btn btn-teal text-white shadow-sm" style={{ backgroundColor: '#0d9488' }} onClick={() => { setEditingReceptionist(null); setReceptionistForm({ name: '', email: '', phone: '' }); setShowReceptionistModal(true); }}><i className="bi bi-plus-circle me-2"></i>Add Receptionist</button></div>
             <ManagementTable items={receptionistsList} idKey="receptionist_id" codeKey="rec_uid" onEdit={(item) => { setEditingReceptionist(item); setReceptionistForm({ name: item.name, email: item.email, phone: item.phone || '' }); setShowReceptionistModal(true); }} onDelete={deleteReceptionist} emptyText="No receptionists registered." />
           </div>
         )}
@@ -676,8 +688,8 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         {/* SECTION 4: DEPARTMENT MANAGEMENT VIEW */}
         {activeSection === 'departments' && (
           <div className="card border-0 rounded-4 shadow-sm bg-white p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4"><div><h5 className="fw-bold mb-1">Department Management</h5><p className="text-muted small mb-0">Create and maintain your hospital departments.</p></div><button className="btn btn-success" onClick={() => { setEditingDepartment(null); setDepartmentForm({ name: '', description: '' }); setShowDepartmentModal(true); }}><i className="bi bi-plus-circle me-2"></i>Add Department</button></div>
-            {departmentsList.length === 0 ? <p className="text-center text-muted py-5 mb-0">No departments added yet.</p> : <div className="table-responsive"><table className="table align-middle"><thead className="table-light"><tr><th>Department</th><th>Description</th><th className="text-end">Actions</th></tr></thead><tbody>{departmentsList.map((item) => <tr key={item.department_id}><td className="fw-bold">{item.name}</td><td>{item.description || '—'}</td><td className="text-end"><button className="btn btn-outline-success btn-sm me-2" onClick={() => { setEditingDepartment(item); setDepartmentForm({ name: item.name, description: item.description || '' }); setShowDepartmentModal(true); }}><i className="bi bi-pencil"></i> Edit</button><button className="btn btn-outline-danger btn-sm" onClick={() => deleteDepartment(item)}><i className="bi bi-trash"></i> Delete</button></td></tr>)}</tbody></table></div>}
+            <div className="d-flex justify-content-between align-items-center mb-4"><div><h5 className="fw-bold mb-1">Department Management</h5><p className="text-muted small mb-0">Create and maintain your hospital departments.</p></div><button className="btn btn-teal text-white shadow-sm" style={{ backgroundColor: '#0d9488' }} onClick={() => { setEditingDepartment(null); setDepartmentForm({ name: '', description: '' }); setShowDepartmentModal(true); }}><i className="bi bi-plus-circle me-2"></i>Add Department</button></div>
+            {departmentsList.length === 0 ? <p className="text-center text-muted py-5 mb-0">No departments added yet.</p> : <div className="table-responsive"><table className="table align-middle"><thead className="table-light"><tr><th>Department</th><th>Description</th><th className="text-end">Actions</th></tr></thead><tbody>{departmentsList.map((item) => <tr key={item.department_id}><td className="fw-bold">{item.name}</td><td>{item.description || '—'}</td><td className="text-end"><button className="btn btn-outline-teal btn-sm me-2" onClick={() => { setEditingDepartment(item); setDepartmentForm({ name: item.name, description: item.description || '' }); setShowDepartmentModal(true); }}><i className="bi bi-pencil"></i> Edit</button><button className="btn btn-outline-danger btn-sm" onClick={() => deleteDepartment(item)}><i className="bi bi-trash"></i> Delete</button></td></tr>)}</tbody></table></div>}
           </div>
         )}
 
@@ -689,7 +701,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         <div className="modal show d-block bg-dark bg-opacity-50" tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-4 border-0 shadow-lg">
-              <div className="modal-header bg-primary text-white rounded-top-4 p-4">
+              <div className="modal-header bg-teal text-white rounded-top-4 p-4" style={{ backgroundColor: '#0d9488' }}>
                 <h5 className="modal-title fw-bold">
                   <i className="bi bi-person-plus-fill me-2"></i>{editingDoctor ? 'Edit Doctor' : 'Register New Doctor'}
                 </h5>
@@ -783,7 +795,8 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   </button>
                   <button 
                     type="submit" 
-                    className="btn btn-primary rounded-3 px-4 fw-bold"
+                    className="btn btn-teal text-white rounded-3 px-4 fw-bold shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
                     disabled={submitting}
                   >
                     {submitting ? 'Saving...' : editingDoctor ? 'Save Changes' : 'Register Doctor'}
@@ -796,11 +809,11 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       )}
 
       {showReceptionistModal && (
-        <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-warning"><h5 className="modal-title fw-bold">{editingReceptionist ? 'Edit Receptionist' : 'Add Receptionist'}</h5><button className="btn-close" onClick={() => setShowReceptionistModal(false)}></button></div><form onSubmit={saveReceptionist}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Full Name *</label><input className="form-control" value={receptionistForm.name} onChange={(e) => setReceptionistForm({ ...receptionistForm, name: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Email *</label><input type="email" className="form-control" value={receptionistForm.email} onChange={(e) => setReceptionistForm({ ...receptionistForm, email: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Phone</label><input className="form-control" value={receptionistForm.phone} onChange={(e) => setReceptionistForm({ ...receptionistForm, phone: e.target.value })} /></div>{!editingReceptionist && <div><label className="form-label">Password *</label><input type="password" minLength="8" className="form-control" value={receptionistForm.password} onChange={(e) => setReceptionistForm({ ...receptionistForm, password: e.target.value })} required /></div>}</div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowReceptionistModal(false)}>Cancel</button><button className="btn btn-warning" type="submit">Save Receptionist</button></div></form></div></div></div>
+        <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-teal text-white" style={{ backgroundColor: '#0d9488' }}><h5 className="modal-title fw-bold text-white">{editingReceptionist ? 'Edit Receptionist' : 'Add Receptionist'}</h5><button className="btn-close btn-close-white" onClick={() => setShowReceptionistModal(false)}></button></div><form onSubmit={saveReceptionist}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Full Name *</label><input className="form-control" value={receptionistForm.name} onChange={(e) => setReceptionistForm({ ...receptionistForm, name: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Email *</label><input type="email" className="form-control" value={receptionistForm.email} onChange={(e) => setReceptionistForm({ ...receptionistForm, email: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Phone</label><input className="form-control" value={receptionistForm.phone} onChange={(e) => setReceptionistForm({ ...receptionistForm, phone: e.target.value })} /></div>{!editingReceptionist && <div><label className="form-label">Password *</label><input type="password" minLength="8" className="form-control" value={receptionistForm.password} onChange={(e) => setReceptionistForm({ ...receptionistForm, password: e.target.value })} required /></div>}</div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowReceptionistModal(false)}>Cancel</button><button className="btn btn-teal text-white" type="submit" style={{ backgroundColor: '#0d9488' }}>Save Receptionist</button></div></form></div></div></div>
       )}
 
       {showDepartmentModal && (
-        <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-success text-white"><h5 className="modal-title fw-bold">{editingDepartment ? 'Edit Department' : 'Add Department'}</h5><button className="btn-close btn-close-white" onClick={() => setShowDepartmentModal(false)}></button></div><form onSubmit={saveDepartment}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Department Name *</label><input className="form-control" value={departmentForm.name} onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })} required /></div><div><label className="form-label">Description</label><textarea className="form-control" rows="3" value={departmentForm.description} onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}></textarea></div></div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowDepartmentModal(false)}>Cancel</button><button className="btn btn-success" type="submit">Save Department</button></div></form></div></div></div>
+        <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-teal text-white" style={{ backgroundColor: '#0d9488' }}><h5 className="modal-title fw-bold text-white">{editingDepartment ? 'Edit Department' : 'Add Department'}</h5><button className="btn-close btn-close-white" onClick={() => setShowDepartmentModal(false)}></button></div><form onSubmit={saveDepartment}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Department Name *</label><input className="form-control" value={departmentForm.name} onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })} required /></div><div><label className="form-label">Description</label><textarea className="form-control" rows="3" value={departmentForm.description} onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}></textarea></div></div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowDepartmentModal(false)}>Cancel</button><button className="btn btn-teal text-white" type="submit" style={{ backgroundColor: '#0d9488' }}>Save Department</button></div></form></div></div></div>
       )}
       </main>
     </div>
@@ -809,7 +822,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
 function ManagementTable({ items, idKey, codeKey, onEdit, onDelete, emptyText }) {
   if (!items.length) return <p className="text-center text-muted py-5 mb-0">{emptyText}</p>;
-  return <div className="table-responsive"><table className="table align-middle"><thead className="table-light"><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th className="text-end">Actions</th></tr></thead><tbody>{items.map((item) => <tr key={item[idKey]}><td><code>{item[codeKey]}</code></td><td className="fw-bold">{item.name}</td><td>{item.email}</td><td>{item.phone || '—'}</td><td className="text-end"><button className="btn btn-outline-primary btn-sm me-2" onClick={() => onEdit(item)}><i className="bi bi-pencil"></i> Edit</button><button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(item)}><i className="bi bi-trash"></i> Delete</button></td></tr>)}</tbody></table></div>;
+  return <div className="table-responsive"><table className="table align-middle"><thead className="table-light"><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th className="text-end">Actions</th></tr></thead><tbody>{items.map((item) => <tr key={item[idKey]}><td><code>{item[codeKey]}</code></td><td className="fw-bold">{item.name}</td><td>{item.email}</td><td>{item.phone || '—'}</td><td className="text-end"><button className="btn btn-outline-teal btn-sm me-2" onClick={() => onEdit(item)}><i className="bi bi-pencil"></i> Edit</button><button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(item)}><i className="bi bi-trash"></i> Delete</button></td></tr>)}</tbody></table></div>;
 }
 
 export default HospitalAdminDashboardPage;
