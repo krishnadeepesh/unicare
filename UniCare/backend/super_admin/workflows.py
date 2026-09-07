@@ -1132,8 +1132,8 @@ def prescriptions(request):
                     else:
                         return JsonResponse({'status': 'success', 'prescriptions': []})
             else:
-                where.append("p.doctor_id = %s AND p.hospital_id = %s")
-                params.extend([user['doctor_id'], user['hospital_id']])
+                # When no patient is specified, do not leak all patients' prescriptions; return empty list
+                return JsonResponse({'status': 'success', 'prescriptions': []})
 
         where_clause = " WHERE " + " AND ".join(where) if where else ""
         sql = f"""

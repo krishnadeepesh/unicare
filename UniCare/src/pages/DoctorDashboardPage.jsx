@@ -1111,6 +1111,84 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                 )}
               </div>
 
+              {/* In-tab Patient Search bar if no patient selected */}
+              {!selectedPatient && (
+                <div className="mb-4">
+                  <div className="p-3 bg-light rounded-3 border mb-3">
+                    <label className="form-label small fw-bold text-muted mb-1">Search Patient to View Consultations</label>
+                    <div className="position-relative">
+                      <div className="input-group">
+                        <span className="input-group-text bg-white border-end-0">
+                          {isSearching ? <span className="spinner-border spinner-border-sm text-teal" role="status"></span> : <i className="bi bi-search text-muted"></i>}
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control border-start-0"
+                          placeholder="Type patient name or Health ID e.g. PTA001..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
+                        />
+                      </div>
+
+                      {showSuggestions && suggestions.length > 0 && (
+                        <div className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 z-3 overflow-hidden">
+                          <div className="p-2 bg-light border-bottom text-muted small fw-bold d-flex justify-content-between">
+                            <span>MATCHING PATIENTS ({displayHospital})</span>
+                            <span>{suggestions.length} Found</span>
+                          </div>
+                          <div className="list-group list-group-flush overflow-auto" style={{ maxHeight: '240px' }}>
+                            {suggestions.map((p) => (
+                              <button
+                                key={p.patient_id}
+                                type="button"
+                                className="list-group-item list-group-item-action p-2.5 d-flex justify-content-between align-items-center"
+                                onClick={() => handleSelectPatient(p)}
+                              >
+                                <div>
+                                  <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                                    <span>{p.name}</span>
+                                    <span className="badge bg-teal-subtle text-teal font-monospace px-2 py-0.5" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                                      {p.patient_uid || p.health_id}
+                                    </span>
+                                  </div>
+                                  <small className="text-muted">
+                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}
+                                  </small>
+                                </div>
+                                <span className="btn btn-sm btn-outline-teal rounded-pill px-3" style={{ borderColor: '#0d9488', color: '#0d9488' }}>
+                                  Select
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {distinctPatients && distinctPatients.length > 0 && (
+                    <div className="mb-4">
+                      <div className="small fw-bold text-muted mb-2"><i className="bi bi-people me-1"></i> Quick Select from Your Patients:</div>
+                      <div className="d-flex flex-wrap gap-2">
+                        {distinctPatients.map((p) => (
+                          <button
+                            key={p.patient_id}
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm rounded-pill px-3 text-start d-flex align-items-center gap-2"
+                            onClick={() => handleSelectPatient(p)}
+                          >
+                            <i className="bi bi-person text-teal" style={{ color: '#0d9488' }}></i>
+                            <span className="fw-bold text-dark">{p.name}</span>
+                            <span className="badge bg-light text-secondary border font-monospace">{p.patient_uid || p.health_id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {selectedPatient ? (
                 <div>
                   <div className="alert alert-info py-2.5 px-3 small mb-4 rounded-3 d-flex justify-content-between align-items-center">
@@ -1118,7 +1196,10 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       Viewing authorized history for: <strong className="text-dark">{selectedPatient.name}</strong> 
                       <span className="badge bg-teal text-white font-monospace ms-2" style={{ backgroundColor: '#0d9488' }}>{selectedPatient.patient_uid || selectedPatient.health_id}</span>
                     </div>
-                    <button className="btn btn-link btn-sm text-secondary p-0" onClick={() => setSelectedPatient(null)}>Clear Selection</button>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-outline-secondary btn-sm px-2 py-0.5 rounded-pill" onClick={() => setSelectedPatient(null)}>Switch Patient</button>
+                      <button className="btn btn-link btn-sm text-secondary p-0" onClick={() => setSelectedPatient(null)}>Clear</button>
+                    </div>
                   </div>
                   <div className="table-responsive">
                     <table className="table table-hover align-middle mb-0">
@@ -1153,12 +1234,9 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-5 text-muted">
+                <div className="text-center py-4 text-muted">
                   <i className="bi bi-folder2-open d-block fs-1 mb-2 text-secondary"></i>
-                  <p className="mb-3">Select a patient from <strong>Patient Search</strong> or <strong>Appointments</strong> to view authorized medical history.</p>
-                  <button className="btn btn-teal text-white rounded-pill px-4" style={{ backgroundColor: '#0d9488' }} onClick={() => setActiveTab('search')}>
-                    Go to Patient Search
-                  </button>
+                  <p className="mb-0">Search or select a patient above to view their consultation history.</p>
                 </div>
               )}
             </div>
@@ -1185,6 +1263,84 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                 )}
               </div>
 
+              {/* In-tab Patient Search bar if no patient selected */}
+              {!selectedPatient && (
+                <div className="mb-4">
+                  <div className="p-3 bg-light rounded-3 border mb-3">
+                    <label className="form-label small fw-bold text-muted mb-1">Search Patient to Manage Prescriptions</label>
+                    <div className="position-relative">
+                      <div className="input-group">
+                        <span className="input-group-text bg-white border-end-0">
+                          {isSearching ? <span className="spinner-border spinner-border-sm text-teal" role="status"></span> : <i className="bi bi-search text-muted"></i>}
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control border-start-0"
+                          placeholder="Type patient name or Health ID e.g. PTA001..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
+                        />
+                      </div>
+
+                      {showSuggestions && suggestions.length > 0 && (
+                        <div className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 z-3 overflow-hidden">
+                          <div className="p-2 bg-light border-bottom text-muted small fw-bold d-flex justify-content-between">
+                            <span>MATCHING PATIENTS ({displayHospital})</span>
+                            <span>{suggestions.length} Found</span>
+                          </div>
+                          <div className="list-group list-group-flush overflow-auto" style={{ maxHeight: '240px' }}>
+                            {suggestions.map((p) => (
+                              <button
+                                key={p.patient_id}
+                                type="button"
+                                className="list-group-item list-group-item-action p-2.5 d-flex justify-content-between align-items-center"
+                                onClick={() => handleSelectPatient(p)}
+                              >
+                                <div>
+                                  <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                                    <span>{p.name}</span>
+                                    <span className="badge bg-teal-subtle text-teal font-monospace px-2 py-0.5" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                                      {p.patient_uid || p.health_id}
+                                    </span>
+                                  </div>
+                                  <small className="text-muted">
+                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}
+                                  </small>
+                                </div>
+                                <span className="btn btn-sm btn-outline-teal rounded-pill px-3" style={{ borderColor: '#0d9488', color: '#0d9488' }}>
+                                  Select
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {distinctPatients && distinctPatients.length > 0 && (
+                    <div className="mb-4">
+                      <div className="small fw-bold text-muted mb-2"><i className="bi bi-people me-1"></i> Quick Select from Your Patients:</div>
+                      <div className="d-flex flex-wrap gap-2">
+                        {distinctPatients.map((p) => (
+                          <button
+                            key={p.patient_id}
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm rounded-pill px-3 text-start d-flex align-items-center gap-2"
+                            onClick={() => handleSelectPatient(p)}
+                          >
+                            <i className="bi bi-person text-teal" style={{ color: '#0d9488' }}></i>
+                            <span className="fw-bold text-dark">{p.name}</span>
+                            <span className="badge bg-light text-secondary border font-monospace">{p.patient_uid || p.health_id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {selectedPatient ? (
                 <div>
                   <div className="alert alert-info py-2.5 px-3 small mb-4 rounded-3 d-flex justify-content-between align-items-center">
@@ -1192,13 +1348,21 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       Prescriptions for: <strong className="text-dark">{selectedPatient.name}</strong> 
                       <span className="badge bg-teal text-white font-monospace ms-2" style={{ backgroundColor: '#0d9488' }}>{selectedPatient.patient_uid || selectedPatient.health_id}</span>
                     </div>
-                    <button
-                      className="btn btn-teal btn-sm text-white rounded-pill px-3"
-                      style={{ backgroundColor: '#0d9488' }}
-                      onClick={() => setShowPrescriptionModal(true)}
-                    >
-                      + Write Prescription
-                    </button>
+                    <div className="d-flex align-items-center gap-2">
+                      <button
+                        className="btn btn-outline-secondary btn-sm px-2 py-0.5 rounded-pill"
+                        onClick={() => setSelectedPatient(null)}
+                      >
+                        Switch Patient
+                      </button>
+                      <button
+                        className="btn btn-teal btn-sm text-white rounded-pill px-3"
+                        style={{ backgroundColor: '#0d9488' }}
+                        onClick={() => setShowPrescriptionModal(true)}
+                      >
+                        + Write Prescription
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="table-responsive">
@@ -1244,12 +1408,9 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-5 text-muted">
+                <div className="text-center py-4 text-muted">
                   <i className="bi bi-capsule d-block fs-1 mb-2 text-secondary"></i>
-                  <p className="mb-3">Select a patient from <strong>Appointments</strong> or <strong>Patient Search</strong> to write or view prescriptions.</p>
-                  <button className="btn btn-teal text-white rounded-pill px-4" style={{ backgroundColor: '#0d9488' }} onClick={() => setActiveTab('search')}>
-                    Select Patient
-                  </button>
+                  <p className="mb-0">Search or select a patient above to view or write digital prescriptions.</p>
                 </div>
               )}
             </div>
