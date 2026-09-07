@@ -37,6 +37,9 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   const [bookingTime, setBookingTime] = useState('09:00');
   const [bookingReason, setBookingReason] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [modalPatientSearch, setModalPatientSearch] = useState('');
+  const [modalPatientSuggestions, setModalPatientSuggestions] = useState([]);
+  const [isSearchingModalPatient, setIsSearchingModalPatient] = useState(false);
 
   // Doctor Visit Entry
   const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '' });
@@ -188,6 +191,31 @@ const RECOVERY_QUESTIONS = [
     return () => clearTimeout(timer);
   }, [searchQuery, isDoctor]);
 
+  // Modal Patient Search API Trigger (when booking appointment without preselected patient)
+  useEffect(() => {
+    if (!modalPatientSearch.trim() || modalPatientSearch.trim().length < 2) {
+      setModalPatientSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingModalPatient(true);
+      try {
+        const res = await fetch(`${API}/receptionist/patient-suggestions/?query=${encodeURIComponent(modalPatientSearch.trim())}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setModalPatientSuggestions(data.patients || []);
+        }
+      } catch (err) {
+        console.error("Modal suggestions error:", err);
+      } finally {
+        setIsSearchingModalPatient(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [modalPatientSearch]);
+
   // Handle Switch Hospital for Doctor
   const handleSwitchHospital = async (targetHid) => {
     try {
@@ -246,12 +274,29 @@ const RECOVERY_QUESTIONS = [
       const res = await fetch(`${API}/appointments/options/?hospital_id=${activeHid}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setBookingDepartments(data.departments || []);
-        setBookingDoctors(data.doctors || []);
-        if (data.departments?.length) setSelectedDeptId(data.departments[0].department_id);
+        const depts = data.departments || [];
+        const docs = data.doctors || [];
+        setBookingDepartments(depts);
+        setBookingDoctors(docs);
+        if (depts.length) {
+          setSelectedDeptId(depts[0].department_id);
+          const deptDocs = docs.filter(d => String(d.department_id) === String(depts[0].department_id));
+          setSelectedDocId(deptDocs.length ? deptDocs[0].doctor_id : (docs[0]?.doctor_id || ''));
+        }
       }
     } catch (err) {
       console.error("Error loading booking options:", err);
+    }
+  };
+
+  // Handle department change in booking modal and reset doctor
+  const handleDepartmentChange = (deptId) => {
+    setSelectedDeptId(deptId);
+    const availableDocs = bookingDoctors.filter(d => !deptId || String(d.department_id) === String(deptId));
+    if (availableDocs.length > 0) {
+      setSelectedDocId(availableDocs[0].doctor_id);
+    } else {
+      setSelectedDocId('');
     }
   };
 
@@ -260,10 +305,35 @@ const RECOVERY_QUESTIONS = [
     doc => !selectedDeptId || String(doc.department_id) === String(selectedDeptId)
   );
 
+  // Update Appointment Status (e.g., Check In / Confirm by Receptionist)
+  const handleUpdateApptStatus = async (appointmentId, status) => {
+    try {
+      const res = await fetch(`${API}/appointments/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ appointment_id: appointmentId, status })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: data.message || `Appointment marked as ${status}.`, type: 'success' });
+        loadData();
+      } else {
+        setMessage({ text: data.message || 'Failed to update status.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error updating appointment status.', type: 'danger' });
+    }
+  };
+
   // Submit Appointment Booking from Receptionist Overlay
   const handleConfirmBooking = async (e) => {
     e.preventDefault();
-    if (!selectedPatient || !selectedDocId || !bookingDate || !bookingTime) {
+    if (!selectedPatient) {
+      setMessage({ text: 'Please search and select a patient first.', type: 'danger' });
+      return;
+    }
+    if (!selectedDocId || !bookingDate || !bookingTime) {
       setMessage({ text: 'Please fill in Doctor, Date, and Time.', type: 'danger' });
       return;
     }
@@ -289,6 +359,7 @@ const RECOVERY_QUESTIONS = [
         setMessage({ text: `Appointment booked successfully for ${selectedPatient.name}!`, type: 'success' });
         setShowReceptionistOverlay(false);
         setBookingReason('');
+        setModalPatientSearch('');
         loadData();
       } else {
         setMessage({ text: data.message || 'Could not book appointment.', type: 'danger' });
@@ -332,7 +403,13 @@ const RECOVERY_QUESTIONS = [
         credentials: 'include',
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        data = { message: res.statusText || 'Server responded with an unexpected error.' };
+      }
+
       if (res.ok) {
         const p = data.patient;
         setRegisterResult(p);
@@ -346,10 +423,11 @@ const RECOVERY_QUESTIONS = [
         });
         loadData();
       } else {
-        setMessage({ text: data.message || 'Failed to register patient.', type: 'danger' });
+        setMessage({ text: data.message || `Failed to register patient (Error ${res.status}).`, type: 'danger' });
       }
     } catch (err) {
-      setMessage({ text: 'Failed to connect to registration service. Please check your session.', type: 'danger' });
+      console.error('Patient registration error:', err);
+      setMessage({ text: err.message || 'Failed to connect to registration service. Please check your network.', type: 'danger' });
     }
   };
 
@@ -1123,7 +1201,6 @@ const RECOVERY_QUESTIONS = [
                   style={{ backgroundColor: '#0d9488' }}
                   onClick={() => {
                     loadBookingOptions();
-                    if (distinctPatients?.length) setSelectedPatient(distinctPatients[0]);
                     setShowReceptionistOverlay(true);
                   }}
                 >
@@ -1233,12 +1310,35 @@ const RECOVERY_QUESTIONS = [
                               </span>
                             </td>
                             <td className="text-end pe-4">
-                              <button
-                                className="btn btn-sm btn-outline-teal rounded-pill"
-                                onClick={() => handleSelectPatient({ patient_id: a.patient_id, health_id: a.health_id, name: a.patient })}
-                              >
-                                Manage
-                              </button>
+                              <div className="d-flex justify-content-end align-items-center gap-1">
+                                {a.status === 'Pending' && !isDoctor && (
+                                  <button
+                                    className="btn btn-sm btn-teal text-white rounded-pill px-3"
+                                    style={{ backgroundColor: '#0d9488' }}
+                                    onClick={() => handleUpdateApptStatus(a.appointment_id, 'Confirmed')}
+                                    title="Check In & Confirm Patient Arrival"
+                                  >
+                                    <i className="bi bi-check2 me-1"></i> Check In
+                                  </button>
+                                )}
+                                <button
+                                  className="btn btn-sm btn-outline-teal rounded-pill"
+                                  onClick={() => handleSelectPatient({
+                                    patient_id: a.patient_id,
+                                    health_id: a.health_id,
+                                    patient_uid: a.patient_uid || a.health_id,
+                                    name: a.patient,
+                                    phone: a.phone,
+                                    gender: a.gender,
+                                    date_of_birth: a.date_of_birth,
+                                    blood_group: a.blood_group,
+                                    address: a.address,
+                                    emergency_contact: a.emergency_contact
+                                  })}
+                                >
+                                  Manage
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1299,12 +1399,34 @@ const RECOVERY_QUESTIONS = [
                             <div><i className="bi bi-clock me-1"></i>Slot: {a.date} at {a.time}</div>
                           </div>
                         </div>
-                        <button
-                          className="btn btn-outline-teal btn-sm w-100 rounded-pill"
-                          onClick={() => handleSelectPatient({ patient_id: a.patient_id, health_id: a.health_id, name: a.patient })}
-                        >
-                          Check In / Update
-                        </button>
+                        <div className="d-flex gap-2">
+                          {a.status === 'Pending' && !isDoctor && (
+                            <button
+                              className="btn btn-teal btn-sm rounded-pill w-100 fw-bold text-white shadow-sm"
+                              style={{ backgroundColor: '#0d9488' }}
+                              onClick={() => handleUpdateApptStatus(a.appointment_id, 'Confirmed')}
+                            >
+                              <i className="bi bi-check2-circle me-1"></i> Check In Patient
+                            </button>
+                          )}
+                          <button
+                            className="btn btn-outline-teal btn-sm w-100 rounded-pill"
+                            onClick={() => handleSelectPatient({
+                              patient_id: a.patient_id,
+                              health_id: a.health_id,
+                              patient_uid: a.patient_uid || a.health_id,
+                              name: a.patient,
+                              phone: a.phone,
+                              gender: a.gender,
+                              date_of_birth: a.date_of_birth,
+                              blood_group: a.blood_group,
+                              address: a.address,
+                              emergency_contact: a.emergency_contact
+                            })}
+                          >
+                            {a.status === 'Pending' ? 'Details' : 'Manage Visit'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1438,7 +1560,7 @@ const RECOVERY_QUESTIONS = [
       </div>
 
       {/* RECEPTIONIST APPOINTMENT CONFIRMATION OVERLAY MODAL */}
-      {showReceptionistOverlay && selectedPatient && (
+      {showReceptionistOverlay && (
         <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content rounded-4 border-0 shadow-lg">
@@ -1450,53 +1572,133 @@ const RECOVERY_QUESTIONS = [
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => setShowReceptionistOverlay(false)}
+                  onClick={() => {
+                    setShowReceptionistOverlay(false);
+                    setModalPatientSearch('');
+                  }}
                 ></button>
               </div>
 
               <div className="modal-body p-4">
-                {/* Complete Registration Details (ONLY for Receptionist) */}
-                <div className="p-3 bg-light rounded-3 border mb-4">
-                  <div className="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
-                    <div>
-                      <h4 className="fw-bold text-dark mb-1">{selectedPatient.name}</h4>
-                      <span className="badge bg-warning text-dark fs-6 font-monospace">
-                        Global Health ID: {selectedPatient.patient_uid || selectedPatient.health_id}
-                      </span>
+                {/* Patient Selection Card */}
+                {selectedPatient ? (
+                  <div className="p-3 bg-light rounded-3 border mb-4">
+                    <div className="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
+                      <div>
+                        <h4 className="fw-bold text-dark mb-1">{selectedPatient.name}</h4>
+                        <span className="badge bg-warning text-dark fs-6 font-monospace">
+                          Global Health ID: {selectedPatient.patient_uid || selectedPatient.health_id}
+                        </span>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="badge bg-secondary fs-6">{selectedPatient.gender || 'Patient'}</span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary rounded-pill"
+                          onClick={() => setSelectedPatient(null)}
+                        >
+                          Change Patient
+                        </button>
+                      </div>
                     </div>
-                    <span className="badge bg-secondary fs-6">{selectedPatient.gender || 'Patient'}</span>
-                  </div>
 
-                  <div className="row g-3 text-start small">
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Phone Number</span>
-                      <strong className="text-dark">{selectedPatient.phone || 'N/A'}</strong>
-                    </div>
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Email Address</span>
-                      <strong className="text-dark">{selectedPatient.email || 'N/A'}</strong>
-                    </div>
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Date of Birth</span>
-                      <strong className="text-dark">{selectedPatient.date_of_birth || 'N/A'}</strong>
-                    </div>
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Blood Group</span>
-                      <strong className="text-dark">{selectedPatient.blood_group || 'N/A'}</strong>
-                    </div>
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Emergency Contact</span>
-                      <strong className="text-dark">{selectedPatient.emergency_contact || 'N/A'}</strong>
-                    </div>
-                    <div className="col-md-4">
-                      <span className="text-muted d-block">Residential Address</span>
-                      <strong className="text-dark">{selectedPatient.address || 'N/A'}</strong>
+                    <div className="row g-3 text-start small">
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Phone Number</span>
+                        <strong className="text-dark">{selectedPatient.phone || 'N/A'}</strong>
+                      </div>
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Email Address</span>
+                        <strong className="text-dark">{selectedPatient.email || 'N/A'}</strong>
+                      </div>
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Date of Birth</span>
+                        <strong className="text-dark">{selectedPatient.date_of_birth || 'N/A'}</strong>
+                      </div>
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Blood Group</span>
+                        <strong className="text-dark">{selectedPatient.blood_group || 'N/A'}</strong>
+                      </div>
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Emergency Contact</span>
+                        <strong className="text-dark">{selectedPatient.emergency_contact || 'N/A'}</strong>
+                      </div>
+                      <div className="col-md-4">
+                        <span className="text-muted d-block">Residential Address</span>
+                        <strong className="text-dark">{selectedPatient.address || 'N/A'}</strong>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 bg-light rounded-3 border mb-4">
+                    <h6 className="fw-bold text-dark mb-2">
+                      <i className="bi bi-person-search me-2 text-teal" style={{ color: '#0d9488' }}></i>
+                      Select Patient for Appointment
+                    </h6>
+                    <p className="text-muted small mb-3">
+                      Search patient by Name, Phone number, or Global Health ID (e.g. PTA001).
+                    </p>
+                    <div className="input-group mb-2">
+                      <span className="input-group-text bg-white"><i className="bi bi-search text-muted"></i></span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Type patient name, phone, or Global Health ID..."
+                        value={modalPatientSearch}
+                        onChange={(e) => setModalPatientSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    {isSearchingModalPatient && (
+                      <small className="text-muted d-block mb-2">
+                        <i className="bi bi-arrow-repeat spin me-1"></i> Searching UniCare patients...
+                      </small>
+                    )}
+                    {modalPatientSuggestions.length > 0 && (
+                      <div className="list-group mt-2 border rounded-3 overflow-hidden shadow-sm" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                        {modalPatientSuggestions.map(p => (
+                          <button
+                            key={p.patient_id}
+                            type="button"
+                            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2"
+                            onClick={() => {
+                              setSelectedPatient(p);
+                              setModalPatientSearch('');
+                              setModalPatientSuggestions([]);
+                            }}
+                          >
+                            <div>
+                              <strong className="text-dark">{p.name}</strong>
+                              <small className="text-muted d-block">
+                                <span className="font-monospace text-teal me-2" style={{ color: '#0d9488' }}>{p.patient_uid || p.health_id}</span>
+                                {p.phone && <span>&bull; {p.phone}</span>}
+                              </small>
+                            </div>
+                            <span className="badge bg-teal text-white rounded-pill px-3" style={{ backgroundColor: '#0d9488' }}>Select</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {modalPatientSearch.trim().length >= 2 && !isSearchingModalPatient && modalPatientSuggestions.length === 0 && (
+                      <div className="alert alert-light border small text-muted mt-2 mb-0 py-2">
+                        No registered patient found for "{modalPatientSearch}".{' '}
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 fw-bold"
+                          onClick={() => {
+                            setShowReceptionistOverlay(false);
+                            setActiveTab('registration');
+                          }}
+                        >
+                          Register new patient &rarr;
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Appointment Booking Form Flow */}
-                <h5 className="fw-bold text-dark mb-3">Confirm Appointment Booking Details</h5>
+                <h5 className="fw-bold text-dark mb-3">Appointment Booking Details</h5>
 
                 <form onSubmit={handleConfirmBooking}>
                   <div className="row g-3 mb-3">
@@ -1506,7 +1708,7 @@ const RECOVERY_QUESTIONS = [
                         className="form-select"
                         required
                         value={selectedDeptId}
-                        onChange={(e) => setSelectedDeptId(e.target.value)}
+                        onChange={(e) => handleDepartmentChange(e.target.value)}
                       >
                         <option value="">-- Select Department --</option>
                         {bookingDepartments.map(d => (
@@ -1535,7 +1737,7 @@ const RECOVERY_QUESTIONS = [
                     </div>
                   </div>
 
-                  <div className="row g-3 mb-4">
+                  <div className="row g-3 mb-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold small text-muted">Step 3: Appointment Date *</label>
                       <input
@@ -1564,11 +1766,25 @@ const RECOVERY_QUESTIONS = [
                     </div>
                   </div>
 
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold small text-muted">Reason for Consultation (Optional)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. General check-up, headache, follow-up"
+                      value={bookingReason}
+                      onChange={(e) => setBookingReason(e.target.value)}
+                    />
+                  </div>
+
                   <div className="modal-footer border-0 p-0 pt-3">
                     <button
                       type="button"
                       className="btn btn-secondary rounded-pill px-4"
-                      onClick={() => setShowReceptionistOverlay(false)}
+                      onClick={() => {
+                        setShowReceptionistOverlay(false);
+                        setModalPatientSearch('');
+                      }}
                     >
                       Cancel
                     </button>
@@ -1576,7 +1792,7 @@ const RECOVERY_QUESTIONS = [
                       type="submit"
                       className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
                       style={{ backgroundColor: '#0d9488' }}
-                      disabled={bookingSubmitting}
+                      disabled={bookingSubmitting || !selectedPatient}
                     >
                       {bookingSubmitting ? 'Booking...' : 'Confirm & Book Appointment'}
                     </button>

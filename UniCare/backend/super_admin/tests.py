@@ -38,6 +38,14 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
                 hospital_is_active TINYINT(1) DEFAULT 1,
                 hospital_created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )""")
+            cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_department (
+                department_id INT AUTO_INCREMENT PRIMARY KEY,
+                hospital_id INT NOT NULL,
+                department_name VARCHAR(100) NOT NULL,
+                department_description TEXT NULL,
+                department_is_active TINYINT(1) DEFAULT 1,
+                department_created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )""")
             cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_doctor (
                 doctor_id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -322,5 +330,74 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
         self.assertEqual(p_reports.status_code, 200)
         self.assertEqual(len(p_reports.json()['reports']), 1)
         self.assertEqual(p_reports.json()['reports'][0]['report_title'], 'Complete Blood Count (CBC)')
+
+    def test_receptionist_appointment_workflow(self):
+        # 1. Create receptionist user
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)
+                VALUES (9000, 3, 'Receptionist Test', 'receptionist_temp@test.com', '9876543212', %s, 1, 0)
+            """, [make_password('TempPass123!')])
+
+        # 2. Receptionist login
+        login_res = self.client.post(
+            '/api/super-admin/auth/login/',
+            data=json.dumps({'identifier': 'receptionist_temp@test.com', 'password': 'TempPass123!'}),
+            content_type='application/json'
+        )
+        self.assertEqual(login_res.status_code, 200)
+
+        # 3. Get doctor_id and patient_id
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM tbl_doctor WHERE user_id=%s", [self.doctor_user_id])
+            doc_id = cursor.fetchone()[0]
+            cursor.execute("SELECT patient_id FROM tbl_patient WHERE user_id=%s", [self.patient_user_id])
+            pat_id = cursor.fetchone()[0]
+
+        # 4. Receptionist books appointment
+        book_res = self.client.post(
+            '/api/super-admin/appointments/',
+            data=json.dumps({
+                'patient_id': pat_id,
+                'doctor_id': doc_id,
+                'hospital_id': 9000,
+                'appointment_date': '2026-09-25',
+                'appointment_time': '10:00',
+                'reason': 'Front desk consultation test'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(book_res.status_code, 200)
+        self.assertEqual(book_res.json()['status'], 'success')
+
+        # 5. Receptionist queries appointments - verify patient_name and health_id are present
+        list_res = self.client.get('/api/super-admin/appointments/')
+        self.assertEqual(list_res.status_code, 200)
+        l_data = list_res.json()
+        self.assertEqual(l_data['status'], 'success')
+        self.assertTrue(len(l_data['appointments']) >= 1)
+        target_appt = next((a for a in l_data['appointments'] if a['date'] == '2026-09-25'), None)
+        self.assertIsNotNone(target_appt)
+        self.assertEqual(target_appt['patient'], 'Patient Temp Test')
+        self.assertEqual(target_appt['health_id'], 'PTT001')
+        self.assertEqual(target_appt['status'], 'Pending')
+
+        # 6. Receptionist checks in patient (status PATCH)
+        patch_res = self.client.patch(
+            '/api/super-admin/appointments/',
+            data=json.dumps({
+                'appointment_id': target_appt['appointment_id'],
+                'status': 'Confirmed'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        self.assertEqual(patch_res.json()['status'], 'success')
+
+        # 7. Verify status is Confirmed
+        list_res_after = self.client.get('/api/super-admin/appointments/')
+        updated_appt = next(a for a in list_res_after.json()['appointments'] if a['appointment_id'] == target_appt['appointment_id'])
+        self.assertEqual(updated_appt['status'], 'Confirmed')
+
 
 

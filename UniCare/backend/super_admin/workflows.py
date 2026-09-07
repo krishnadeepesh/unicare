@@ -577,7 +577,16 @@ def register_patient(request):
         # Generate unique patient_uid: format PT{LETTER}{3-DIGITS}, e.g. PTA001
         cursor.execute("SELECT patient_uid FROM tbl_patient ORDER BY patient_id DESC LIMIT 1")
         last_row = cursor.fetchone()
-        patient_uid = _next_patient_uid(last_row[0] if last_row else None, cursor)
+        last_uid = last_row[0] if last_row else None
+        if not last_uid:
+            try:
+                cursor.execute("SELECT health_id FROM tbl_patient_profile ORDER BY patient_id DESC LIMIT 1")
+                prof_row = cursor.fetchone()
+                if prof_row:
+                    last_uid = prof_row[0]
+            except Exception:
+                pass
+        patient_uid = _next_patient_uid(last_uid, cursor)
 
         # Insert into tbl_user
         cursor.execute(
@@ -643,8 +652,15 @@ def _next_patient_uid(last_uid, cursor):
             letter_idx = (letter_idx + 1) % 26
         candidate = f"PT{LETTERS[letter_idx]}{number:03d}"
         cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_uid=%s LIMIT 1", [candidate])
-        if not cursor.fetchone():
-            return candidate
+        if cursor.fetchone():
+            continue
+        try:
+            cursor.execute("SELECT 1 FROM tbl_patient_profile WHERE health_id=%s LIMIT 1", [candidate])
+            if cursor.fetchone():
+                continue
+        except Exception:
+            pass
+        return candidate
     raise RuntimeError("Could not generate a unique patient_uid — space exhausted.")
 
 
@@ -888,14 +904,18 @@ def appointments(request):
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.reason, a.appointment_status,"
-                " h.hospital_name, dep.department_name, du.user_name, p.health_id, pu.user_name, a.patient_id"
+                " h.hospital_name, dep.department_name, du.user_name,"
+                " COALESCE(p.patient_uid, pp.health_id, CONCAT('PTA', LPAD(a.patient_id, 3, '0'))) AS health_id,"
+                " COALESCE(p.patient_name, pu.user_name, 'Patient') AS patient_name,"
+                " a.patient_id, p.patient_phone, p.patient_gender, p.patient_dob, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
                 " FROM tbl_appointment a"
                 " LEFT JOIN tbl_hospital h ON h.hospital_id=a.hospital_id"
                 " LEFT JOIN tbl_department dep ON dep.department_id=a.department_id"
                 " JOIN tbl_doctor dr ON dr.doctor_id=a.doctor_id"
                 " JOIN tbl_user du ON du.user_id=dr.user_id"
-                " JOIN tbl_patient_profile p ON p.patient_id=a.patient_id"
-                " JOIN tbl_user pu ON pu.user_id=p.user_id"
+                " LEFT JOIN tbl_patient p ON p.patient_id=a.patient_id"
+                " LEFT JOIN tbl_patient_profile pp ON pp.patient_id=a.patient_id"
+                " LEFT JOIN tbl_user pu ON pu.user_id=pp.user_id"
                 " WHERE " + ' AND '.join(filters) +
                 " ORDER BY a.appointment_date DESC, a.appointment_time DESC",
                 params
@@ -909,11 +929,51 @@ def appointments(request):
                 'appointment_uid': f"APT{r[0]:03d}",
                 'date': str(r[1]), 'time': r[2],
                 'reason': r[3] or '', 'status': r[4], 'hospital': r[5] or '',
-                'department': r[6] or '', 'doctor': r[7], 'health_id': r[8], 'patient': r[9],
+                'department': r[6] or '', 'doctor': r[7],
+                'health_id': r[8],
+                'patient_uid': r[8],
+                'patient': r[9],
+                'patient_name': r[9],
                 'patient_id': r[10],
+                'phone': r[11] or '',
+                'gender': r[12] or '',
+                'date_of_birth': str(r[13]) if r[13] else '',
+                'blood_group': r[14] or '',
+                'address': r[15] or '',
+                'emergency_contact': r[16] or '',
             }
             for r in rows
         ]})
+
+    if request.method == 'PATCH':
+        data = payload(request)
+        appointment_id = data.get('appointment_id')
+        new_status = data.get('status')
+        if not appointment_id or not new_status:
+            return JsonResponse({'status': 'error', 'message': 'appointment_id and status are required.'}, status=400)
+        if new_status not in ('Pending', 'Confirmed', 'Completed', 'Cancelled'):
+            return JsonResponse({'status': 'error', 'message': 'Invalid appointment status.'}, status=400)
+
+        with connection.cursor() as cursor:
+            # Verify authorization
+            if user['role'] == 'receptionist':
+                cursor.execute(
+                    "UPDATE tbl_appointment SET appointment_status=%s WHERE appointment_id=%s AND hospital_id=%s",
+                    [new_status, appointment_id, user['hospital_id']]
+                )
+            elif user['role'] == 'doctor':
+                cursor.execute(
+                    "UPDATE tbl_appointment SET appointment_status=%s WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
+                    [new_status, appointment_id, user['doctor_id'], user['hospital_id']]
+                )
+            else:
+                cursor.execute(
+                    "UPDATE tbl_appointment SET appointment_status=%s WHERE appointment_id=%s AND patient_id=%s",
+                    [new_status, appointment_id, user['patient_id']]
+                )
+            if cursor.rowcount == 0:
+                return JsonResponse({'status': 'error', 'message': 'Appointment not found or unauthorized.'}, status=404)
+        return JsonResponse({'status': 'success', 'message': f'Appointment marked as {new_status}.'})
 
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)

@@ -143,6 +143,10 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   // Handle Add Doctor directly into MySQL
   const handleAddDoctor = async (e) => {
     e.preventDefault();
+    if (!docDept || !docDept.trim()) {
+      showToast('Please select a department for the doctor.', 'danger');
+      return;
+    }
     if (!docName.trim() || !docEmail.trim()) return;
     if (!validatePhone(docPhone)) {
       showToast('Enter a valid 10-digit phone number for the doctor.', 'danger');
@@ -180,7 +184,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         setDocName('');
         setDocEmail('');
         setDocPhone('');
-        setDocDept(departmentsList[0]?.name || '');
+        setDocDept('');
         setDocLicense('');
         setDocExperience('');
         setDocPassword('');
@@ -199,8 +203,12 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const openDoctorModal = (doctor = null) => {
     setEditingDoctor(doctor);
-    setDocName(doctor?.name || ''); setDocEmail(doctor?.email || ''); setDocPhone(doctor?.phone || '');
-    setDocDept(doctor?.department || doctor?.specialization || departmentsList[0]?.name || ''); setDocLicense(doctor?.license || ''); setDocExperience(doctor?.experience || '');
+    setDocName(doctor?.name || '');
+    setDocEmail(doctor?.email || '');
+    setDocPhone(doctor?.phone || '');
+    setDocDept(doctor?.department || doctor?.specialization || '');
+    setDocLicense(doctor?.license || '');
+    setDocExperience(doctor?.experience || '');
     setDocPassword('');
     setShowAddDoctorModal(true);
   };
@@ -714,6 +722,33 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
               <form onSubmit={handleAddDoctor}>
                 <div className="modal-body p-4">
 
+                  {/* 1. Department Field First */}
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">
+                      Department <span className="text-danger">*</span>
+                    </label>
+                    {departmentsList.length === 0 ? (
+                      <div className="alert alert-warning p-2 mb-0 small">
+                        No departments found. Please add departments first.
+                      </div>
+                    ) : (
+                      <select
+                        className="form-select"
+                        value={docDept}
+                        onChange={(e) => setDocDept(e.target.value)}
+                        required
+                      >
+                        <option value="">-- Select Department --</option>
+                        {departmentsList.filter(d => d.is_active !== false).map(dept => (
+                          <option key={dept.department_id || dept.id || dept.name} value={dept.name}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* 2. Doctor Full Name */}
                   <div className="mb-3">
                     <label className="form-label fw-semibold small">Doctor Full Name <span className="text-danger">*</span></label>
                     <input 
@@ -722,8 +757,11 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       required
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
+                      placeholder="e.g. Dr. Sarah Jenkins"
                     />
                   </div>
+
+                  {/* 3. Email Address */}
                   <div className="mb-3">
                     <label className="form-label fw-semibold small">Email Address <span className="text-danger">*</span></label>
                     <input 
@@ -732,8 +770,11 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       required
                       value={docEmail}
                       onChange={(e) => setDocEmail(e.target.value)}
+                      placeholder="doctor@unicare.com"
                     />
                   </div>
+
+                  {/* 4. Phone Number & License Number */}
                   <div className="row g-3 mb-3">
                     <div className="col-6">
                       <label className="form-label fw-semibold small">Phone Number</label>
@@ -745,45 +786,48 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         pattern="[0-9+()\-\s]{10,15}"
                         title="Enter a valid 10-digit phone number"
                         maxLength="15"
+                        placeholder="10-digit phone"
                       />
                     </div>
                     <div className="col-6">
-                      <label className="form-label fw-semibold small">Department</label>
-                      {departmentsList.length === 0 ? (
-                        <div className="alert alert-warning p-2 mb-0 small">
-                          No departments found. Please add departments first.
-                        </div>
-                      ) : (
-                        <select
-                          className="form-select"
-                          value={docDept}
-                          onChange={(e) => setDocDept(e.target.value)}
-                          required
-                        >
-                          <option value="">-- Select Department --</option>
-                          {departmentsList.filter(d => d.is_active !== false).map(dept => (
-                            <option key={dept.department_id} value={dept.name}>
-                              {dept.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                      <label className="form-label fw-semibold small">Medical License Number</label>
+                      <input 
+                        type="text" 
+                        className="form-control"
+                        value={docLicense}
+                        onChange={(e) => setDocLicense(e.target.value)}
+                        placeholder="e.g. MED-78291"
+                      />
                     </div>
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold small">Medical License Number</label>
-                    <input 
-                      type="text" 
-                      className="form-control"
-                      value={docLicense}
-                      onChange={(e) => setDocLicense(e.target.value)}
-                    />
-                  </div>
+
+                  {/* 5. Experience */}
                   <div className="mb-3">
                     <label className="form-label fw-semibold small">Experience</label>
-                    <input type="text" className="form-control" value={docExperience} onChange={(e) => setDocExperience(e.target.value)} />
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={docExperience} 
+                      onChange={(e) => setDocExperience(e.target.value)} 
+                      placeholder="e.g. 8 years"
+                    />
                   </div>
-                  {!editingDoctor && <div className="mb-3"><label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label><input type="password" className="form-control" value={docPassword} onChange={(e) => setDocPassword(e.target.value)} minLength="8" required /></div>}
+
+                  {/* 6. Password (for new doctor) */}
+                  {!editingDoctor && (
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label>
+                      <input 
+                        type="password" 
+                        className="form-control" 
+                        value={docPassword} 
+                        onChange={(e) => setDocPassword(e.target.value)} 
+                        minLength="8" 
+                        required 
+                        placeholder="Minimum 8 characters"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="modal-footer border-0 p-4 pt-0">
                   <button 

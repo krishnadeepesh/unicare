@@ -153,7 +153,6 @@ export default function RegisterPage({ setView }) {
                     <input 
                       type="text" 
                       className="form-control py-2" 
-                      placeholder="e.g. Dr. John Doe"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required 
@@ -165,7 +164,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="email"
                       className="form-control py-2"
-                      placeholder="admin@hospital.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -177,7 +175,6 @@ export default function RegisterPage({ setView }) {
                     <input
                       type="tel"
                       className="form-control py-2"
-                      placeholder="9876543210"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       pattern="[0-9+()\-\s]{10,20}"

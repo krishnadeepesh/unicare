@@ -1579,7 +1579,7 @@ def get_departments(request):
     if error:
         return error
     with connection.cursor() as cursor:
-        cursor.execute("SELECT department_id, hospital_id, department_name, department_description, department_is_active FROM tbl_department WHERE hospital_id=%s ORDER BY department_id DESC", [hospital_id])
+        cursor.execute("SELECT department_id, hospital_id, department_name, department_description, department_is_active FROM tbl_department WHERE hospital_id=%s ORDER BY department_name ASC", [hospital_id])
         rows = cursor.fetchall()
     return JsonResponse({
         'status': 'success',
