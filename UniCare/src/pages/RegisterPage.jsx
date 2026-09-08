@@ -19,10 +19,67 @@ export default function RegisterPage({ setView }) {
   const [recoveryQuestion, setRecoveryQuestion] = useState('');
   const [recoveryAnswer, setRecoveryAnswer] = useState('');
 
+  // Touched state for live inline validation
+  const [touched, setTouched] = useState({});
+
   // Form State
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const markTouched = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  // Live Field Validations
+  const getErrors = () => {
+    const errs = {};
+    if (!fullName.trim()) {
+      errs.fullName = 'Full name is required.';
+    } else if (fullName.trim().length < 3) {
+      errs.fullName = 'Name must be at least 3 characters.';
+    }
+
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    if (!email.trim()) {
+      errs.email = 'Email address is required.';
+    } else if (!emailRegex.test(email.trim())) {
+      errs.email = 'Enter a valid email address (e.g. name@domain.com).';
+    }
+
+    const phoneDigits = phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!phone.trim()) {
+      errs.phone = 'Phone number is required.';
+    } else if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      errs.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6-9).';
+    }
+
+    if (!password) {
+      errs.password = 'Password is required.';
+    } else if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
+      errs.password = 'Min 8 characters with at least one letter and one number.';
+    }
+
+    if (!confirmPassword) {
+      errs.confirmPassword = 'Confirm your password.';
+    } else if (password && confirmPassword !== password) {
+      errs.confirmPassword = 'Passwords do not match.';
+    }
+
+    if (!recoveryQuestion) {
+      errs.recoveryQuestion = 'Please choose a recovery question.';
+    }
+
+    if (!recoveryAnswer.trim()) {
+      errs.recoveryAnswer = 'Recovery answer is required.';
+    } else if (recoveryAnswer.trim().length < 2) {
+      errs.recoveryAnswer = 'Answer is too short.';
+    }
+
+    return errs;
+  };
+
+  const fieldErrors = getErrors();
 
 
   const handleRegister = async (e) => {
@@ -30,29 +87,20 @@ export default function RegisterPage({ setView }) {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
-      setErrorMsg('Password must be at least 8 characters and include a letter and number.');
-      return;
-    }
+    // Mark all fields touched
+    setTouched({
+      fullName: true,
+      email: true,
+      phone: true,
+      password: true,
+      confirmPassword: true,
+      recoveryQuestion: true,
+      recoveryAnswer: true,
+    });
 
-    const phoneDigits = phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
-    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
-      setErrorMsg('Enter a valid 10-digit phone number.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMsg('Passwords do not match.');
-      return;
-    }
-
-    if (!recoveryQuestion) {
-      setErrorMsg('Please select a recovery question.');
-      return;
-    }
-
-    if (!recoveryAnswer.trim()) {
-      setErrorMsg('Please enter an answer to your recovery question.');
+    const errs = getErrors();
+    if (Object.keys(errs).length > 0) {
+      setErrorMsg('Please correct the highlighted errors before submitting.');
       return;
     }
 
@@ -152,62 +200,83 @@ export default function RegisterPage({ setView }) {
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Full Name *</label>
                     <input 
                       type="text" 
-                      className="form-control py-2" 
+                      className={`form-control py-2 ${touched.fullName ? (fieldErrors.fullName ? 'is-invalid' : 'is-valid') : ''}`}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
+                      onBlur={() => markTouched('fullName')}
+                      placeholder="e.g. Dr. John Doe"
                       required 
                     />
+                    {touched.fullName && fieldErrors.fullName && (
+                      <div className="invalid-feedback small">{fieldErrors.fullName}</div>
+                    )}
                   </div>
 
                   <div className="col-md-4">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Email Address *</label>
                     <input
                       type="email"
-                      className="form-control py-2"
+                      className={`form-control py-2 ${touched.email ? (fieldErrors.email ? 'is-invalid' : 'is-valid') : ''}`}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => markTouched('email')}
+                      placeholder="admin@hospital.com"
                       required
                     />
+                    {touched.email && fieldErrors.email && (
+                      <div className="invalid-feedback small">{fieldErrors.email}</div>
+                    )}
                   </div>
 
                   <div className="col-md-4">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Phone Number *</label>
                     <input
                       type="tel"
-                      className="form-control py-2"
+                      className={`form-control py-2 ${touched.phone ? (fieldErrors.phone ? 'is-invalid' : 'is-valid') : ''}`}
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      pattern="[0-9+()\-\s]{10,20}"
-                      title="Enter a valid 10-digit phone number"
+                      onBlur={() => markTouched('phone')}
+                      placeholder="10-digit mobile number"
                       maxLength="15"
                       required
                     />
+                    {touched.phone && fieldErrors.phone && (
+                      <div className="invalid-feedback small">{fieldErrors.phone}</div>
+                    )}
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Password (Min 8 chars, letter & number) *</label>
                     <input
                       type="password"
-                      className="form-control py-2"
+                      className={`form-control py-2 ${touched.password ? (fieldErrors.password ? 'is-invalid' : 'is-valid') : ''}`}
                       placeholder="Create secure password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => markTouched('password')}
                       minLength="8"
                       required
                     />
+                    {touched.password && fieldErrors.password && (
+                      <div className="invalid-feedback small">{fieldErrors.password}</div>
+                    )}
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Confirm Password *</label>
                     <input
                       type="password"
-                      className="form-control py-2"
+                      className={`form-control py-2 ${touched.confirmPassword ? (fieldErrors.confirmPassword ? 'is-invalid' : 'is-valid') : ''}`}
                       placeholder="Repeat password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
+                      onBlur={() => markTouched('confirmPassword')}
                       minLength="8"
                       required
                     />
+                    {touched.confirmPassword && fieldErrors.confirmPassword && (
+                      <div className="invalid-feedback small">{fieldErrors.confirmPassword}</div>
+                    )}
                   </div>
                 </div>
 
@@ -220,9 +289,10 @@ export default function RegisterPage({ setView }) {
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Recovery Question *</label>
                     <select
-                      className="form-select py-2"
+                      className={`form-select py-2 ${touched.recoveryQuestion ? (fieldErrors.recoveryQuestion ? 'is-invalid' : 'is-valid') : ''}`}
                       value={recoveryQuestion}
                       onChange={(e) => setRecoveryQuestion(e.target.value)}
+                      onBlur={() => markTouched('recoveryQuestion')}
                       required
                     >
                       <option value="">Select a recovery question...</option>
@@ -230,19 +300,26 @@ export default function RegisterPage({ setView }) {
                         <option key={q} value={q}>{q}</option>
                       ))}
                     </select>
+                    {touched.recoveryQuestion && fieldErrors.recoveryQuestion && (
+                      <div className="invalid-feedback small">{fieldErrors.recoveryQuestion}</div>
+                    )}
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label fw-semibold text-slate-700 small mb-1">Recovery Answer *</label>
                     <input
                       type="text"
-                      className="form-control py-2"
+                      className={`form-control py-2 ${touched.recoveryAnswer ? (fieldErrors.recoveryAnswer ? 'is-invalid' : 'is-valid') : ''}`}
                       value={recoveryAnswer}
                       onChange={(e) => setRecoveryAnswer(e.target.value)}
+                      onBlur={() => markTouched('recoveryAnswer')}
                       placeholder="Enter your secret answer"
                       maxLength="100"
                       required
                     />
+                    {touched.recoveryAnswer && fieldErrors.recoveryAnswer && (
+                      <div className="invalid-feedback small">{fieldErrors.recoveryAnswer}</div>
+                    )}
                   </div>
                 </div>
 

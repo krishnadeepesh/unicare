@@ -62,6 +62,10 @@ def ensure_workflow_schema():
             'patient_is_active': 'TINYINT(1) NOT NULL DEFAULT 1',
             'created_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
         })
+        try:
+            cursor.execute("ALTER TABLE tbl_patient MODIFY COLUMN patient_email VARCHAR(100) NULL")
+        except Exception:
+            pass
         # Ensure tbl_patient_visit has all required columns (table may pre-exist with a different schema)
         _ensure_columns(cursor, 'tbl_patient_visit', {
             'patient_id': 'INT NOT NULL',
@@ -511,123 +515,164 @@ def register_patient(request):
     address        = (data.get('address') or data.get('patient_address') or '').strip() or None
     emergency_contact = (data.get('emergency_contact') or data.get('patient_emergency_contact') or '').strip() or None
 
+    import re
+    from datetime import date
+
     if not name:
         return JsonResponse({'status': 'error', 'message': 'Patient name is required.'}, status=400)
     if not (email or phone):
         return JsonResponse({'status': 'error', 'message': 'Email or phone number is required.'}, status=400)
+    if email and not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid email address.'}, status=400)
     if phone and not is_valid_phone(phone):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number.'}, status=400)
     if emergency_contact and not is_valid_phone(emergency_contact):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit emergency contact number.'}, status=400)
+    if not dob:
+        return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
+    try:
+        dob_val = date.fromisoformat(str(dob))
+        if dob_val > date.today():
+            return JsonResponse({'status': 'error', 'message': 'Date of birth cannot be in the future.'}, status=400)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid date of birth format. Use YYYY-MM-DD.'}, status=400)
+    if not gender or gender not in ('Male', 'Female', 'Other'):
+        return JsonResponse({'status': 'error', 'message': 'Gender must be Male, Female, or Other.'}, status=400)
+    if blood_group and blood_group not in ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'):
+        return JsonResponse({'status': 'error', 'message': 'Invalid blood group selected.'}, status=400)
 
-    with transaction.atomic(), connection.cursor() as cursor:
-        # If patient already exists, return existing global patient record
-        existing_row = None
-        if email:
+    try:
+        with transaction.atomic(), connection.cursor() as cursor:
+            # If patient already exists, return existing global patient record
+            existing_row = None
+            if email:
+                cursor.execute(
+                    "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                    " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                    " FROM tbl_patient p WHERE LOWER(p.patient_email)=LOWER(%s) LIMIT 1",
+                    [email]
+                )
+                existing_row = cursor.fetchone()
+            if not existing_row and phone:
+                cursor.execute(
+                    "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                    " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                    " FROM tbl_patient p WHERE p.patient_phone=%s LIMIT 1",
+                    [phone]
+                )
+                existing_row = cursor.fetchone()
+
+            if existing_row:
+                return JsonResponse({
+                    'status': 'success',
+                    'existing': True,
+                    'message': 'Patient already registered in UniCare. Linked existing global record.',
+                    'patient': {
+                        'patient_id': existing_row[0],
+                        'patient_uid': existing_row[1],
+                        'health_id': existing_row[1],
+                        'name': existing_row[2],
+                        'email': existing_row[3] or '',
+                        'phone': existing_row[4] or '',
+                        'date_of_birth': str(existing_row[5]) if existing_row[5] else '',
+                        'gender': existing_row[6] or '',
+                        'blood_group': existing_row[7] or '',
+                        'address': existing_row[8] or '',
+                        'emergency_contact': existing_row[9] or '',
+                    }
+                })
+
+            # Check if email or phone is already used by an existing non-patient user in tbl_user
+            if email:
+                cursor.execute("SELECT user_id, user_name, role_id FROM tbl_user WHERE LOWER(user_email)=LOWER(%s) LIMIT 1", [email])
+                existing_user = cursor.fetchone()
+                if existing_user:
+                    return JsonResponse({'status': 'error', 'message': f"A user account with email '{email}' already exists in the system."}, status=400)
+            if phone:
+                cursor.execute("SELECT user_id, user_name, role_id FROM tbl_user WHERE user_phone=%s LIMIT 1", [phone])
+                existing_phone_user = cursor.fetchone()
+                if existing_phone_user:
+                    return JsonResponse({'status': 'error', 'message': f"A user account with phone number '{phone}' already exists in the system."}, status=400)
+
+            if not password:
+                password = 'Patient@123'
+            elif len(password) < 8:
+                return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
+            if not dob:
+                return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
+            if not gender:
+                return JsonResponse({'status': 'error', 'message': 'Gender is required.'}, status=400)
+
+            # Role lookup
+            cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='patient' LIMIT 1")
+            role_row = cursor.fetchone()
+            role_id = role_row[0] if role_row else 4
+
+            # Generate unique patient_uid: format PT{LETTER}{3-DIGITS}, e.g. PTA001
+            cursor.execute("SELECT patient_uid FROM tbl_patient ORDER BY patient_id DESC LIMIT 1")
+            last_row = cursor.fetchone()
+            last_uid = last_row[0] if last_row else None
+            if not last_uid:
+                try:
+                    cursor.execute("SELECT health_id FROM tbl_patient_profile ORDER BY patient_id DESC LIMIT 1")
+                    prof_row = cursor.fetchone()
+                    if prof_row:
+                        last_uid = prof_row[0]
+                except Exception:
+                    pass
+            patient_uid = _next_patient_uid(last_uid, cursor)
+
+            # Insert into tbl_user
             cursor.execute(
-                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
-                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
-                " FROM tbl_patient p WHERE LOWER(p.patient_email)=LOWER(%s) LIMIT 1",
-                [email]
+                "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)"
+                " VALUES (%s,%s,%s,%s,%s,%s,1,1)",
+                [user['hospital_id'], role_id, name, email or None, phone or None, make_password(password)]
             )
-            existing_row = cursor.fetchone()
-        if not existing_row and phone:
+            user_id = cursor.lastrowid
+
+            # Insert into tbl_patient
             cursor.execute(
-                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
-                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
-                " FROM tbl_patient p WHERE p.patient_phone=%s LIMIT 1",
-                [phone]
+                "INSERT INTO tbl_patient"
+                " (user_id, patient_uid, patient_name, patient_dob, patient_gender,"
+                "  patient_phone, patient_email, patient_blood_group, patient_address,"
+                "  patient_emergency_contact, patient_is_active)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
+                [user_id, patient_uid, name, dob, gender,
+                 phone or None, email or None, blood_group, address, emergency_contact]
             )
-            existing_row = cursor.fetchone()
+            tbl_patient_id = cursor.lastrowid
 
-        if existing_row:
-            return JsonResponse({
-                'status': 'success',
-                'existing': True,
-                'message': 'Patient already registered in UniCare. Linked existing global record.',
-                'patient': {
-                    'patient_id': existing_row[0],
-                    'patient_uid': existing_row[1],
-                    'health_id': existing_row[1],
-                    'name': existing_row[2],
-                    'email': existing_row[3] or '',
-                    'phone': existing_row[4] or '',
-                    'date_of_birth': str(existing_row[5]) if existing_row[5] else '',
-                    'gender': existing_row[6] or '',
-                    'blood_group': existing_row[7] or '',
-                    'address': existing_row[8] or '',
-                    'emergency_contact': existing_row[9] or '',
-                }
-            })
+            # Insert into tbl_patient_profile for backward compatibility
+            cursor.execute(
+                "INSERT INTO tbl_patient_profile (user_id, health_id, date_of_birth, gender, address)"
+                " VALUES (%s,%s,%s,%s,%s)",
+                [user_id, patient_uid, dob, gender, address]
+            )
 
-        if not password:
-            password = 'Patient@123'
-        elif len(password) < 8:
-            return JsonResponse({'status': 'error', 'message': 'Password must be at least 8 characters.'}, status=400)
-        if not dob:
-            return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
-        if not gender:
-            return JsonResponse({'status': 'error', 'message': 'Gender is required.'}, status=400)
-
-        # Role lookup
-        cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='patient' LIMIT 1")
-        role_row = cursor.fetchone()
-        role_id = role_row[0] if role_row else 4
-
-        # Generate unique patient_uid: format PT{LETTER}{3-DIGITS}, e.g. PTA001
-        cursor.execute("SELECT patient_uid FROM tbl_patient ORDER BY patient_id DESC LIMIT 1")
-        last_row = cursor.fetchone()
-        last_uid = last_row[0] if last_row else None
-        if not last_uid:
-            try:
-                cursor.execute("SELECT health_id FROM tbl_patient_profile ORDER BY patient_id DESC LIMIT 1")
-                prof_row = cursor.fetchone()
-                if prof_row:
-                    last_uid = prof_row[0]
-            except Exception:
-                pass
-        patient_uid = _next_patient_uid(last_uid, cursor)
-
-        # Insert into tbl_user
-        cursor.execute(
-            "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)"
-            " VALUES (%s,%s,%s,%s,%s,%s,1,1)",
-            [user['hospital_id'], role_id, name, email or None, phone or None, make_password(password)]
-        )
-        user_id = cursor.lastrowid
-
-        # Insert into tbl_patient
-        cursor.execute(
-            "INSERT INTO tbl_patient"
-            " (user_id, patient_uid, patient_name, patient_dob, patient_gender,"
-            "  patient_phone, patient_email, patient_blood_group, patient_address,"
-            "  patient_emergency_contact, patient_is_active)"
-            " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
-            [user_id, patient_uid, name, dob, gender,
-             phone or None, email or None, blood_group, address, emergency_contact]
-        )
-        tbl_patient_id = cursor.lastrowid
-
-        # Insert into tbl_patient_profile for backward compatibility
-        cursor.execute(
-            "INSERT INTO tbl_patient_profile (user_id, health_id, date_of_birth, gender, address)"
-            " VALUES (%s,%s,%s,%s,%s)",
-            [user_id, patient_uid, dob, gender, address]
-        )
-
-    return JsonResponse({'status': 'success', 'patient': {
-        'patient_id': tbl_patient_id,
-        'patient_uid': patient_uid,
-        'health_id': patient_uid,
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'date_of_birth': dob,
-        'gender': gender,
-        'blood_group': blood_group,
-        'address': address,
-        'emergency_contact': emergency_contact,
-    }})
+        return JsonResponse({'status': 'success', 'patient': {
+            'patient_id': tbl_patient_id,
+            'patient_uid': patient_uid,
+            'health_id': patient_uid,
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'date_of_birth': dob,
+            'gender': gender,
+            'blood_group': blood_group,
+            'address': address,
+            'emergency_contact': emergency_contact,
+        }})
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        msg = str(exc)
+        if 'Duplicate entry' in msg:
+            if 'user_email' in msg or 'patient_email' in msg:
+                return JsonResponse({'status': 'error', 'message': f"A patient or user with email '{email}' already exists."}, status=400)
+            if 'user_phone' in msg or 'patient_phone' in msg:
+                return JsonResponse({'status': 'error', 'message': f"A patient or user with phone '{phone}' already exists."}, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Duplicate record detected with provided details.'}, status=400)
+        return JsonResponse({'status': 'error', 'message': f'Failed to register patient: {msg}'}, status=500)
 
 
 def _next_patient_uid(last_uid, cursor):

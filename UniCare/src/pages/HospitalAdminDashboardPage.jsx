@@ -41,6 +41,74 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const [docPassword, setDocPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Live validation states
+  const [docTouched, setDocTouched] = useState({});
+  const [recTouched, setRecTouched] = useState({});
+  const [hospTouched, setHospTouched] = useState({});
+
+  const markDocTouched = (f) => setDocTouched(p => ({ ...p, [f]: true }));
+  const markRecTouched = (f) => setRecTouched(p => ({ ...p, [f]: true }));
+  const markHospTouched = (f) => setHospTouched(p => ({ ...p, [f]: true }));
+
+  const getDocErrors = () => {
+    const errs = {};
+    if (!docDept) errs.dept = 'Please select a department.';
+    if (!docName.trim()) errs.name = 'Doctor name is required.';
+    else if (docName.trim().length < 3) errs.name = 'Name must be at least 3 characters.';
+
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    if (!docEmail.trim()) errs.email = 'Email address is required.';
+    else if (!emailRegex.test(docEmail.trim())) errs.email = 'Enter a valid email address.';
+
+    if (docPhone.trim()) {
+      const d = docPhone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (!/^[6-9]\d{9}$/.test(d)) errs.phone = 'Enter a valid 10-digit mobile number.';
+    }
+
+    if (!editingDoctor) {
+      if (!docPassword) errs.password = 'Password is required.';
+      else if (docPassword.length < 8) errs.password = 'Minimum 8 characters required.';
+    }
+    return errs;
+  };
+
+  const getRecErrors = () => {
+    const errs = {};
+    if (!receptionistForm.name.trim()) errs.name = 'Receptionist name is required.';
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    if (!receptionistForm.email.trim()) errs.email = 'Email is required.';
+    else if (!emailRegex.test(receptionistForm.email.trim())) errs.email = 'Enter a valid email address.';
+
+    if (receptionistForm.phone.trim()) {
+      const d = receptionistForm.phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (!/^[6-9]\d{9}$/.test(d)) errs.phone = 'Enter a valid 10-digit mobile number.';
+    }
+
+    if (!editingReceptionist) {
+      if (!receptionistForm.password) errs.password = 'Password is required.';
+      else if (receptionistForm.password.length < 8) errs.password = 'Minimum 8 characters.';
+    }
+    return errs;
+  };
+
+  const getHospErrors = () => {
+    const errs = {};
+    if (!hospitalRegistration.name.trim()) errs.name = 'Hospital name is required.';
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    if (!hospitalRegistration.email.trim()) errs.email = 'Hospital email is required.';
+    else if (!emailRegex.test(hospitalRegistration.email.trim())) errs.email = 'Enter a valid email address.';
+
+    const d = (hospitalRegistration.phone || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!hospitalRegistration.phone || !hospitalRegistration.phone.trim()) errs.phone = 'Phone number is required.';
+    else if (!/^[6-9]\d{9}$/.test(d)) errs.phone = 'Enter a valid 10-digit mobile number.';
+
+    return errs;
+  };
+
+  const docErrors = getDocErrors();
+  const recErrors = getRecErrors();
+  const hospErrors = getHospErrors();
+
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 5000);
@@ -143,13 +211,17 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   // Handle Add Doctor directly into MySQL
   const handleAddDoctor = async (e) => {
     e.preventDefault();
-    if (!docDept || !docDept.trim()) {
-      showToast('Please select a department for the doctor.', 'danger');
-      return;
-    }
-    if (!docName.trim() || !docEmail.trim()) return;
-    if (!validatePhone(docPhone)) {
-      showToast('Enter a valid 10-digit phone number for the doctor.', 'danger');
+    setDocTouched({
+      dept: true,
+      name: true,
+      email: true,
+      phone: true,
+      password: true,
+    });
+
+    const errs = getDocErrors();
+    if (Object.keys(errs).length > 0) {
+      showToast(Object.values(errs)[0], 'danger');
       return;
     }
 
@@ -188,6 +260,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         setDocLicense('');
         setDocExperience('');
         setDocPassword('');
+        setDocTouched({});
         setEditingDoctor(null);
         setShowAddDoctorModal(false);
       } else {
@@ -202,6 +275,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   };
 
   const openDoctorModal = (doctor = null) => {
+    setDocTouched({});
     setEditingDoctor(doctor);
     setDocName(doctor?.name || '');
     setDocEmail(doctor?.email || '');
@@ -215,15 +289,24 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const saveReceptionist = async (e) => {
     e.preventDefault();
-    if (!validatePhone(receptionistForm.phone)) {
-      showToast('Enter a valid 10-digit phone number for the receptionist.', 'danger');
+    setRecTouched({
+      name: true,
+      email: true,
+      phone: true,
+      password: true,
+    });
+
+    const errs = getRecErrors();
+    if (Object.keys(errs).length > 0) {
+      showToast(Object.values(errs)[0], 'danger');
       return;
     }
+
     try {
       const response = await fetch(`${API_BASE_URL}/receptionists/${editingReceptionist ? 'update' : 'add'}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ hospital_id: currentHospitalId, ...receptionistForm, ...(editingReceptionist ? { receptionist_id: editingReceptionist.receptionist_id } : {}) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message);
-      showToast(data.message); setShowReceptionistModal(false); setEditingReceptionist(null); setReceptionistForm({ name: '', email: '', phone: '' }); fetchManagementData(); fetchDashboardData();
+      showToast(data.message); setShowReceptionistModal(false); setEditingReceptionist(null); setReceptionistForm({ name: '', email: '', phone: '' }); setRecTouched({}); fetchManagementData(); fetchDashboardData();
     } catch (err) { showToast(err.message || 'Could not save receptionist.', 'danger'); }
   };
 
@@ -250,10 +333,18 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const submitHospitalRegistration = async (e) => {
     e.preventDefault();
-    if (!validatePhone(hospitalRegistration.phone)) {
-      showToast('Enter a valid 10-digit hospital phone number.', 'danger');
+    setHospTouched({
+      name: true,
+      email: true,
+      phone: true,
+    });
+
+    const errs = getHospErrors();
+    if (Object.keys(errs).length > 0) {
+      showToast(Object.values(errs)[0], 'danger');
       return;
     }
+
     try {
       const response = await fetch(`${API_BASE_URL}/hospital-registration/submit/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -439,7 +530,76 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
               <h4 className="fw-bold mb-2"><i className="bi bi-hourglass-split me-2"></i>Hospital Registration Status: {registrationStatus}</h4>
               <p className="mb-0">{registrationStatus === 'Pending' ? 'Your registration has been sent to Super Admin. Management tools will unlock after approval.' : registrationStatus === 'Rejected' ? 'Your registration was not approved. Update the details and submit again.' : 'Complete the hospital registration below to request UniCare access from Super Admin.'}</p>
             </div>
-            {registrationStatus !== 'Pending' && <div className="card border-0 rounded-4 shadow-sm p-4"><h4 className="fw-bold mb-1">Hospital Registration</h4><p className="text-muted small mb-4">Submit these details for Super Admin approval.</p><form onSubmit={submitHospitalRegistration}><div className="row g-3"><div className="col-md-6"><label className="form-label">Hospital Name *</label><input className="form-control" value={hospitalRegistration.name} onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, name: e.target.value })} required /></div><div className="col-md-6"><label className="form-label">Hospital Email *</label><input type="email" className="form-control" value={hospitalRegistration.email} onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, email: e.target.value })} required /></div><div className="col-md-6"><label className="form-label">Hospital Phone *</label><input className="form-control" value={hospitalRegistration.phone} onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, phone: e.target.value })} required /></div><div className="col-md-6"><label className="form-label">Hospital Address</label><input className="form-control" value={hospitalRegistration.address} onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, address: e.target.value })} /></div><div className="col-12"><button className="btn btn-primary px-4" type="submit"><i className="bi bi-send me-2"></i>Send Registration Request</button></div></div></form></div>}
+            {registrationStatus !== 'Pending' && (
+              <div className="card border-0 rounded-4 shadow-sm p-4">
+                <h4 className="fw-bold mb-1">Hospital Registration</h4>
+                <p className="text-muted small mb-4">Submit these details for Super Admin approval.</p>
+                <form onSubmit={submitHospitalRegistration} noValidate>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">Hospital Name <span className="text-danger">*</span></label>
+                      <input 
+                        type="text"
+                        className={`form-control ${hospTouched.name ? (hospErrors.name ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.name} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, name: e.target.value })} 
+                        onBlur={() => markHospTouched('name')}
+                        placeholder="e.g. City General Hospital"
+                        required 
+                      />
+                      {hospTouched.name && hospErrors.name && (
+                        <div className="invalid-feedback small">{hospErrors.name}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">Hospital Email <span className="text-danger">*</span></label>
+                      <input 
+                        type="email" 
+                        className={`form-control ${hospTouched.email ? (hospErrors.email ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.email} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, email: e.target.value })} 
+                        onBlur={() => markHospTouched('email')}
+                        placeholder="admin@hospital.com"
+                        required 
+                      />
+                      {hospTouched.email && hospErrors.email && (
+                        <div className="invalid-feedback small">{hospErrors.email}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">Hospital Phone <span className="text-danger">*</span></label>
+                      <input 
+                        type="tel"
+                        className={`form-control ${hospTouched.phone ? (hospErrors.phone ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.phone} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, phone: e.target.value })} 
+                        onBlur={() => markHospTouched('phone')}
+                        placeholder="10-digit mobile number"
+                        required 
+                      />
+                      {hospTouched.phone && hospErrors.phone && (
+                        <div className="invalid-feedback small">{hospErrors.phone}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">Hospital Address</label>
+                      <input 
+                        type="text"
+                        className="form-control" 
+                        value={hospitalRegistration.address} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, address: e.target.value })} 
+                        placeholder="Hospital physical address"
+                      />
+                    </div>
+                    <div className="col-12">
+                      <button className="btn btn-teal text-white px-4 fw-semibold rounded-3 shadow-sm" type="submit" style={{ backgroundColor: '#0d9488' }}>
+                        <i className="bi bi-send me-2"></i>Send Registration Request
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            )}
           </div></div>
         ) : (<>
         
@@ -719,7 +879,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   onClick={() => setShowAddDoctorModal(false)}
                 ></button>
               </div>
-              <form onSubmit={handleAddDoctor}>
+              <form onSubmit={handleAddDoctor} noValidate>
                 <div className="modal-body p-4">
 
                   {/* 1. Department Field First */}
@@ -732,19 +892,25 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         No departments found. Please add departments first.
                       </div>
                     ) : (
-                      <select
-                        className="form-select"
-                        value={docDept}
-                        onChange={(e) => setDocDept(e.target.value)}
-                        required
-                      >
-                        <option value="">-- Select Department --</option>
-                        {departmentsList.filter(d => d.is_active !== false).map(dept => (
-                          <option key={dept.department_id || dept.id || dept.name} value={dept.name}>
-                            {dept.name}
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          className={`form-select ${docTouched.dept ? (docErrors.dept ? 'is-invalid' : 'is-valid') : ''}`}
+                          value={docDept}
+                          onChange={(e) => { setDocDept(e.target.value); markDocTouched('dept'); }}
+                          onBlur={() => markDocTouched('dept')}
+                          required
+                        >
+                          <option value="">-- Select Department --</option>
+                          {departmentsList.filter(d => d.is_active !== false).map(dept => (
+                            <option key={dept.department_id || dept.id || dept.name} value={dept.name}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                        {docTouched.dept && docErrors.dept && (
+                          <div className="invalid-feedback small">{docErrors.dept}</div>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -753,12 +919,16 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <label className="form-label fw-semibold small">Doctor Full Name <span className="text-danger">*</span></label>
                     <input 
                       type="text" 
-                      className="form-control"
+                      className={`form-control ${docTouched.name ? (docErrors.name ? 'is-invalid' : 'is-valid') : ''}`}
                       required
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
-                      placeholder="e.g. Dr. Sarah Jenkins"
+                      onBlur={() => markDocTouched('name')}
+                      placeholder="e.g. Dr. John Doe"
                     />
+                    {docTouched.name && docErrors.name && (
+                      <div className="invalid-feedback small">{docErrors.name}</div>
+                    )}
                   </div>
 
                   {/* 3. Email Address */}
@@ -766,12 +936,16 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <label className="form-label fw-semibold small">Email Address <span className="text-danger">*</span></label>
                     <input 
                       type="email" 
-                      className="form-control"
+                      className={`form-control ${docTouched.email ? (docErrors.email ? 'is-invalid' : 'is-valid') : ''}`}
                       required
                       value={docEmail}
                       onChange={(e) => setDocEmail(e.target.value)}
-                      placeholder="doctor@unicare.com"
+                      onBlur={() => markDocTouched('email')}
+                      placeholder="doctor@hospital.com"
                     />
+                    {docTouched.email && docErrors.email && (
+                      <div className="invalid-feedback small">{docErrors.email}</div>
+                    )}
                   </div>
 
                   {/* 4. Phone Number & License Number */}
@@ -780,14 +954,16 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       <label className="form-label fw-semibold small">Phone Number</label>
                       <input 
                         type="tel" 
-                        className="form-control"
+                        className={`form-control ${docTouched.phone ? (docErrors.phone ? 'is-invalid' : 'is-valid') : ''}`}
                         value={docPhone}
                         onChange={(e) => setDocPhone(e.target.value)}
-                        pattern="[0-9+()\-\s]{10,15}"
-                        title="Enter a valid 10-digit phone number"
+                        onBlur={() => markDocTouched('phone')}
+                        placeholder="10-digit mobile"
                         maxLength="15"
-                        placeholder="10-digit phone"
                       />
+                      {docTouched.phone && docErrors.phone && (
+                        <div className="invalid-feedback small">{docErrors.phone}</div>
+                      )}
                     </div>
                     <div className="col-6">
                       <label className="form-label fw-semibold small">Medical License Number</label>
@@ -796,7 +972,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         className="form-control"
                         value={docLicense}
                         onChange={(e) => setDocLicense(e.target.value)}
-                        placeholder="e.g. MED-78291"
+                        placeholder="e.g. MED12345"
                       />
                     </div>
                   </div>
@@ -809,7 +985,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       className="form-control" 
                       value={docExperience} 
                       onChange={(e) => setDocExperience(e.target.value)} 
-                      placeholder="e.g. 8 years"
+                      placeholder="e.g. 5 years, Senior Consultant"
                     />
                   </div>
 
@@ -819,13 +995,17 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       <label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label>
                       <input 
                         type="password" 
-                        className="form-control" 
+                        className={`form-control ${docTouched.password ? (docErrors.password ? 'is-invalid' : 'is-valid') : ''}`} 
                         value={docPassword} 
                         onChange={(e) => setDocPassword(e.target.value)} 
+                        onBlur={() => markDocTouched('password')}
                         minLength="8" 
                         required 
                         placeholder="Minimum 8 characters"
                       />
+                      {docTouched.password && docErrors.password && (
+                        <div className="invalid-feedback small">{docErrors.password}</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -853,7 +1033,85 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       )}
 
       {showReceptionistModal && (
-        <div className="modal show d-block bg-dark bg-opacity-50"><div className="modal-dialog modal-dialog-centered"><div className="modal-content rounded-4 border-0"><div className="modal-header bg-teal text-white" style={{ backgroundColor: '#0d9488' }}><h5 className="modal-title fw-bold text-white">{editingReceptionist ? 'Edit Receptionist' : 'Add Receptionist'}</h5><button className="btn-close btn-close-white" onClick={() => setShowReceptionistModal(false)}></button></div><form onSubmit={saveReceptionist}><div className="modal-body p-4"><div className="mb-3"><label className="form-label">Full Name *</label><input className="form-control" value={receptionistForm.name} onChange={(e) => setReceptionistForm({ ...receptionistForm, name: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Email *</label><input type="email" className="form-control" value={receptionistForm.email} onChange={(e) => setReceptionistForm({ ...receptionistForm, email: e.target.value })} required /></div><div className="mb-3"><label className="form-label">Phone</label><input className="form-control" value={receptionistForm.phone} onChange={(e) => setReceptionistForm({ ...receptionistForm, phone: e.target.value })} /></div>{!editingReceptionist && <div><label className="form-label">Password *</label><input type="password" minLength="8" className="form-control" value={receptionistForm.password} onChange={(e) => setReceptionistForm({ ...receptionistForm, password: e.target.value })} required /></div>}</div><div className="modal-footer"><button className="btn btn-secondary" type="button" onClick={() => setShowReceptionistModal(false)}>Cancel</button><button className="btn btn-teal text-white" type="submit" style={{ backgroundColor: '#0d9488' }}>Save Receptionist</button></div></form></div></div></div>
+        <div className="modal show d-block bg-dark bg-opacity-50">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0">
+              <div className="modal-header bg-teal text-white" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold text-white">{editingReceptionist ? 'Edit Receptionist' : 'Add Receptionist'}</h5>
+                <button className="btn-close btn-close-white" onClick={() => setShowReceptionistModal(false)}></button>
+              </div>
+              <form onSubmit={saveReceptionist} noValidate>
+                <div className="modal-body p-4">
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Full Name <span className="text-danger">*</span></label>
+                    <input 
+                      className={`form-control ${recTouched.name ? (recErrors.name ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={receptionistForm.name} 
+                      onChange={(e) => setReceptionistForm({ ...receptionistForm, name: e.target.value })} 
+                      onBlur={() => markRecTouched('name')}
+                      placeholder="e.g. Sarah Jenkins"
+                      required 
+                    />
+                    {recTouched.name && recErrors.name && (
+                      <div className="invalid-feedback small">{recErrors.name}</div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Email <span className="text-danger">*</span></label>
+                    <input 
+                      type="email" 
+                      className={`form-control ${recTouched.email ? (recErrors.email ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={receptionistForm.email} 
+                      onChange={(e) => setReceptionistForm({ ...receptionistForm, email: e.target.value })} 
+                      onBlur={() => markRecTouched('email')}
+                      placeholder="reception@hospital.com"
+                      required 
+                    />
+                    {recTouched.email && recErrors.email && (
+                      <div className="invalid-feedback small">{recErrors.email}</div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Phone</label>
+                    <input 
+                      type="tel"
+                      className={`form-control ${recTouched.phone ? (recErrors.phone ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={receptionistForm.phone} 
+                      onChange={(e) => setReceptionistForm({ ...receptionistForm, phone: e.target.value })} 
+                      onBlur={() => markRecTouched('phone')}
+                      placeholder="10-digit mobile number"
+                    />
+                    {recTouched.phone && recErrors.phone && (
+                      <div className="invalid-feedback small">{recErrors.phone}</div>
+                    )}
+                  </div>
+                  {!editingReceptionist && (
+                    <div className="mb-2">
+                      <label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label>
+                      <input 
+                        type="password" 
+                        minLength="8" 
+                        className={`form-control ${recTouched.password ? (recErrors.password ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={receptionistForm.password} 
+                        onChange={(e) => setReceptionistForm({ ...receptionistForm, password: e.target.value })} 
+                        onBlur={() => markRecTouched('password')}
+                        placeholder="Minimum 8 characters"
+                        required 
+                      />
+                      {recTouched.password && recErrors.password && (
+                        <div className="invalid-feedback small">{recErrors.password}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer border-0 p-4 pt-0">
+                  <button className="btn btn-secondary rounded-3 px-4" type="button" onClick={() => setShowReceptionistModal(false)}>Cancel</button>
+                  <button className="btn btn-teal text-white rounded-3 px-4 fw-bold shadow-sm" type="submit" style={{ backgroundColor: '#0d9488' }}>Save Receptionist</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {showDepartmentModal && (

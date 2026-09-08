@@ -57,6 +57,61 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
     address: '',
     emergency_contact: ''
   });
+  const [patientTouched, setPatientTouched] = useState({});
+
+  const markPatientTouched = (field) => {
+    setPatientTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const getPatientErrors = () => {
+    const errs = {};
+    if (!patientForm.name.trim()) {
+      errs.name = 'Patient full name is required.';
+    } else if (patientForm.name.trim().length < 3) {
+      errs.name = 'Name must be at least 3 characters.';
+    }
+
+    const phoneDigits = (patientForm.phone || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!patientForm.phone || !patientForm.phone.trim()) {
+      errs.phone = 'Mobile phone number is required.';
+    } else if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      errs.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6-9).';
+    }
+
+    if (patientForm.email && patientForm.email.trim()) {
+      const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+      if (!emailRegex.test(patientForm.email.trim())) {
+        errs.email = 'Enter a valid email address (e.g. name@domain.com).';
+      }
+    }
+
+    if (!patientForm.date_of_birth) {
+      errs.date_of_birth = 'Date of birth is required.';
+    } else {
+      const selected = new Date(patientForm.date_of_birth);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      if (selected > now) {
+        errs.date_of_birth = 'Date of birth cannot be in the future.';
+      }
+    }
+
+    if (patientForm.emergency_contact && patientForm.emergency_contact.trim()) {
+      const emDigits = patientForm.emergency_contact.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (!/^[6-9]\d{9}$/.test(emDigits)) {
+        errs.emergency_contact = 'Enter a valid 10-digit emergency contact number.';
+      }
+    }
+
+    if (patientForm.password && patientForm.password.trim().length < 8) {
+      errs.password = 'Password must be at least 8 characters.';
+    }
+
+    return errs;
+  };
+
+  const patientErrors = getPatientErrors();
+
   const [registerResult, setRegisterResult] = useState(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [apptFilter, setApptFilter] = useState('all');
@@ -377,18 +432,19 @@ const RECOVERY_QUESTIONS = [
     setMessage(null);
     setRegisterResult(null);
 
-    const validatePhone = (value) => {
-      if (!value || !value.trim()) return true; // optional field
-      const digits = value.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
-      return /^[6-9]\d{9}$/.test(digits);
-    };
+    setPatientTouched({
+      name: true,
+      phone: true,
+      email: true,
+      date_of_birth: true,
+      gender: true,
+      emergency_contact: true,
+      password: true,
+    });
 
-    if (!validatePhone(patientForm.phone)) {
-      setMessage({ text: 'Enter a valid 10-digit phone number.', type: 'danger' });
-      return;
-    }
-    if (!validatePhone(patientForm.emergency_contact)) {
-      setMessage({ text: 'Enter a valid 10-digit emergency contact number.', type: 'danger' });
+    const errs = getPatientErrors();
+    if (Object.keys(errs).length > 0) {
+      setMessage({ text: 'Please correct the highlighted errors before registering the patient.', type: 'danger' });
       return;
     }
 
@@ -1023,32 +1079,38 @@ const RECOVERY_QUESTIONS = [
                     Register a patient into UniCare. A permanent <strong>Global Patient Health ID (PTA001)</strong> will be automatically generated. If the patient already exists by Phone or Email, their global record will be seamlessly linked.
                   </p>
 
-                  <form onSubmit={handleRegisterPatient}>
+                  <form onSubmit={handleRegisterPatient} noValidate>
                     <div className="row g-3 mb-3">
                       <div className="col-md-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Full Legal Name *</label>
+                        <label className="form-label fw-semibold small text-secondary mb-1">Full Name *</label>
                         <input
                           type="text"
-                          className="form-control rounded-3 py-2"
-                          placeholder="e.g. Jane Doe"
+                          className={`form-control rounded-3 py-2 ${patientTouched.name ? (patientErrors.name ? 'is-invalid' : 'is-valid') : ''}`}
+                          placeholder="e.g. Rahul Sharma"
                           required
                           value={patientForm.name}
                           onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })}
+                          onBlur={() => markPatientTouched('name')}
                         />
+                        {patientTouched.name && patientErrors.name && (
+                          <div className="invalid-feedback small">{patientErrors.name}</div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold small text-secondary mb-1">Phone Number *</label>
                         <input
                           type="tel"
-                          className="form-control rounded-3 py-2"
+                          className={`form-control rounded-3 py-2 ${patientTouched.phone ? (patientErrors.phone ? 'is-invalid' : 'is-valid') : ''}`}
                           placeholder="10-digit mobile number"
                           required
-                          pattern="[0-9+()\-\s]{10,15}"
-                          title="Enter a valid 10-digit phone number"
                           maxLength="15"
                           value={patientForm.phone}
                           onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
+                          onBlur={() => markPatientTouched('phone')}
                         />
+                        {patientTouched.phone && patientErrors.phone && (
+                          <div className="invalid-feedback small">{patientErrors.phone}</div>
+                        )}
                       </div>
                     </div>
 
@@ -1057,27 +1119,35 @@ const RECOVERY_QUESTIONS = [
                         <label className="form-label fw-semibold small text-secondary mb-1">Email Address</label>
                         <input
                           type="email"
-                          className="form-control rounded-3 py-2"
-                          placeholder="e.g. patient@example.com"
+                          className={`form-control rounded-3 py-2 ${patientTouched.email ? (patientErrors.email ? 'is-invalid' : (patientForm.email.trim() ? 'is-valid' : '')) : ''}`}
+                          placeholder="Optional (name@domain.com)"
                           value={patientForm.email}
                           onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
+                          onBlur={() => markPatientTouched('email')}
                         />
+                        {patientTouched.email && patientErrors.email && (
+                          <div className="invalid-feedback small">{patientErrors.email}</div>
+                        )}
                       </div>
                       <div className="col-md-4">
                         <label className="form-label fw-semibold small text-secondary mb-1">Date of Birth *</label>
                         <input
                           type="date"
-                          className="form-control rounded-3 py-2"
+                          className={`form-control rounded-3 py-2 ${patientTouched.date_of_birth ? (patientErrors.date_of_birth ? 'is-invalid' : 'is-valid') : ''}`}
                           required
                           max={todayStr}
                           value={patientForm.date_of_birth}
                           onChange={(e) => setPatientForm({ ...patientForm, date_of_birth: e.target.value })}
+                          onBlur={() => markPatientTouched('date_of_birth')}
                         />
+                        {patientTouched.date_of_birth && patientErrors.date_of_birth && (
+                          <div className="invalid-feedback small">{patientErrors.date_of_birth}</div>
+                        )}
                       </div>
                       <div className="col-md-4">
                         <label className="form-label fw-semibold small text-secondary mb-1">Gender *</label>
                         <select
-                          className="form-select rounded-3 py-2"
+                          className="form-select rounded-3 py-2 is-valid"
                           value={patientForm.gender}
                           onChange={(e) => setPatientForm({ ...patientForm, gender: e.target.value })}
                         >
@@ -1092,7 +1162,7 @@ const RECOVERY_QUESTIONS = [
                       <div className="col-md-6">
                         <label className="form-label fw-semibold small text-secondary mb-1">Blood Group</label>
                         <select
-                          className="form-select rounded-3 py-2"
+                          className="form-select rounded-3 py-2 is-valid"
                           value={patientForm.blood_group}
                           onChange={(e) => setPatientForm({ ...patientForm, blood_group: e.target.value })}
                         >
@@ -1106,14 +1176,16 @@ const RECOVERY_QUESTIONS = [
                         <label className="form-label fw-semibold small text-secondary mb-1">Emergency Contact Number</label>
                         <input
                           type="tel"
-                          className="form-control rounded-3 py-2"
-                          placeholder="10-digit emergency phone"
+                          className={`form-control rounded-3 py-2 ${patientTouched.emergency_contact ? (patientErrors.emergency_contact ? 'is-invalid' : (patientForm.emergency_contact.trim() ? 'is-valid' : '')) : ''}`}
+                          placeholder="Optional 10-digit number"
                           value={patientForm.emergency_contact}
                           onChange={(e) => setPatientForm({ ...patientForm, emergency_contact: e.target.value })}
-                          pattern="[0-9+()\-\s]{10,15}"
-                          title="Enter a valid 10-digit phone number"
+                          onBlur={() => markPatientTouched('emergency_contact')}
                           maxLength="15"
                         />
+                        {patientTouched.emergency_contact && patientErrors.emergency_contact && (
+                          <div className="invalid-feedback small">{patientErrors.emergency_contact}</div>
+                        )}
                       </div>
                     </div>
 
@@ -1132,11 +1204,15 @@ const RECOVERY_QUESTIONS = [
                       <label className="form-label fw-semibold small text-secondary mb-1">Patient Portal Temporary Password (Optional)</label>
                       <input
                         type="password"
-                        className="form-control rounded-3 py-2"
+                        className={`form-control rounded-3 py-2 ${patientTouched.password ? (patientErrors.password ? 'is-invalid' : (patientForm.password ? 'is-valid' : '')) : ''}`}
                         placeholder="Leave blank to auto-assign default (Patient@123)"
                         value={patientForm.password}
                         onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })}
+                        onBlur={() => markPatientTouched('password')}
                       />
+                      {patientTouched.password && patientErrors.password && (
+                        <div className="invalid-feedback small">{patientErrors.password}</div>
+                      )}
                       <small className="text-muted">Defaults to <code>Patient@123</code> if left empty. Patient will be prompted to change it upon first login.</small>
                     </div>
 

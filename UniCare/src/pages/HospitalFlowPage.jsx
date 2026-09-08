@@ -27,6 +27,68 @@ export default function HospitalFlowPage({ setView, onLogin }) {
   const [registerError, setRegisterError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Live registration validation state
+  const [regTouched, setRegTouched] = useState({});
+  const markRegTouched = (field) => setRegTouched((prev) => ({ ...prev, [field]: true }));
+
+  const getRegisterErrors = () => {
+    const errs = {};
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+
+    // Hospital Name
+    if (!hospitalName.trim()) {
+      errs.hospitalName = 'Hospital name is required.';
+    } else if (hospitalName.trim().length < 3) {
+      errs.hospitalName = 'Hospital name must be at least 3 characters.';
+    }
+
+    // Contact Phone Number
+    const cDigits = (contactNumber || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!contactNumber.trim()) {
+      errs.contactNumber = 'Contact phone number is required.';
+    } else if (!/^[6-9]\d{9}$/.test(cDigits)) {
+      errs.contactNumber = 'Enter a valid 10-digit mobile number.';
+    }
+
+    // Hospital Email (optional, but if provided, validate format)
+    if (hospitalEmail.trim() && !emailRegex.test(hospitalEmail.trim())) {
+      errs.hospitalEmail = 'Enter a valid hospital email address.';
+    }
+
+    // Admin Full Name
+    if (!adminName.trim()) {
+      errs.adminName = 'Admin full name is required.';
+    } else if (adminName.trim().length < 3) {
+      errs.adminName = 'Admin name must be at least 3 characters.';
+    }
+
+    // Admin Email
+    if (!adminEmail.trim()) {
+      errs.adminEmail = 'Admin email address is required.';
+    } else if (!emailRegex.test(adminEmail.trim())) {
+      errs.adminEmail = 'Enter a valid admin email address.';
+    }
+
+    // Admin Phone (optional, but if provided, validate)
+    if (adminPhone.trim()) {
+      const aDigits = adminPhone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (!/^[6-9]\d{9}$/.test(aDigits)) {
+        errs.adminPhone = 'Enter a valid 10-digit mobile number.';
+      }
+    }
+
+    // Admin Password
+    if (!adminPassword) {
+      errs.adminPassword = 'Password is required.';
+    } else if (adminPassword.length < 8) {
+      errs.adminPassword = 'Password must be at least 8 characters.';
+    }
+
+    return errs;
+  };
+
+  const regErrors = getRegisterErrors();
+
   // Clear legacy localStorage cache on mount so local mock items don't mask MySQL
   useEffect(() => {
     localStorage.removeItem('unicare_hospitals');
@@ -36,23 +98,24 @@ export default function HospitalFlowPage({ setView, onLogin }) {
   const handleRegister = async (e) => {
     e.preventDefault();
     setRegisterError('');
+
+    setRegTouched({
+      hospitalName: true,
+      contactNumber: true,
+      hospitalEmail: true,
+      adminName: true,
+      adminEmail: true,
+      adminPhone: true,
+      adminPassword: true,
+    });
+
+    const errs = getRegisterErrors();
+    if (Object.keys(errs).length > 0) {
+      setRegisterError(Object.values(errs)[0]);
+      return;
+    }
+
     setLoading(true);
-
-    const validatePhone = (value) => {
-      const digits = (value || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
-      return /^[6-9]\d{9}$/.test(digits);
-    };
-
-    if (!validatePhone(contactNumber)) {
-      setRegisterError('Enter a valid 10-digit contact phone number.');
-      setLoading(false);
-      return;
-    }
-    if (adminPhone.trim() && !validatePhone(adminPhone)) {
-      setRegisterError('Enter a valid 10-digit admin phone number.');
-      setLoading(false);
-      return;
-    }
 
     const payload = {
       hospital_name: hospitalName.trim(),
@@ -268,7 +331,7 @@ Your hospital registration request has been sent and is currently pending admini
                   <div className="col-6">
                     <button 
                       className={`w-100 py-3 fw-bold border-0 fs-5 text-center bg-transparent ${activeTab === 'login' ? 'text-primary border-bottom border-primary border-3' : 'text-muted'}`}
-                      onClick={() => { setActiveTab('login'); setLoginError(''); setRegisterError(''); }}
+                      onClick={() => { setActiveTab('login'); setLoginError(''); setRegisterError(''); setRegTouched({}); }}
                       style={{ outline: 'none' }}
                     >
                       <i className="bi bi-box-arrow-in-right me-2"></i>
@@ -278,7 +341,7 @@ Your hospital registration request has been sent and is currently pending admini
                   <div className="col-6">
                     <button 
                       className={`w-100 py-3 fw-bold border-0 fs-5 text-center bg-transparent ${activeTab === 'register' ? 'text-primary border-bottom border-primary border-3' : 'text-muted'}`}
-                      onClick={() => { setActiveTab('register'); setLoginError(''); setRegisterError(''); }}
+                      onClick={() => { setActiveTab('register'); setLoginError(''); setRegisterError(''); setRegTouched({}); }}
                       style={{ outline: 'none' }}
                     >
                       <i className="bi bi-building-add me-2"></i>
@@ -341,7 +404,7 @@ Your hospital registration request has been sent and is currently pending admini
 
                   {/* Tab 2: REGISTRATION FORM */}
                   {activeTab === 'register' && (
-                    <form onSubmit={handleRegister}>
+                    <form onSubmit={handleRegister} noValidate>
                       {registerError && (
                         <div className="alert alert-danger d-flex align-items-center gap-2 mb-4" style={{ fontSize: '0.9rem' }}>
                           <i className="bi bi-exclamation-triangle-fill fs-5"></i>
@@ -355,11 +418,16 @@ Your hospital registration request has been sent and is currently pending admini
                           <label className="form-label fw-semibold small">Hospital Name <span className="text-danger">*</span></label>
                           <input 
                             type="text" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.hospitalName ? (regErrors.hospitalName ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={hospitalName}
                             onChange={(e) => setHospitalName(e.target.value)}
+                            onBlur={() => markRegTouched('hospitalName')}
+                            placeholder="e.g. Apollo Memorial Hospital"
                             required 
                           />
+                          {regTouched.hospitalName && regErrors.hospitalName && (
+                            <div className="invalid-feedback small">{regErrors.hospitalName}</div>
+                          )}
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Registration Number</label>
@@ -368,29 +436,38 @@ Your hospital registration request has been sent and is currently pending admini
                             className="form-control" 
                             value={regNumber}
                             onChange={(e) => setRegNumber(e.target.value)}
+                            placeholder="e.g. REG-9842"
                           />
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Hospital Email Address</label>
                           <input 
                             type="email" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.hospitalEmail ? (regErrors.hospitalEmail ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={hospitalEmail}
                             onChange={(e) => setHospitalEmail(e.target.value)}
+                            onBlur={() => markRegTouched('hospitalEmail')}
+                            placeholder="contact@hospital.org"
                           />
+                          {regTouched.hospitalEmail && regErrors.hospitalEmail && (
+                            <div className="invalid-feedback small">{regErrors.hospitalEmail}</div>
+                          )}
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Contact Phone Number <span className="text-danger">*</span></label>
                           <input 
                             type="tel" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.contactNumber ? (regErrors.contactNumber ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={contactNumber}
                             onChange={(e) => setContactNumber(e.target.value)}
-                            pattern="[0-9+()\-\s]{10,15}"
-                            title="Enter a valid 10-digit phone number"
+                            onBlur={() => markRegTouched('contactNumber')}
+                            placeholder="10-digit mobile number"
                             maxLength="15"
                             required 
                           />
+                          {regTouched.contactNumber && regErrors.contactNumber && (
+                            <div className="invalid-feedback small">{regErrors.contactNumber}</div>
+                          )}
                         </div>
                         <div className="col-12">
                           <label className="form-label fw-semibold small">Hospital Address</label>
@@ -399,6 +476,7 @@ Your hospital registration request has been sent and is currently pending admini
                             className="form-control" 
                             value={hospitalAddress}
                             onChange={(e) => setHospitalAddress(e.target.value)}
+                            placeholder="e.g. 101 Health Ave, Downtown"
                           />
                         </div>
                       </div>
@@ -409,43 +487,61 @@ Your hospital registration request has been sent and is currently pending admini
                           <label className="form-label fw-semibold small">Admin Full Name <span className="text-danger">*</span></label>
                           <input 
                             type="text" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.adminName ? (regErrors.adminName ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={adminName}
                             onChange={(e) => setAdminName(e.target.value)}
+                            onBlur={() => markRegTouched('adminName')}
+                            placeholder="e.g. Johnathan Smith"
                             required 
                           />
+                          {regTouched.adminName && regErrors.adminName && (
+                            <div className="invalid-feedback small">{regErrors.adminName}</div>
+                          )}
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Phone Number</label>
                           <input 
                             type="tel" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.adminPhone ? (regErrors.adminPhone ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={adminPhone}
                             onChange={(e) => setAdminPhone(e.target.value)}
-                            pattern="[0-9+()\-\s]{10,15}"
-                            title="Enter a valid 10-digit phone number"
+                            onBlur={() => markRegTouched('adminPhone')}
+                            placeholder="10-digit mobile number"
                             maxLength="15"
                           />
+                          {regTouched.adminPhone && regErrors.adminPhone && (
+                            <div className="invalid-feedback small">{regErrors.adminPhone}</div>
+                          )}
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Admin Email <span className="text-danger">*</span></label>
                           <input 
                             type="email" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.adminEmail ? (regErrors.adminEmail ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={adminEmail}
                             onChange={(e) => setAdminEmail(e.target.value)}
+                            onBlur={() => markRegTouched('adminEmail')}
+                            placeholder="admin@hospital.org"
                             required 
                           />
+                          {regTouched.adminEmail && regErrors.adminEmail && (
+                            <div className="invalid-feedback small">{regErrors.adminEmail}</div>
+                          )}
                         </div>
                         <div className="col-md-6">
                           <label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label>
                           <input 
                             type="password" 
-                            className="form-control" 
+                            className={`form-control ${regTouched.adminPassword ? (regErrors.adminPassword ? 'is-invalid' : 'is-valid') : ''}`} 
                             value={adminPassword}
                             onChange={(e) => setAdminPassword(e.target.value)}
+                            onBlur={() => markRegTouched('adminPassword')}
+                            placeholder="Minimum 8 characters"
                             required 
                           />
+                          {regTouched.adminPassword && regErrors.adminPassword && (
+                            <div className="invalid-feedback small">{regErrors.adminPassword}</div>
+                          )}
                         </div>
                       </div>
 
