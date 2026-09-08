@@ -52,6 +52,10 @@ def ensure_workflow_schema():
             hospital_id INT NOT NULL, appointment_id INT NULL, diagnosis TEXT NULL, medical_notes TEXT NULL,
             visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
+        # Ensure tbl_patient and tbl_patient_profile have allergies column
+        _ensure_columns(cursor, 'tbl_patient', {
+            'allergies': 'TEXT NULL',
+        })
         # Ensure tbl_patient_profile has all required columns (table may pre-exist with a different schema)
         _ensure_columns(cursor, 'tbl_patient_profile', {
             'user_id': 'INT NOT NULL UNIQUE',
@@ -59,6 +63,7 @@ def ensure_workflow_schema():
             'date_of_birth': 'DATE NULL',
             'gender': 'VARCHAR(30) NULL',
             'address': 'TEXT NULL',
+            'allergies': 'TEXT NULL',
             'patient_is_active': 'TINYINT(1) NOT NULL DEFAULT 1',
             'created_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
         })
@@ -719,14 +724,14 @@ def patient_lookup(request):
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
-            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+            " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact, p.allergies"
             " FROM tbl_patient p WHERE (LOWER(p.patient_uid)=LOWER(%s) OR LOWER(p.patient_email)=LOWER(%s) OR p.patient_phone=%s)",
             [health_id, health_id, health_id]
         )
         row = cursor.fetchone()
         if not row:
             cursor.execute(
-                "SELECT p.patient_id, p.health_id, u.user_name, u.user_email, u.user_phone, p.date_of_birth, p.gender"
+                "SELECT p.patient_id, p.health_id, u.user_name, u.user_email, u.user_phone, p.date_of_birth, p.gender, p.allergies"
                 " FROM tbl_patient_profile p JOIN tbl_user u ON u.user_id=p.user_id"
                 " WHERE LOWER(p.health_id)=LOWER(%s) AND p.patient_is_active=1",
                 [health_id]
@@ -734,7 +739,7 @@ def patient_lookup(request):
             prof_row = cursor.fetchone()
             if not prof_row:
                 return JsonResponse({'status': 'error', 'message': 'Patient not found.'}, status=404)
-            row = (prof_row[0], prof_row[1], prof_row[2], prof_row[3], prof_row[4], prof_row[5], prof_row[6], '', '', '')
+            row = (prof_row[0], prof_row[1], prof_row[2], prof_row[3], prof_row[4], prof_row[5], prof_row[6], '', '', '', prof_row[7] if len(prof_row) > 7 else '')
 
         if user['role'] == 'doctor':
             cursor.execute(
@@ -744,12 +749,158 @@ def patient_lookup(request):
             if not cursor.fetchone():
                 return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient.'}, status=403)
 
-    return JsonResponse({'status': 'success', 'patient': {
+    patient_data = {
         'patient_id': row[0], 'patient_uid': row[1], 'health_id': row[1],
         'name': row[2], 'email': row[3] or '', 'phone': row[4] or '',
         'date_of_birth': str(row[5]) if row[5] else '', 'gender': row[6] or '',
         'blood_group': row[7] or '', 'address': row[8] or '', 'emergency_contact': row[9] or '',
-    }})
+    }
+    # Allergy information is strictly visible ONLY to doctors and patients, NOT receptionists or admins
+    if user['role'] in ('doctor', 'patient'):
+        patient_data['allergies'] = row[10] or ''
+
+    return JsonResponse({'status': 'success', 'patient': patient_data})
+
+
+@csrf_exempt
+def get_all_patients(request):
+    """Retrieve full list or filtered list of patients for the receptionist patient roster / directory."""
+    user, error = require_roles(request, 'receptionist', 'hospital-admin')
+    if error:
+        return error
+
+    query = (request.GET.get('query') or request.GET.get('q') or '').strip().lower()
+
+    with connection.cursor() as cursor:
+        if query:
+            cursor.execute(
+                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " FROM tbl_patient p"
+                " WHERE p.patient_is_active = 1"
+                " AND (LOWER(p.patient_name) LIKE %s OR LOWER(p.patient_uid) LIKE %s OR p.patient_phone LIKE %s)"
+                " ORDER BY p.patient_id DESC LIMIT 50",
+                [f'%{query}%', f'%{query}%', f'%{query}%']
+            )
+        else:
+            cursor.execute(
+                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " FROM tbl_patient p"
+                " WHERE p.patient_is_active = 1"
+                " ORDER BY p.patient_id DESC LIMIT 100"
+            )
+        rows = cursor.fetchall()
+        patients = [
+            {
+                'patient_id': r[0],
+                'patient_uid': r[1],
+                'health_id': r[1],
+                'name': r[2],
+                'email': r[3] or '',
+                'phone': r[4] or '',
+                'date_of_birth': str(r[5]) if r[5] else '',
+                'gender': r[6] or '',
+                'blood_group': r[7] or '',
+                'address': r[8] or '',
+                'emergency_contact': r[9] or '',
+            }
+            for r in rows
+        ]
+
+    return JsonResponse({'status': 'success', 'patients': patients})
+
+
+@csrf_exempt
+def update_patient(request):
+    """Allows receptionist or hospital admin to edit and update patient demographic details."""
+    user, error = require_roles(request, 'receptionist', 'hospital-admin')
+    if error:
+        return error
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    data = payload(request)
+    patient_id = data.get('patient_id')
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    dob = (data.get('date_of_birth') or '').strip() or None
+    gender = (data.get('gender') or '').strip() or None
+    blood_group = (data.get('blood_group') or '').strip() or None
+    address = (data.get('address') or '').strip() or None
+    emergency_contact = (data.get('emergency_contact') or '').strip() or None
+
+    if not patient_id:
+        return JsonResponse({'status': 'error', 'message': 'Patient ID is required.'}, status=400)
+    if not name or len(name) < 3:
+        return JsonResponse({'status': 'error', 'message': 'Patient full name is required (minimum 3 characters).'}, status=400)
+    if not phone or not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'A valid 10-digit primary phone number is required.'}, status=400)
+    if email and not is_valid_email(email):
+        return JsonResponse({'status': 'error', 'message': 'Please provide a valid email address.'}, status=400)
+    if not dob:
+        return JsonResponse({'status': 'error', 'message': 'Date of birth is required.'}, status=400)
+
+    try:
+        parsed_dob = datetime.strptime(dob, '%Y-%m-%d').date()
+        if parsed_dob > date.today():
+            return JsonResponse({'status': 'error', 'message': 'Date of birth cannot be a future date.'}, status=400)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid date of birth (YYYY-MM-DD).'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id, patient_uid FROM tbl_patient WHERE patient_id = %s", [patient_id])
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'error', 'message': 'Patient not found.'}, status=404)
+
+        user_id, patient_uid = p_row
+
+        # Check unique email/phone against other users
+        if email:
+            cursor.execute("SELECT user_id FROM tbl_user WHERE LOWER(user_email) = LOWER(%s) AND user_id != %s LIMIT 1", [email, user_id])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': f"A user with email '{email}' already exists."}, status=400)
+
+        cursor.execute("SELECT user_id FROM tbl_user WHERE user_phone = %s AND user_id != %s LIMIT 1", [phone, user_id])
+        if cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': f"A user with phone '{phone}' already exists."}, status=400)
+
+        # Update tbl_patient
+        cursor.execute("""
+            UPDATE tbl_patient
+            SET patient_name = %s, patient_email = %s, patient_phone = %s,
+                patient_dob = %s, patient_gender = %s, patient_blood_group = %s,
+                patient_address = %s, patient_emergency_contact = %s
+            WHERE patient_id = %s
+        """, [name, email or None, phone, dob, gender, blood_group, address, emergency_contact, patient_id])
+
+        # Update corresponding tbl_user
+        if user_id:
+            cursor.execute("""
+                UPDATE tbl_user
+                SET user_name = %s, user_email = %s, user_phone = %s
+                WHERE user_id = %s
+            """, [name, email or None, phone, user_id])
+
+    return JsonResponse({
+        'status': 'success',
+        'message': f"Patient '{name}' ({patient_uid}) updated successfully!",
+        'patient': {
+            'patient_id': patient_id,
+            'patient_uid': patient_uid,
+            'health_id': patient_uid,
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'date_of_birth': dob,
+            'gender': gender,
+            'blood_group': blood_group,
+            'address': address,
+            'emergency_contact': emergency_contact,
+        }
+    })
 
 
 @csrf_exempt
@@ -842,7 +993,7 @@ def patient_history(request):
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT patient_id, patient_uid, patient_name, patient_email, patient_phone,"
-            " patient_dob, patient_gender, patient_blood_group, patient_address, patient_emergency_contact"
+            " patient_dob, patient_gender, patient_blood_group, patient_address, patient_emergency_contact, allergies"
             " FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1",
             [patient_param, patient_param]
         )
@@ -871,6 +1022,7 @@ def patient_history(request):
             'blood_group': p_row[7] or '',
             'address': p_row[8] or '',
             'emergency_contact': p_row[9] or '',
+            'allergies': p_row[10] or '',
         }
 
         cursor.execute(
@@ -924,7 +1076,21 @@ def booking_options(request):
             [hospital_id, hospital_id]
         )
         doctors = [{'doctor_id': r[0], 'id': f"DOC{r[0]:03d}", 'name': r[1], 'specialization': r[2] or '', 'department_id': r[3]} for r in cursor.fetchall()]
-    return JsonResponse({'status': 'success', 'departments': departments, 'doctors': doctors})
+
+        # Check booked slots for a specific doctor & date if queried
+        doc_param = request.GET.get('doctor_id')
+        date_param = request.GET.get('date') or request.GET.get('appointment_date')
+        booked_slots = []
+        if doc_param and date_param:
+            cursor.execute(
+                "SELECT appointment_time FROM tbl_appointment"
+                " WHERE doctor_id=%s AND appointment_date=%s"
+                " AND appointment_status IN ('Pending','Confirmed')",
+                [doc_param, date_param]
+            )
+            booked_slots = [r[0][:5] if len(r[0]) >= 5 else r[0] for r in cursor.fetchall()]
+
+    return JsonResponse({'status': 'success', 'departments': departments, 'doctors': doctors, 'booked_slots': booked_slots})
 
 
 @csrf_exempt
@@ -952,7 +1118,8 @@ def appointments(request):
                 " h.hospital_name, dep.department_name, du.user_name,"
                 " COALESCE(p.patient_uid, pp.health_id, CONCAT('PTA', LPAD(a.patient_id, 3, '0'))) AS health_id,"
                 " COALESCE(p.patient_name, pu.user_name, 'Patient') AS patient_name,"
-                " a.patient_id, p.patient_phone, p.patient_gender, p.patient_dob, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " a.patient_id, p.patient_phone, p.patient_gender, p.patient_dob, p.patient_blood_group, p.patient_address, p.patient_emergency_contact,"
+                " p.allergies"
                 " FROM tbl_appointment a"
                 " LEFT JOIN tbl_hospital h ON h.hospital_id=a.hospital_id"
                 " LEFT JOIN tbl_department dep ON dep.department_id=a.department_id"
@@ -986,6 +1153,7 @@ def appointments(request):
                 'blood_group': r[14] or '',
                 'address': r[15] or '',
                 'emergency_contact': r[16] or '',
+                **({'allergies': r[17] or ''} if user['role'] in ('doctor', 'patient') else {})
             }
             for r in rows
         ]})
@@ -1144,7 +1312,58 @@ def visits(request):
             [appointment_id, user['doctor_id'], user['hospital_id']]
         )
 
+        # Update patient allergies across all doctors if provided/modified in consultation
+        if 'allergies' in data:
+            allergies_val = (data.get('allergies') or '').strip()
+            cursor.execute(
+                "UPDATE tbl_patient SET allergies=%s WHERE patient_id=%s",
+                [allergies_val, patient_id]
+            )
+            try:
+                cursor.execute(
+                    "UPDATE tbl_patient_profile SET allergies=%s WHERE patient_id=%s",
+                    [allergies_val, patient_id]
+                )
+            except Exception:
+                pass
+
     return JsonResponse({'status': 'success', 'message': 'Patient visit saved successfully.'})
+
+
+@csrf_exempt
+def update_patient_allergies(request):
+    """Allows doctors and patients to update allergy details. Restricts access from receptionists and admins."""
+    user, error = require_roles(request, 'doctor', 'patient')
+    if error:
+        return error
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    ensure_workflow_schema()
+    data = payload(request)
+    patient_param = user['patient_id'] if user['role'] == 'patient' else (data.get('patient_id') or data.get('health_id'))
+    allergies = (data.get('allergies') or '').strip()
+
+    if not patient_param:
+        return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1",
+            [patient_param, patient_param]
+        )
+        row = cursor.fetchone()
+        if not row:
+            return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+        patient_id = row[0]
+
+        cursor.execute("UPDATE tbl_patient SET allergies=%s WHERE patient_id=%s", [allergies, patient_id])
+        try:
+            cursor.execute("UPDATE tbl_patient_profile SET allergies=%s WHERE patient_id=%s", [allergies, patient_id])
+        except Exception:
+            pass
+
+    return JsonResponse({'status': 'success', 'message': 'Allergies updated successfully.', 'allergies': allergies})
 
 
 @csrf_exempt

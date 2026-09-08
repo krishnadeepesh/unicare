@@ -135,7 +135,13 @@ export default function HospitalFlowPage({ setView, onLogin }) {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        setRegisterError(`Server returned an error (${response.status} ${response.statusText || 'Error'}). Please try again later.`);
+        return;
+      }
 
       if (response.ok && data.status === 'success') {
         setRegisteredData(data.hospital);
@@ -143,6 +149,7 @@ export default function HospitalFlowPage({ setView, onLogin }) {
       } else {
         setRegisterError(data.message || 'Registration failed to save.');
       }
+
     } catch (err) {
       console.error('Registration error:', err);
       setRegisterError('Unable to connect to backend server.');
@@ -461,7 +468,6 @@ Your hospital registration request has been sent and is currently pending admini
                             value={contactNumber}
                             onChange={(e) => setContactNumber(e.target.value)}
                             onBlur={() => markRegTouched('contactNumber')}
-                            placeholder="10-digit mobile number"
                             maxLength="15"
                             required 
                           />
@@ -506,7 +512,6 @@ Your hospital registration request has been sent and is currently pending admini
                             value={adminPhone}
                             onChange={(e) => setAdminPhone(e.target.value)}
                             onBlur={() => markRegTouched('adminPhone')}
-                            placeholder="10-digit mobile number"
                             maxLength="15"
                           />
                           {regTouched.adminPhone && regErrors.adminPhone && (
@@ -521,7 +526,6 @@ Your hospital registration request has been sent and is currently pending admini
                             value={adminEmail}
                             onChange={(e) => setAdminEmail(e.target.value)}
                             onBlur={() => markRegTouched('adminEmail')}
-                            placeholder="admin@hospital.org"
                             required 
                           />
                           {regTouched.adminEmail && regErrors.adminEmail && (

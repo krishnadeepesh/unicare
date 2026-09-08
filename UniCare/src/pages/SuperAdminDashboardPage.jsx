@@ -54,7 +54,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
 
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
-    setTimeout(() => setToastMessage(null), 4000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   // 1. Fetch Dashboard Stats
@@ -302,12 +302,12 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
-      {/* Toast Notification */}
+      {/* Toast Notification (Positioned at bottom with auto-dismiss) */}
       {toastMessage && (
-        <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 2000 }}>
-          <div className={`toast show align-items-center text-white bg-${toastMessage.type} border-0 shadow-lg`}>
-            <div className="d-flex">
-              <div className="toast-body fw-medium">{toastMessage.msg}</div>
+        <div className="position-fixed bottom-0 end-0 p-4" style={{ zIndex: 2000 }}>
+          <div className={`toast show align-items-center text-white bg-${toastMessage.type} border-0 shadow-lg rounded-4 animate-soft-entrance`}>
+            <div className="d-flex p-1">
+              <div className="toast-body fw-bold fs-6">{toastMessage.msg}</div>
               <button type="button" className="btn-close btn-close-white me-2 m-auto" onClick={() => setToastMessage(null)}></button>
             </div>
           </div>

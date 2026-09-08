@@ -44,14 +44,14 @@ export default function RegisterPage({ setView }) {
     if (!email.trim()) {
       errs.email = 'Email address is required.';
     } else if (!emailRegex.test(email.trim())) {
-      errs.email = 'Enter a valid email address (e.g. name@domain.com).';
+      errs.email = 'Enter a valid email address.';
     }
 
     const phoneDigits = phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
     if (!phone.trim()) {
       errs.phone = 'Phone number is required.';
     } else if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
-      errs.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6-9).';
+      errs.phone = 'Enter a valid 10-digit(starts with 6-9).';
     }
 
     if (!password) {
@@ -204,7 +204,6 @@ export default function RegisterPage({ setView }) {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       onBlur={() => markTouched('fullName')}
-                      placeholder="e.g. Dr. John Doe"
                       required 
                     />
                     {touched.fullName && fieldErrors.fullName && (
@@ -220,7 +219,6 @@ export default function RegisterPage({ setView }) {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       onBlur={() => markTouched('email')}
-                      placeholder="admin@hospital.com"
                       required
                     />
                     {touched.email && fieldErrors.email && (
@@ -236,7 +234,6 @@ export default function RegisterPage({ setView }) {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       onBlur={() => markTouched('phone')}
-                      placeholder="10-digit mobile number"
                       maxLength="15"
                       required
                     />

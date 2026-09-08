@@ -53,8 +53,13 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   });
 
   // Doctor Visit Entry Form
-  const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '' });
+  const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '' });
   const [visitSubmitting, setVisitSubmitting] = useState(false);
+
+  // Quick Allergies Update Modal
+  const [showAllergyModal, setShowAllergyModal] = useState(false);
+  const [allergyInput, setAllergyInput] = useState('');
+  const [allergySubmitting, setAllergySubmitting] = useState(false);
 
   // Profile & Password Update Forms
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -238,6 +243,17 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     }
   };
 
+  // Open Visit Consultation Modal pre-populated with patient's allergies
+  const handleOpenVisitModal = () => {
+    setVisitForm({
+      diagnosis: '',
+      medical_notes: '',
+      appointment_id: '',
+      allergies: selectedPatient?.allergies || ''
+    });
+    setShowVisitModal(true);
+  };
+
   // Save Visit Consultation Record (Doctor)
   const handleSaveVisit = async (e) => {
     e.preventDefault();
@@ -259,8 +275,10 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: 'Patient consultation visit record saved successfully!', type: 'success' });
-        setVisitForm({ diagnosis: '', medical_notes: '', appointment_id: '' });
+        const updatedAllergies = visitForm.allergies;
+        setVisitForm({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '' });
         setShowVisitModal(false);
+        setSelectedPatient(prev => (prev ? { ...prev, allergies: updatedAllergies } : null));
         handleSelectPatient(selectedPatient);
         loadData();
       } else {
@@ -270,6 +288,41 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       setMessage({ text: 'Error saving visit record.', type: 'danger' });
     } finally {
       setVisitSubmitting(false);
+    }
+  };
+
+  // Open & Save Quick Allergy Modal
+  const handleOpenAllergyModal = () => {
+    setAllergyInput(selectedPatient?.allergies || '');
+    setShowAllergyModal(true);
+  };
+
+  const handleSaveAllergies = async (e) => {
+    e.preventDefault();
+    if (!selectedPatient) return;
+    setAllergySubmitting(true);
+    try {
+      const res = await fetch(`${API}/patients/allergies/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patient_id: selectedPatient.patient_id || selectedPatient.patient_uid,
+          allergies: allergyInput
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: 'Patient allergies updated successfully!', type: 'success' });
+        setSelectedPatient(prev => (prev ? { ...prev, allergies: allergyInput } : null));
+        setShowAllergyModal(false);
+      } else {
+        setMessage({ text: data.message || 'Failed to update allergies.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error updating patient allergies.', type: 'danger' });
+    } finally {
+      setAllergySubmitting(false);
     }
   };
 
@@ -1001,11 +1054,40 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       <p className="text-muted small mb-0">
                         Phone: <strong>{selectedPatient.phone || 'N/A'}</strong> &bull; DOB: {selectedPatient.date_of_birth || 'N/A'}{selectedPatient.date_of_birth && calculateAge(selectedPatient.date_of_birth) !== '' ? ` (Age: ${calculateAge(selectedPatient.date_of_birth)} yrs)` : ''} &bull; Gender: {selectedPatient.gender || 'N/A'}
                       </p>
+                      <div className="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                        {selectedPatient.allergies ? (
+                          <div className="alert alert-danger py-1 px-3 mb-0 d-inline-flex align-items-center gap-2 rounded-3 border-danger border-opacity-50">
+                            <i className="bi bi-exclamation-octagon-fill text-danger"></i>
+                            <span className="small"><strong>Known Allergies:</strong> <span className="fw-bold">{selectedPatient.allergies}</span></span>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 ms-1 extra-small"
+                              onClick={handleOpenAllergyModal}
+                              title="Update allergies"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="alert alert-light py-1 px-2.5 mb-0 d-inline-flex align-items-center gap-1.5 rounded-3 border text-muted small">
+                            <i className="bi bi-shield-check text-success"></i>
+                            <span>No allergies documented</span>
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm text-teal p-0 ms-1 extra-small fw-semibold text-decoration-none"
+                              style={{ color: '#0d9488' }}
+                              onClick={handleOpenAllergyModal}
+                            >
+                              + Add Allergy
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <button
-                      className="btn btn-teal text-white btn-sm fw-bold rounded-pill px-3"
+                      className="btn btn-teal text-white btn-sm fw-bold rounded-pill px-3 shadow-sm"
                       style={{ backgroundColor: '#0d9488' }}
-                      onClick={() => setShowVisitModal(true)}
+                      onClick={handleOpenVisitModal}
                     >
                       <i className="bi bi-plus-circle me-1"></i> Record New Visit
                     </button>
@@ -1105,7 +1187,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   <button
                     className="btn btn-teal text-white btn-sm rounded-pill fw-bold px-3 shadow-sm"
                     style={{ backgroundColor: '#0d9488' }}
-                    onClick={() => setShowVisitModal(true)}
+                    onClick={handleOpenVisitModal}
                   >
                     <i className="bi bi-plus-circle me-1"></i> Record Visit
                   </button>
@@ -1192,10 +1274,19 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
 
               {selectedPatient ? (
                 <div>
-                  <div className="alert alert-info py-2.5 px-3 small mb-4 rounded-3 d-flex justify-content-between align-items-center">
-                    <div>
-                      Viewing authorized history for: <strong className="text-dark">{selectedPatient.name}</strong> 
-                      <span className="badge bg-teal text-white font-monospace ms-2" style={{ backgroundColor: '#0d9488' }}>{selectedPatient.patient_uid || selectedPatient.health_id}</span>
+                  <div className="alert alert-info py-2.5 px-3 small mb-4 rounded-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span>Viewing authorized history for: <strong className="text-dark">{selectedPatient.name}</strong></span> 
+                      <span className="badge bg-teal text-white font-monospace" style={{ backgroundColor: '#0d9488' }}>{selectedPatient.patient_uid || selectedPatient.health_id}</span>
+                      {selectedPatient.allergies ? (
+                        <span className="badge bg-danger text-white py-1 px-2.5 rounded-pill shadow-sm">
+                          <i className="bi bi-exclamation-octagon-fill me-1"></i>Allergies: {selectedPatient.allergies}
+                        </span>
+                      ) : (
+                        <span className="badge bg-light text-secondary border py-1 px-2 rounded-pill">
+                          No allergies logged
+                        </span>
+                      )}
                     </div>
                     <div className="d-flex gap-2">
                       <button className="btn btn-outline-secondary btn-sm px-2 py-0.5 rounded-pill" onClick={() => setSelectedPatient(null)}>Switch Patient</button>
@@ -1717,9 +1808,32 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                 ></button>
               </div>
               <div className="modal-body p-4">
-                <div className="alert alert-light border py-2 px-3 small mb-3">
-                  Patient: <strong>{selectedPatient.name}</strong> ({selectedPatient.patient_uid || selectedPatient.health_id})
+                <div className="alert alert-light border py-2 px-3 small mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    Patient: <strong>{selectedPatient.name}</strong> ({selectedPatient.patient_uid || selectedPatient.health_id})
+                  </div>
+                  {selectedPatient.allergies ? (
+                    <span className="badge bg-danger text-white px-2.5 py-1 rounded-pill">
+                      <i className="bi bi-exclamation-octagon-fill me-1"></i>Allergies: {selectedPatient.allergies}
+                    </span>
+                  ) : (
+                    <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill">
+                      <i className="bi bi-shield-check me-1"></i>No Allergies Recorded
+                    </span>
+                  )}
                 </div>
+
+                {/* Known Allergies Alert Banner */}
+                {selectedPatient.allergies && (
+                  <div className="alert alert-danger bg-danger-subtle border-danger border-opacity-25 py-2.5 px-3 small mb-3 rounded-3 d-flex align-items-center gap-2">
+                    <i className="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0"></i>
+                    <div>
+                      <strong>Medical Alert — Known Allergies:</strong> <span className="fw-bold text-danger">{selectedPatient.allergies}</span>
+                      <div className="extra-small text-muted">Review before prescribing medications or administering treatments.</div>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleSaveVisit}>
                   <div className="mb-3">
                     <label className="form-label small fw-semibold">Diagnosis / Clinical Finding *</label>
@@ -1732,6 +1846,28 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       onChange={(e) => setVisitForm({ ...visitForm, diagnosis: e.target.value })}
                     />
                   </div>
+
+                  {/* Allergy Field in Consultation Form */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold d-flex justify-content-between align-items-center mb-1">
+                      <span><i className="bi bi-shield-exclamation text-danger me-1"></i>Patient Known Allergies (Drug / Food / Environmental)</span>
+                      <span className="badge bg-light text-secondary border extra-small">Shared across all consulting doctors</span>
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light text-danger"><i className="bi bi-exclamation-triangle"></i></span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Penicillin, Peanuts, Sulfa drugs, Aspirin (or leave blank if none)..."
+                        value={visitForm.allergies}
+                        onChange={(e) => setVisitForm({ ...visitForm, allergies: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-text text-muted extra-small mt-1">
+                      <i className="bi bi-info-circle me-1"></i>Allergies documented or updated here are saved permanently to this patient's profile and immediately visible to any doctor who consults them.
+                    </div>
+                  </div>
+
                   <div className="mb-3">
                     <label className="form-label small fw-semibold">Clinical Notes & Prescribed Treatment *</label>
                     <textarea
@@ -1749,6 +1885,54 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                     </button>
                     <button type="submit" className="btn btn-teal text-white rounded-pill px-4 fw-bold" style={{ backgroundColor: '#0d9488' }} disabled={visitSubmitting}>
                       {visitSubmitting ? 'Saving...' : 'Save Visit Record'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK ALLERGIES UPDATE MODAL */}
+      {showAllergyModal && selectedPatient && (
+        <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold fs-5 mb-0">
+                  <i className="bi bi-shield-exclamation me-2"></i>Update Patient Allergies
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowAllergyModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <div className="alert alert-light border py-2 px-3 small mb-3">
+                  Patient: <strong>{selectedPatient.name}</strong> ({selectedPatient.patient_uid || selectedPatient.health_id})
+                </div>
+                <form onSubmit={handleSaveAllergies}>
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Documented Allergies</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      placeholder="e.g. Penicillin, Sulfa drugs, Peanuts, Latex..."
+                      value={allergyInput}
+                      onChange={(e) => setAllergyInput(e.target.value)}
+                    ></textarea>
+                    <div className="form-text text-muted small">
+                      Allergies entered here will be immediately visible to all consulting doctors across all hospitals.
+                    </div>
+                  </div>
+                  <div className="d-flex justify-content-end gap-2">
+                    <button type="button" className="btn btn-secondary rounded-pill px-3" onClick={() => setShowAllergyModal(false)}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-teal text-white rounded-pill px-4 fw-bold" style={{ backgroundColor: '#0d9488' }} disabled={allergySubmitting}>
+                      {allergySubmitting ? 'Saving...' : 'Save Allergies'}
                     </button>
                   </div>
                 </form>
@@ -1780,6 +1964,17 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   </div>
                   <span className="badge bg-light text-teal border" style={{ color: '#0d9488' }}>Facility: {displayHospital}</span>
                 </div>
+
+                {/* Patient Known Allergies Medical Warning */}
+                {selectedPatient.allergies && (
+                  <div className="alert alert-danger bg-danger-subtle border-danger border-opacity-25 py-2 px-3 small mb-3 rounded-3 d-flex align-items-center gap-2">
+                    <i className="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0"></i>
+                    <div>
+                      <strong>Medical Caution — Patient Allergies:</strong> <span className="fw-bold text-danger">{selectedPatient.allergies}</span>
+                      <div className="extra-small text-muted">Verify prescribed drugs do not cause adverse allergic reactions.</div>
+                    </div>
+                  </div>
+                )}
                 <form onSubmit={handleSavePrescription}>
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">

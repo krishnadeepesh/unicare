@@ -113,7 +113,6 @@ function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
                 </span>
                 <input
                   type="email"
-                  placeholder="admin@unicare.com"
                   className={`form-control border-start-0 bg-light py-2.5 ${validated && !email.trim() ? 'is-invalid' : ''}`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

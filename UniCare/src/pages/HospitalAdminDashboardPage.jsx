@@ -152,12 +152,31 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     // License Issue Date *
     if (!hospitalRegistration.license_issue_date) {
       errs.license_issue_date = 'License issue date is required.';
+    } else {
+      const issueDate = new Date(hospitalRegistration.license_issue_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (isNaN(issueDate.getTime())) {
+        errs.license_issue_date = 'Enter a valid issue date.';
+      } else if (issueDate > today) {
+        errs.license_issue_date = 'License issue date cannot be a future date.';
+      }
     }
 
-    // License Expiry Date
-    if (hospitalRegistration.license_expiry_date && hospitalRegistration.license_issue_date) {
-      if (new Date(hospitalRegistration.license_expiry_date) < new Date(hospitalRegistration.license_issue_date)) {
-        errs.license_expiry_date = 'Expiry date cannot be before issue date.';
+    // License Expiry Date *
+    if (!hospitalRegistration.license_expiry_date) {
+      errs.license_expiry_date = 'License expiry date is required.';
+    } else {
+      const expiryDate = new Date(hospitalRegistration.license_expiry_date);
+      if (isNaN(expiryDate.getTime())) {
+        errs.license_expiry_date = 'Enter a valid expiry date.';
+      } else if (hospitalRegistration.license_issue_date) {
+        const issueDate = new Date(hospitalRegistration.license_issue_date);
+        if (expiryDate.getTime() === issueDate.getTime()) {
+          errs.license_expiry_date = 'Expiry date cannot be the same as the issue date.';
+        } else if (expiryDate < issueDate) {
+          errs.license_expiry_date = 'Expiry date must be after the license issue date.';
+        }
       }
     }
 
@@ -177,7 +196,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
-    setTimeout(() => setToastMessage(null), 5000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   // Fetch Hospital Details & Hospital-Specific Dashboard Stats from MySQL
@@ -447,8 +466,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         credentials: 'include',
         body: formData,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message);
+      let data;
+
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        throw new Error(`Server returned ${response.status} ${response.statusText || 'error'}`);
+      }
+      if (!response.ok) throw new Error(data.message || 'Hospital registration submission failed');
       setHospitalData((current) => ({
         ...current,
         hospital_name: hospitalRegistration.name,
@@ -502,12 +527,12 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* Toast Notification */}
+      {/* Toast Notification (Positioned at bottom with auto-dismiss) */}
       {toastMessage && (
-        <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 2000 }}>
-          <div className={`toast show align-items-center text-white bg-${toastMessage.type} border-0 shadow-lg`}>
-            <div className="d-flex">
-              <div className="toast-body fw-bold">{toastMessage.msg}</div>
+        <div className="position-fixed bottom-0 end-0 p-4" style={{ zIndex: 2000 }}>
+          <div className={`toast show align-items-center text-white bg-${toastMessage.type} border-0 shadow-lg rounded-4 animate-soft-entrance`}>
+            <div className="d-flex p-1">
+              <div className="toast-body fw-bold fs-6">{toastMessage.msg}</div>
               <button type="button" className="btn-close btn-close-white me-2 m-auto" onClick={() => setToastMessage(null)}></button>
             </div>
           </div>
@@ -676,7 +701,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         value={hospitalRegistration.email} 
                         onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, email: e.target.value })} 
                         onBlur={() => markHospTouched('email')}
-                        placeholder="admin@hospital.com"
                         required 
                       />
                       {hospTouched.email && hospErrors.email && (
@@ -691,7 +715,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         value={hospitalRegistration.phone} 
                         onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, phone: e.target.value })} 
                         onBlur={() => markHospTouched('phone')}
-                        placeholder="10-digit mobile number"
                         required 
                       />
                       {hospTouched.phone && hospErrors.phone && (
@@ -758,13 +781,14 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       )}
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label fw-semibold small">License Expiry Date</label>
+                      <label className="form-label fw-semibold small">License Expiry Date <span className="text-danger">*</span></label>
                       <input 
                         type="date"
                         className={`form-control ${hospTouched.license_expiry_date ? (hospErrors.license_expiry_date ? 'is-invalid' : 'is-valid') : ''}`} 
                         value={hospitalRegistration.license_expiry_date} 
                         onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, license_expiry_date: e.target.value })} 
                         onBlur={() => markHospTouched('license_expiry_date')}
+                        required
                       />
                       {hospTouched.license_expiry_date && hospErrors.license_expiry_date && (
                         <div className="invalid-feedback small">{hospErrors.license_expiry_date}</div>
@@ -1193,7 +1217,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
                       onBlur={() => markDocTouched('name')}
-                      placeholder="e.g. Dr. John Doe"
                     />
                     {docTouched.name && docErrors.name && (
                       <div className="invalid-feedback small">{docErrors.name}</div>
@@ -1210,7 +1233,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={docEmail}
                       onChange={(e) => setDocEmail(e.target.value)}
                       onBlur={() => markDocTouched('email')}
-                      placeholder="doctor@hospital.com"
                     />
                     {docTouched.email && docErrors.email && (
                       <div className="invalid-feedback small">{docErrors.email}</div>
@@ -1227,7 +1249,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         value={docPhone}
                         onChange={(e) => setDocPhone(e.target.value)}
                         onBlur={() => markDocTouched('phone')}
-                        placeholder="10-digit mobile"
                         maxLength="15"
                       />
                       {docTouched.phone && docErrors.phone && (
@@ -1241,7 +1262,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         className="form-control"
                         value={docLicense}
                         onChange={(e) => setDocLicense(e.target.value)}
-                        placeholder="e.g. MED12345"
                       />
                     </div>
                   </div>
@@ -1254,7 +1274,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       className="form-control" 
                       value={docExperience} 
                       onChange={(e) => setDocExperience(e.target.value)} 
-                      placeholder="e.g. 5 years, Senior Consultant"
                     />
                   </div>
 
@@ -1318,7 +1337,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={receptionistForm.name} 
                       onChange={(e) => setReceptionistForm({ ...receptionistForm, name: e.target.value })} 
                       onBlur={() => markRecTouched('name')}
-                      placeholder="e.g. Sarah Jenkins"
                       required 
                     />
                     {recTouched.name && recErrors.name && (
@@ -1333,7 +1351,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={receptionistForm.email} 
                       onChange={(e) => setReceptionistForm({ ...receptionistForm, email: e.target.value })} 
                       onBlur={() => markRecTouched('email')}
-                      placeholder="reception@hospital.com"
                       required 
                     />
                     {recTouched.email && recErrors.email && (
@@ -1348,7 +1365,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={receptionistForm.phone} 
                       onChange={(e) => setReceptionistForm({ ...receptionistForm, phone: e.target.value })} 
                       onBlur={() => markRecTouched('phone')}
-                      placeholder="10-digit mobile number"
                     />
                     {recTouched.phone && recErrors.phone && (
                       <div className="invalid-feedback small">{recErrors.phone}</div>

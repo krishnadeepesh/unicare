@@ -38,9 +38,28 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   const [bookingTime, setBookingTime] = useState('09:00');
   const [bookingReason, setBookingReason] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState([]);
   const [modalPatientSearch, setModalPatientSearch] = useState('');
   const [modalPatientSuggestions, setModalPatientSuggestions] = useState([]);
   const [isSearchingModalPatient, setIsSearchingModalPatient] = useState(false);
+
+  // Patient Directory Roster & Edit Patient State
+  const [directoryPatients, setDirectoryPatients] = useState([]);
+  const [loadingDirectory, setLoadingDirectory] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
+  const [editPatientForm, setEditPatientForm] = useState({
+    patient_id: null,
+    name: '',
+    email: '',
+    phone: '',
+    date_of_birth: '',
+    gender: 'Male',
+    blood_group: 'A+',
+    address: '',
+    emergency_contact: '',
+  });
+  const [editPatientSubmitting, setEditPatientSubmitting] = useState(false);
+  const [showRegistrationSuccessModal, setShowRegistrationSuccessModal] = useState(false);
 
   // Doctor Visit Entry
   const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '' });
@@ -53,8 +72,8 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
     phone: '',
     password: '',
     date_of_birth: '',
-    gender: 'Male',
-    blood_group: 'A+',
+    gender: '',
+    blood_group: '',
     address: '',
     emergency_contact: ''
   });
@@ -95,6 +114,14 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
       if (selected > now) {
         errs.date_of_birth = 'Date of birth cannot be in the future.';
       }
+    }
+
+    if (!patientForm.gender) {
+      errs.gender = 'Gender is required.';
+    }
+
+    if (!patientForm.blood_group) {
+      errs.blood_group = 'Blood group is required.';
     }
 
     if (patientForm.emergency_contact && patientForm.emergency_contact.trim()) {
@@ -247,6 +274,40 @@ const RECOVERY_QUESTIONS = [
     return () => clearTimeout(timer);
   }, [searchQuery, isDoctor]);
 
+  // Fetch Directory Patients (full roster or filtered)
+  const fetchDirectoryPatients = async (query = '') => {
+    setLoadingDirectory(true);
+    try {
+      const url = query.trim()
+        ? `${API}/patients/all/?query=${encodeURIComponent(query.trim())}`
+        : `${API}/patients/all/`;
+      const res = await fetch(url, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setDirectoryPatients(data.patients || []);
+      }
+    } catch (err) {
+      console.error('Error fetching directory patients:', err);
+    } finally {
+      setLoadingDirectory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'patients') {
+      fetchDirectoryPatients(patientSearch);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'patients') {
+      const timer = setTimeout(() => {
+        fetchDirectoryPatients(patientSearch);
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [patientSearch]);
+
   // Modal Patient Search API Trigger (when booking appointment without preselected patient)
   useEffect(() => {
     if (!modalPatientSearch.trim() || modalPatientSearch.trim().length < 2) {
@@ -345,6 +406,32 @@ const RECOVERY_QUESTIONS = [
     }
   };
 
+  // Fetch Booked Slots when Doctor and Date are chosen
+  const fetchBookedSlots = async (docId, date) => {
+    const activeHid = hospitalId || user?.hospital_id;
+    if (!activeHid || !docId || !date) {
+      setBookedSlots([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/appointments/options/?hospital_id=${activeHid}&doctor_id=${encodeURIComponent(docId)}&date=${encodeURIComponent(date)}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setBookedSlots(data.booked_slots || []);
+      }
+    } catch (err) {
+      console.error('Error fetching booked slots:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedDocId && bookingDate) {
+      fetchBookedSlots(selectedDocId, bookingDate);
+    } else {
+      setBookedSlots([]);
+    }
+  }, [selectedDocId, bookingDate]);
+
   // Handle department change in booking modal and reset doctor
   const handleDepartmentChange = (deptId) => {
     setSelectedDeptId(deptId);
@@ -439,6 +526,7 @@ const RECOVERY_QUESTIONS = [
       email: true,
       date_of_birth: true,
       gender: true,
+      blood_group: true,
       emergency_contact: true,
       password: true,
     });
@@ -470,21 +558,95 @@ const RECOVERY_QUESTIONS = [
       if (res.ok) {
         const p = data.patient;
         setRegisterResult(p);
+        setShowRegistrationSuccessModal(true);
         setMessage({
           text: data.existing ? `Existing patient record found and linked (${p.patient_uid || p.health_id})!` : `New patient registered successfully! Assigned Health ID: ${p.patient_uid || p.health_id}`,
           type: 'success'
         });
         setPatientForm({
           name: '', email: '', phone: '', password: '', date_of_birth: '',
-          gender: 'Male', blood_group: 'A+', address: '', emergency_contact: ''
+          gender: '', blood_group: '', address: '', emergency_contact: ''
         });
+        setPatientTouched({});
         loadData();
+        fetchDirectoryPatients(patientSearch);
       } else {
         setMessage({ text: data.message || `Failed to register patient (Error ${res.status}).`, type: 'danger' });
       }
     } catch (err) {
       console.error('Patient registration error:', err);
       setMessage({ text: err.message || 'Failed to connect to registration service. Please check your network.', type: 'danger' });
+    }
+  };
+
+  // Open Edit Patient Modal
+  const handleOpenEditPatient = (p) => {
+    setEditingPatient(p);
+    setEditPatientForm({
+      patient_id: p.patient_id,
+      name: p.name || '',
+      email: p.email || '',
+      phone: p.phone || '',
+      date_of_birth: p.date_of_birth || '',
+      gender: p.gender || 'Male',
+      blood_group: p.blood_group || 'A+',
+      address: p.address || '',
+      emergency_contact: p.emergency_contact || '',
+    });
+  };
+
+  // Submit Patient Details Update
+  const handleSavePatientEdit = async (e) => {
+    e.preventDefault();
+    if (!editPatientForm.name.trim() || editPatientForm.name.trim().length < 3) {
+      setMessage({ text: 'Patient name must be at least 3 characters.', type: 'danger' });
+      return;
+    }
+    const dDigits = (editPatientForm.phone || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!/^[6-9]\d{9}$/.test(dDigits)) {
+      setMessage({ text: 'Enter a valid 10-digit primary phone number.', type: 'danger' });
+      return;
+    }
+    if (!editPatientForm.date_of_birth) {
+      setMessage({ text: 'Date of birth is required.', type: 'danger' });
+      return;
+    }
+    const selectedDob = new Date(editPatientForm.date_of_birth);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (isNaN(selectedDob.getTime())) {
+      setMessage({ text: 'Enter a valid date of birth.', type: 'danger' });
+      return;
+    }
+    if (selectedDob > today) {
+      setMessage({ text: 'Date of birth cannot be a future date.', type: 'danger' });
+      return;
+    }
+
+    setEditPatientSubmitting(true);
+    try {
+      const res = await fetch(`${API}/patients/update/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(editPatientForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: data.message, type: 'success' });
+        setEditingPatient(null);
+        fetchDirectoryPatients(patientSearch);
+        if (selectedPatient && selectedPatient.patient_id === editPatientForm.patient_id) {
+          setSelectedPatient(data.patient);
+        }
+      } else {
+        setMessage({ text: data.message || 'Failed to update patient details.', type: 'danger' });
+      }
+    } catch (err) {
+      console.error('Error updating patient details:', err);
+      setMessage({ text: 'Network error updating patient details.', type: 'danger' });
+    } finally {
+      setEditPatientSubmitting(false);
     }
   };
 
@@ -1087,7 +1249,6 @@ const RECOVERY_QUESTIONS = [
                         <input
                           type="text"
                           className={`form-control rounded-3 py-2 ${patientTouched.name ? (patientErrors.name ? 'is-invalid' : 'is-valid') : ''}`}
-                          placeholder="e.g. Rahul Sharma"
                           required
                           value={patientForm.name}
                           onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })}
@@ -1102,7 +1263,6 @@ const RECOVERY_QUESTIONS = [
                         <input
                           type="tel"
                           className={`form-control rounded-3 py-2 ${patientTouched.phone ? (patientErrors.phone ? 'is-invalid' : 'is-valid') : ''}`}
-                          placeholder="10-digit mobile number"
                           required
                           maxLength="15"
                           value={patientForm.phone}
@@ -1121,7 +1281,6 @@ const RECOVERY_QUESTIONS = [
                         <input
                           type="email"
                           className={`form-control rounded-3 py-2 ${patientTouched.email ? (patientErrors.email ? 'is-invalid' : (patientForm.email.trim() ? 'is-valid' : '')) : ''}`}
-                          placeholder="Optional (name@domain.com)"
                           value={patientForm.email}
                           onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })}
                           onBlur={() => markPatientTouched('email')}
@@ -1152,7 +1311,6 @@ const RECOVERY_QUESTIONS = [
                           className="form-control rounded-3 py-2 bg-light fw-bold"
                           style={{ color: '#0d9488' }}
                           value={calculateAge(patientForm.date_of_birth) !== '' ? `${calculateAge(patientForm.date_of_birth)} yrs` : ''}
-                          placeholder="Auto"
                           readOnly
                           disabled
                         />
@@ -1160,37 +1318,48 @@ const RECOVERY_QUESTIONS = [
                       <div className="col-md-3">
                         <label className="form-label fw-semibold small text-secondary mb-1">Gender *</label>
                         <select
-                          className="form-select rounded-3 py-2 is-valid"
+                          className={`form-select rounded-3 py-2 ${patientTouched.gender ? (patientErrors.gender ? 'is-invalid' : (patientForm.gender ? 'is-valid' : '')) : ''}`}
                           value={patientForm.gender}
                           onChange={(e) => setPatientForm({ ...patientForm, gender: e.target.value })}
+                          onBlur={() => markPatientTouched('gender')}
+                          required
                         >
+                          <option value="">-- Select Gender --</option>
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
                           <option value="Other">Other</option>
                         </select>
+                        {patientTouched.gender && patientErrors.gender && (
+                          <div className="invalid-feedback small">{patientErrors.gender}</div>
+                        )}
                       </div>
                     </div>
 
                     <div className="row g-3 mb-3">
                       <div className="col-md-6">
-                        <label className="form-label fw-semibold small text-secondary mb-1">Blood Group</label>
+                        <label className="form-label fw-semibold small text-secondary mb-1">Blood Group *</label>
                         <select
-                          className="form-select rounded-3 py-2 is-valid"
+                          className={`form-select rounded-3 py-2 ${patientTouched.blood_group ? (patientErrors.blood_group ? 'is-invalid' : (patientForm.blood_group ? 'is-valid' : '')) : ''}`}
                           value={patientForm.blood_group}
                           onChange={(e) => setPatientForm({ ...patientForm, blood_group: e.target.value })}
+                          onBlur={() => markPatientTouched('blood_group')}
+                          required
                         >
+                          <option value="">-- Select Blood Group --</option>
                           <option value="A+">A+</option><option value="A-">A-</option>
                           <option value="B+">B+</option><option value="B-">B-</option>
                           <option value="AB+">AB+</option><option value="AB-">AB-</option>
                           <option value="O+">O+</option><option value="O-">O-</option>
                         </select>
+                        {patientTouched.blood_group && patientErrors.blood_group && (
+                          <div className="invalid-feedback small">{patientErrors.blood_group}</div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold small text-secondary mb-1">Emergency Contact Number</label>
                         <input
                           type="tel"
                           className={`form-control rounded-3 py-2 ${patientTouched.emergency_contact ? (patientErrors.emergency_contact ? 'is-invalid' : (patientForm.emergency_contact.trim() ? 'is-valid' : '')) : ''}`}
-                          placeholder="Optional 10-digit number"
                           value={patientForm.emergency_contact}
                           onChange={(e) => setPatientForm({ ...patientForm, emergency_contact: e.target.value })}
                           onBlur={() => markPatientTouched('emergency_contact')}
@@ -1207,7 +1376,6 @@ const RECOVERY_QUESTIONS = [
                       <textarea
                         rows="2"
                         className="form-control rounded-3"
-                        placeholder="Street, City, Postal Code"
                         value={patientForm.address}
                         onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
                       ></textarea>
@@ -1565,29 +1733,111 @@ const RECOVERY_QUESTIONS = [
             </div>
 
             <div className="row g-3">
-              {suggestions.length > 0 ? (
-                suggestions.map((p) => (
-                  <div key={p.patient_id} className="col-md-6 col-lg-4">
-                    <div className="card border-0 shadow-sm rounded-4 p-3.5 h-100 d-flex flex-column justify-content-between bg-white">
+              {loadingDirectory ? (
+                <div className="col-12 py-5 text-center">
+                  <div className="spinner-border text-teal" role="status" style={{ color: '#0d9488' }}></div>
+                  <p className="text-muted small mt-2">Loading patients directory...</p>
+                </div>
+              ) : directoryPatients.length > 0 ? (
+                directoryPatients.map((p) => (
+                  <div key={p.patient_id} className="col-md-6 col-xl-4">
+                    <div className="card border border-light-subtle shadow-sm rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white position-relative hover-shadow-sm transition-all">
                       <div>
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <h6 className="fw-bold text-dark mb-0">{p.name}</h6>
-                          <span className="badge bg-teal-subtle text-teal font-monospace" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                            {p.patient_uid || p.health_id}
-                          </span>
+                        {/* Header: Avatar, Patient Name, Blood Group & Health ID */}
+                        <div className="d-flex align-items-start gap-3 mb-3">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5 flex-shrink-0"
+                            style={{
+                              width: '46px',
+                              height: '46px',
+                              backgroundColor: '#e6f4f1',
+                              color: '#0d9488',
+                              border: '2px solid #ccede7'
+                            }}
+                          >
+                            {(p.name || 'P').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-grow-1 min-w-0">
+                            <div className="d-flex align-items-center justify-content-between gap-2">
+                              <h6 className="fw-bold text-dark mb-0 text-truncate" title={p.name}>
+                                {p.name}
+                              </h6>
+                              {p.blood_group && (
+                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-1 flex-shrink-0" style={{ fontSize: '0.72rem' }}>
+                                  <i className="bi bi-droplet-fill me-1"></i>{p.blood_group}
+                                </span>
+                              )}
+                            </div>
+                            <div className="d-flex align-items-center flex-wrap gap-1 mt-1">
+                              <span className="badge bg-light text-secondary border font-monospace px-2 py-0.5" style={{ fontSize: '0.75rem', letterSpacing: '0.5px' }}>
+                                <i className="bi bi-upc-scan me-1 text-teal" style={{ color: '#0d9488' }}></i>
+                                {p.patient_uid || p.health_id}
+                              </span>
+                              {p.gender && (
+                                <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-0.5" style={{ fontSize: '0.72rem' }}>
+                                  {p.gender}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="small text-muted mb-3">
-                          <div><i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'}</div>
-                          <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''} &bull; Gender: {p.gender || 'N/A'}</div>
-                          {p.blood_group && <div><i className="bi bi-droplet me-1"></i>Blood Group: {p.blood_group}</div>}
+
+                        {/* Demographics Pill Bar */}
+                        <div className="d-flex flex-wrap gap-1 mb-3">
+                          {p.date_of_birth && calculateAge(p.date_of_birth) !== '' && (
+                            <span className="badge bg-teal-subtle text-teal rounded-pill px-2 py-1" style={{ backgroundColor: '#e6f4f1', color: '#0d9488', fontSize: '0.75rem' }}>
+                              <i className="bi bi-person me-1"></i>Age: {calculateAge(p.date_of_birth)} yrs
+                            </span>
+                          )}
+                          <span className="badge bg-light text-muted border rounded-pill px-2 py-1" style={{ fontSize: '0.75rem' }}>
+                            <i className="bi bi-calendar-event me-1"></i>DOB: {p.date_of_birth || 'N/A'}
+                          </span>
+                          {p.emergency_contact && (
+                            <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-1" style={{ fontSize: '0.75rem' }} title="Emergency Contact">
+                              <i className="bi bi-telephone-plus me-1"></i>ICE: {p.emergency_contact}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Contact Information Box */}
+                        <div className="bg-light bg-opacity-50 rounded-3 p-2.5 mb-3 border border-light-subtle">
+                          <div className="d-flex align-items-center gap-2 text-secondary small mb-1.5">
+                            <i className="bi bi-telephone text-teal flex-shrink-0" style={{ color: '#0d9488' }}></i>
+                            <span className="fw-semibold text-dark">{p.phone || 'No phone'}</span>
+                          </div>
+                          <div className="d-flex align-items-center gap-2 text-secondary small mb-1.5">
+                            <i className="bi bi-envelope text-primary flex-shrink-0"></i>
+                            <span className="text-truncate" title={p.email || 'No email registered'}>
+                              {p.email ? p.email : <span className="text-muted fst-italic">No email provided</span>}
+                            </span>
+                          </div>
+                          <div className="d-flex align-items-start gap-2 text-secondary small">
+                            <i className="bi bi-geo-alt text-danger flex-shrink-0 mt-0.5"></i>
+                            <span className="text-truncate" title={p.address || 'No address registered'}>
+                              {p.address ? p.address : <span className="text-muted fst-italic">No address recorded</span>}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <button
-                        className="btn btn-outline-teal btn-sm rounded-pill w-100"
-                        onClick={() => handleSelectPatient(p)}
-                      >
-                        <i className="bi bi-calendar-plus me-1"></i> Book Consultation
-                      </button>
+
+                      {/* Card Action Buttons */}
+                      <div className="d-flex gap-2 pt-2 border-top border-light-subtle">
+                        <button
+                          className="btn btn-outline-secondary btn-sm rounded-pill flex-grow-1 fw-medium py-1.5"
+                          onClick={() => handleOpenEditPatient(p)}
+                          title="Edit patient demographic details"
+                        >
+                          <i className="bi bi-pencil-square me-1.5 text-secondary"></i> Edit
+                        </button>
+                        <button
+                          className="btn btn-teal text-white btn-sm rounded-pill flex-grow-1 fw-semibold py-1.5 shadow-sm"
+                          style={{ backgroundColor: '#0d9488' }}
+                          onClick={() => handleSelectPatient(p)}
+                          title="Book appointment for this patient"
+                        >
+                          <i className="bi bi-calendar2-plus me-1.5"></i> Book Visit
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1595,8 +1845,10 @@ const RECOVERY_QUESTIONS = [
                 <div className="col-12">
                   <div className="card border-0 shadow-sm rounded-4 p-5 text-center text-muted">
                     <i className="bi bi-people fs-1 text-secondary mb-2"></i>
-                    <h6 className="fw-bold text-dark">Use the Search Bar or Register a Patient</h6>
-                    <p className="small mb-0">Type in the search box above to instantly find registered patients by Name, Phone, or Global Health ID.</p>
+                    <h6 className="fw-bold text-dark">No Patients Found</h6>
+                    <p className="small mb-0">
+                      {patientSearch ? `No patient matches "${patientSearch}". Check spelling or register as a new patient.` : 'No patient records found in the database. Click "Register New Patient" to add one.'}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1841,17 +2093,35 @@ const RECOVERY_QUESTIONS = [
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label fw-semibold small text-muted">Step 4: Available Time Slot *</label>
+                      <label className="form-label fw-semibold small text-muted">
+                        Step 4: Available Time Slot *
+                        {bookedSlots.length > 0 && (
+                          <span className="badge bg-warning text-dark ms-2 extra-small">
+                            {bookedSlots.length} slot(s) booked
+                          </span>
+                        )}
+                      </label>
                       <select
                         className="form-select py-2"
                         required
                         value={bookingTime}
                         onChange={(e) => setBookingTime(e.target.value)}
                       >
-                        {availableTimeSlots.map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
+                        {availableTimeSlots.map(t => {
+                          const isBooked = bookedSlots.includes(t);
+                          return (
+                            <option key={t} value={t} disabled={isBooked}>
+                              {t} {isBooked ? '(Booked - Unavailable)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
+                      {bookedSlots.includes(bookingTime) && (
+                        <small className="text-danger d-block mt-1">
+                          <i className="bi bi-exclamation-circle me-1"></i>
+                          Selected time slot is already booked for this doctor. Please pick another time.
+                        </small>
+                      )}
                     </div>
                   </div>
 
@@ -1964,7 +2234,6 @@ const RECOVERY_QUESTIONS = [
                           <label className="form-label small fw-semibold text-muted mb-1">Clinical Experience</label>
                           <input
                             className="form-control form-control-sm"
-                            placeholder="e.g. 5 Years"
                             value={profileForm.experience}
                             onChange={(e) => setProfileForm({ ...profileForm, experience: e.target.value })}
                           />
@@ -2055,6 +2324,230 @@ const RECOVERY_QUESTIONS = [
                   </form>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ANIMATED REGISTRATION SUCCESS POPUP MODAL (ON MAIN PAGE) */}
+      {showRegistrationSuccessModal && registerResult && (
+        <div className="modal show d-block bg-dark bg-opacity-50 animate-soft-entrance" tabIndex="-1" style={{ zIndex: 1060 }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+              <div className="p-4 text-center text-white" style={{ background: 'linear-gradient(135deg, #0d9488 0%, #115e59 100%)' }}>
+                <div className="bg-white bg-opacity-20 rounded-circle p-3 d-inline-flex mb-3 shadow-sm">
+                  <i className="bi bi-check-circle-fill text-white" style={{ fontSize: '3rem' }}></i>
+                </div>
+                <h4 className="fw-bold mb-1">Patient Registered Successfully!</h4>
+                <p className="small mb-0 text-white-50">Global Digital Health Record Created</p>
+              </div>
+              <div className="modal-body p-4 text-center">
+                <div className="mb-3">
+                  <span className="text-muted small d-block mb-1">Assigned Global Health ID</span>
+                  <span className="fs-2 fw-bold font-monospace text-teal bg-light px-4 py-1.5 rounded-3 border shadow-sm d-inline-block" style={{ color: '#0d9488' }}>
+                    {registerResult.patient_uid || registerResult.health_id}
+                  </span>
+                </div>
+                <div className="p-3 bg-light rounded-3 text-start mb-3 border">
+                  <div className="row g-2 small">
+                    <div className="col-6">
+                      <span className="text-muted d-block">Full Name:</span>
+                      <strong className="text-dark">{registerResult.name}</strong>
+                    </div>
+                    <div className="col-6">
+                      <span className="text-muted d-block">Phone:</span>
+                      <strong className="text-dark">{registerResult.phone || 'N/A'}</strong>
+                    </div>
+                    <div className="col-6">
+                      <span className="text-muted d-block">Date of Birth:</span>
+                      <strong className="text-dark">
+                        {registerResult.date_of_birth || 'N/A'}
+                        {registerResult.date_of_birth && calculateAge(registerResult.date_of_birth) !== '' ? ` (${calculateAge(registerResult.date_of_birth)} yrs)` : ''}
+                      </strong>
+                    </div>
+                    <div className="col-6">
+                      <span className="text-muted d-block">Gender:</span>
+                      <strong className="text-dark">{registerResult.gender || 'N/A'}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className="d-flex flex-column flex-sm-row gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-teal text-white fw-bold py-2.5 rounded-pill flex-grow-1 shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
+                    onClick={() => {
+                      setShowRegistrationSuccessModal(false);
+                      handleSelectPatient(registerResult);
+                    }}
+                  >
+                    <i className="bi bi-calendar-plus me-1"></i> Book Appointment Now
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-light border py-2.5 rounded-pill px-4"
+                    onClick={() => setShowRegistrationSuccessModal(false)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PATIENT DETAILS MODAL */}
+      {editingPatient && (
+        <div className="modal show d-block bg-dark bg-opacity-50" tabIndex="-1" style={{ zIndex: 1055 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header bg-teal text-white rounded-top-4 p-4" style={{ backgroundColor: '#0d9488' }}>
+                <div>
+                  <h5 className="modal-title fw-bold mb-0">
+                    <i className="bi bi-pencil-square me-2"></i>Edit Patient Details
+                  </h5>
+                  <small className="text-white-50">
+                    Patient ID: <code className="text-white fw-bold">{editingPatient.patient_uid || editingPatient.health_id}</code>
+                  </small>
+                </div>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setEditingPatient(null)}></button>
+              </div>
+              <form onSubmit={handleSavePatientEdit}>
+                <div className="modal-body p-4">
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Patient Full Name <span className="text-danger">*</span></label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        required
+                        value={editPatientForm.name}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, name: e.target.value })}
+                        placeholder="Patient full name"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Primary Phone Number <span className="text-danger">*</span></label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        required
+                        value={editPatientForm.phone}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, phone: e.target.value })}
+                        placeholder="10-digit mobile number"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">Email Address (Optional)</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={editPatientForm.email}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-semibold">Date of Birth <span className="text-danger">*</span></label>
+                      <input
+                        type="date"
+                        className={`form-control ${editPatientForm.date_of_birth && editPatientForm.date_of_birth > todayStr ? 'is-invalid' : ''}`}
+                        required
+                        max={todayStr}
+                        value={editPatientForm.date_of_birth}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, date_of_birth: e.target.value })}
+                      />
+                      {editPatientForm.date_of_birth && editPatientForm.date_of_birth > todayStr && (
+                        <div className="invalid-feedback d-block small">DOB cannot be a future date.</div>
+                      )}
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-semibold">Calculated Age</label>
+                      <input
+                        type="text"
+                        className={`form-control ${editPatientForm.date_of_birth && editPatientForm.date_of_birth > todayStr ? 'bg-danger-subtle text-danger fw-semibold' : 'bg-light'}`}
+                        readOnly
+                        value={
+                          editPatientForm.date_of_birth && editPatientForm.date_of_birth > todayStr
+                            ? 'Invalid (Future Date)'
+                            : (editPatientForm.date_of_birth && calculateAge(editPatientForm.date_of_birth) !== ''
+                                ? `${calculateAge(editPatientForm.date_of_birth)} years`
+                                : 'Auto')
+                        }
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Gender</label>
+                      <select
+                        className="form-select"
+                        value={editPatientForm.gender}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, gender: e.target.value })}
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Blood Group</label>
+                      <select
+                        className="form-select"
+                        value={editPatientForm.blood_group}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, blood_group: e.target.value })}
+                      >
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Emergency Contact</label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        value={editPatientForm.emergency_contact}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, emergency_contact: e.target.value })}
+                        placeholder="Emergency contact number"
+                      />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-semibold">Residential Address</label>
+                      <textarea
+                        className="form-control"
+                        rows="2"
+                        value={editPatientForm.address}
+                        onChange={(e) => setEditPatientForm({ ...editPatientForm, address: e.target.value })}
+                        placeholder="House / Street, City, State, Pincode"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer border-0 p-3 pt-0">
+                  <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setEditingPatient(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
+                    style={{ backgroundColor: '#0d9488' }}
+                    disabled={editPatientSubmitting}
+                  >
+                    {editPatientSubmitting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

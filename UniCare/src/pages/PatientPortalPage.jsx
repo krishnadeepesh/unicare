@@ -55,7 +55,13 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
     appointment_date: '',
     appointment_time: '09:00'
   });
+  const [bookedSlots, setBookedSlots] = useState([]);
   const [message, setMessage] = useState(null);
+
+  const availableTimeSlots = [
+    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
+  ];
 
   const loadPatientData = () => {
     fetch(`${API}/profile/`, { credentials: 'include' })
@@ -127,6 +133,17 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
       })
       .catch((err) => console.error("Error loading hospital booking options:", err));
   }, [form.hospital_id]);
+
+  useEffect(() => {
+    if (!form.hospital_id || !form.doctor_id || !form.appointment_date) {
+      setBookedSlots([]);
+      return;
+    }
+    fetch(`${API}/appointments/options/?hospital_id=${form.hospital_id}&doctor_id=${encodeURIComponent(form.doctor_id)}&date=${encodeURIComponent(form.appointment_date)}`)
+      .then((r) => r.json())
+      .then((d) => setBookedSlots(d.booked_slots || []))
+      .catch((err) => console.error("Error loading booked slots:", err));
+  }, [form.hospital_id, form.doctor_id, form.appointment_date]);
 
   const book = async (e) => {
     e.preventDefault();
@@ -676,16 +693,37 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                         />
                       </div>
                       <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary">Time *</label>
-                        <input
-                          type="time"
-                          className="form-control rounded-3 py-2"
+                        <label className="form-label fw-semibold small text-secondary">
+                          Time Slot *
+                          {bookedSlots.length > 0 && (
+                            <span className="badge bg-warning text-dark ms-1 extra-small">
+                              {bookedSlots.length} booked
+                            </span>
+                          )}
+                        </label>
+                        <select
+                          className="form-select rounded-3 py-2"
                           required
                           value={form.appointment_time}
                           onChange={(e) => setForm({ ...form, appointment_time: e.target.value })}
-                        />
+                        >
+                          {availableTimeSlots.map((t) => {
+                            const isBooked = bookedSlots.includes(t);
+                            return (
+                              <option key={t} value={t} disabled={isBooked}>
+                                {t} {isBooked ? '(Booked)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
                       </div>
                     </div>
+                    {bookedSlots.includes(form.appointment_time) && (
+                      <div className="alert alert-danger py-1 px-3 small mb-3">
+                        <i className="bi bi-exclamation-triangle me-1"></i>
+                        Selected time is already booked for Dr. {doctors.find(d => String(d.doctor_id) === String(form.doctor_id))?.name || 'this doctor'}. Please choose an open slot.
+                      </div>
+                    )}
 
                     <button
                       type="submit"

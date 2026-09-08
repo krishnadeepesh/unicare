@@ -8,15 +8,39 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetStep, setResetStep] = useState('lookup'); // lookup → question → new-password → done
   const [resetForm, setResetForm] = useState({ identifier: '', answer: '', password: '', confirmPassword: '' });
+  const [resetTouched, setResetTouched] = useState({});
   const [recoveryQuestion, setRecoveryQuestion] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
+  const getResetErrors = () => {
+    const errs = {};
+    if (!resetForm.answer.trim()) {
+      errs.answer = 'Recovery answer is required.';
+    }
+    if (!resetForm.password) {
+      errs.password = 'New password is required.';
+    } else if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(resetForm.password)) {
+      errs.password = 'Min 8 characters with at least one letter and one number.';
+    }
+    if (!resetForm.confirmPassword) {
+      errs.confirmPassword = 'Confirm your new password.';
+    } else if (resetForm.password !== resetForm.confirmPassword) {
+      errs.confirmPassword = 'Passwords do not match.';
+    }
+    return errs;
+  };
+
+  const markResetTouched = (field) => {
+    setResetTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
   const closeForgotModal = () => {
     setShowForgotModal(false);
     setResetStep('lookup');
     setResetForm({ identifier: '', answer: '', password: '', confirmPassword: '' });
+    setResetTouched({});
     setRecoveryQuestion('');
     setResetMessage('');
     setResetError('');
@@ -50,14 +74,16 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
 
   const handleRecoveryVerify = async (e) => {
     e.preventDefault();
+    setResetTouched({
+      answer: true,
+      password: true,
+      confirmPassword: true,
+    });
     setResetError('');
     setResetMessage('');
-    if (resetForm.password !== resetForm.confirmPassword) {
-      setResetError('Passwords do not match.');
-      return;
-    }
-    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(resetForm.password)) {
-      setResetError('Password must be at least 8 characters and include a letter and number.');
+    const errs = getResetErrors();
+    if (Object.keys(errs).length > 0) {
+      setResetError(Object.values(errs)[0]);
       return;
     }
     setResetLoading(true);
@@ -325,35 +351,47 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                       <label className="form-label small fw-semibold">Your Answer</label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={`form-control form-control-sm ${resetTouched.answer ? (getResetErrors().answer ? 'is-invalid' : 'is-valid') : ''}`}
                         value={resetForm.answer}
                         onChange={(e) => setResetForm({ ...resetForm, answer: e.target.value })}
+                        onBlur={() => markResetTouched('answer')}
                         placeholder="Enter your answer"
                         required
                       />
+                      {resetTouched.answer && getResetErrors().answer && (
+                        <div className="invalid-feedback extra-small">{getResetErrors().answer}</div>
+                      )}
                     </div>
                     <div className="row g-2 mb-2">
                       <div className="col-md-6">
                         <label className="form-label small fw-semibold">New Password</label>
                         <input
                           type="password"
-                          className="form-control form-control-sm"
+                          className={`form-control form-control-sm ${resetTouched.password ? (getResetErrors().password ? 'is-invalid' : 'is-valid') : ''}`}
                           value={resetForm.password}
                           onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })}
+                          onBlur={() => markResetTouched('password')}
                           placeholder="Min 8 chars (letter & number)"
                           required
                         />
+                        {resetTouched.password && getResetErrors().password && (
+                          <div className="invalid-feedback extra-small">{getResetErrors().password}</div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label small fw-semibold">Confirm Password</label>
                         <input
                           type="password"
-                          className="form-control form-control-sm"
+                          className={`form-control form-control-sm ${resetTouched.confirmPassword ? (getResetErrors().confirmPassword ? 'is-invalid' : 'is-valid') : ''}`}
                           value={resetForm.confirmPassword}
                           onChange={(e) => setResetForm({ ...resetForm, confirmPassword: e.target.value })}
+                          onBlur={() => markResetTouched('confirmPassword')}
                           placeholder="Re-enter password"
                           required
                         />
+                        {resetTouched.confirmPassword && getResetErrors().confirmPassword && (
+                          <div className="invalid-feedback extra-small">{getResetErrors().confirmPassword}</div>
+                        )}
                       </div>
                     </div>
                     <div className="d-flex justify-content-end gap-2 mt-3">

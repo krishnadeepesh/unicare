@@ -12,6 +12,8 @@ from .models import Hospital
 # pyrefly: ignore [missing-import]
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
+from datetime import datetime, date
+
 
 
 def is_valid_phone(phone):
@@ -494,6 +496,22 @@ def hospital_request_action(request):
     is_active = 1 if action == 'approve' else 0
 
     with connection.cursor() as cursor:
+        if action == 'approve':
+            cursor.execute("SELECT license_expiry_date, hospital_name FROM tbl_hospital WHERE hospital_id = %s", [hospital_id])
+            h_row = cursor.fetchone()
+            if h_row and h_row[0]:
+                exp_date = h_row[0]
+                if isinstance(exp_date, str):
+                    try:
+                        exp_date = datetime.strptime(exp_date, '%Y-%m-%d').date()
+                    except Exception:
+                        pass
+                if isinstance(exp_date, date) and exp_date < date.today():
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f"Cannot approve hospital: The hospital license expired on {exp_date.strftime('%d-%b-%Y')}. Approval requires a valid, active license."
+                    }, status=400)
+
         cursor.execute("""
             UPDATE tbl_hospital 
             SET hospital_status = %s, hospital_is_active = %s 
@@ -1033,11 +1051,24 @@ def submit_hospital_registration(request):
     issue_date = (data.get('license_issue_date') or '').strip() or None
     expiry_date = (data.get('license_expiry_date') or '').strip() or None
 
-    if not name or not email or not phone or not address or not reg_number or not license_number or not issuing_authority or not issue_date:
+    if not name or not email or not phone or not address or not reg_number or not license_number or not issuing_authority or not issue_date or not expiry_date:
         return JsonResponse({
             'status': 'error',
-            'message': 'Hospital Name, Email, Phone, Address, Registration Number, License Number, Issuing Authority, and Issue Date are all required.'
+            'message': 'Hospital Name, Email, Phone, Address, Registration Number, License Number, Issuing Authority, Issue Date, and Expiry Date are all required.'
         }, status=400)
+
+    try:
+        parsed_issue = datetime.strptime(issue_date, '%Y-%m-%d').date()
+        parsed_expiry = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'message': 'License Issue Date and Expiry Date must be valid dates (YYYY-MM-DD).'}, status=400)
+
+    today = date.today()
+    if parsed_issue > today:
+        return JsonResponse({'status': 'error', 'message': 'License Issue Date cannot be a future date.'}, status=400)
+
+    if parsed_expiry <= parsed_issue:
+        return JsonResponse({'status': 'error', 'message': 'License Expiry Date must be strictly after the Issue Date.'}, status=400)
 
     if not is_valid_phone(phone):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
