@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { calculateAge } from '../utils/dateUtils';
 
 const API = 'http://localhost:8000/api/super-admin';
 
@@ -961,7 +962,7 @@ const RECOVERY_QUESTIONS = [
                               </span>
                             </div>
                             <small className="text-muted">
-                              <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}
+                              <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''} &bull; Gender: {p.gender || 'N/A'}
                             </small>
                           </div>
                           <span className="btn btn-sm btn-outline-teal rounded-pill px-3">
@@ -1129,7 +1130,7 @@ const RECOVERY_QUESTIONS = [
                           <div className="invalid-feedback small">{patientErrors.email}</div>
                         )}
                       </div>
-                      <div className="col-md-4">
+                      <div className="col-md-3">
                         <label className="form-label fw-semibold small text-secondary mb-1">Date of Birth *</label>
                         <input
                           type="date"
@@ -1144,7 +1145,19 @@ const RECOVERY_QUESTIONS = [
                           <div className="invalid-feedback small">{patientErrors.date_of_birth}</div>
                         )}
                       </div>
-                      <div className="col-md-4">
+                      <div className="col-md-2">
+                        <label className="form-label fw-semibold small text-secondary mb-1">Age</label>
+                        <input
+                          type="text"
+                          className="form-control rounded-3 py-2 bg-light fw-bold"
+                          style={{ color: '#0d9488' }}
+                          value={calculateAge(patientForm.date_of_birth) !== '' ? `${calculateAge(patientForm.date_of_birth)} yrs` : ''}
+                          placeholder="Auto"
+                          readOnly
+                          disabled
+                        />
+                      </div>
+                      <div className="col-md-3">
                         <label className="form-label fw-semibold small text-secondary mb-1">Gender *</label>
                         <select
                           className="form-select rounded-3 py-2 is-valid"
@@ -1565,7 +1578,7 @@ const RECOVERY_QUESTIONS = [
                         </div>
                         <div className="small text-muted mb-3">
                           <div><i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'}</div>
-                          <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}</div>
+                          <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''} &bull; Gender: {p.gender || 'N/A'}</div>
                           {p.blood_group && <div><i className="bi bi-droplet me-1"></i>Blood Group: {p.blood_group}</div>}
                         </div>
                       </div>
@@ -1689,7 +1702,7 @@ const RECOVERY_QUESTIONS = [
                       </div>
                       <div className="col-md-4">
                         <span className="text-muted d-block">Date of Birth</span>
-                        <strong className="text-dark">{selectedPatient.date_of_birth || 'N/A'}</strong>
+                        <strong className="text-dark">{selectedPatient.date_of_birth || 'N/A'}{selectedPatient.date_of_birth && calculateAge(selectedPatient.date_of_birth) !== '' ? ` (Age: ${calculateAge(selectedPatient.date_of_birth)} yrs)` : ''}</strong>
                       </div>
                       <div className="col-md-4">
                         <span className="text-muted d-block">Blood Group</span>

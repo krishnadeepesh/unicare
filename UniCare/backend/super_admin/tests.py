@@ -34,6 +34,12 @@ class PasswordAndRecoveryTestCase(TransactionTestCase):
                 hospital_email VARCHAR(100) NULL,
                 hospital_phone VARCHAR(15) NOT NULL,
                 hospital_address TEXT NULL,
+                hospital_registration_number VARCHAR(100) NULL,
+                hospital_license_number VARCHAR(100) NULL,
+                license_issuing_authority VARCHAR(150) NULL,
+                license_issue_date DATE NULL,
+                license_expiry_date DATE NULL,
+                license_document VARCHAR(255) NULL,
                 hospital_status VARCHAR(20) DEFAULT 'Approved',
                 hospital_is_active TINYINT(1) DEFAULT 1,
                 hospital_created_at DATETIME DEFAULT CURRENT_TIMESTAMP

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { calculateAge } from '../utils/dateUtils';
 
 const API = 'http://localhost:8000/api/super-admin';
 
@@ -975,7 +976,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                               </span>
                             </div>
                             <small className="text-muted">
-                              <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'} &bull; Gender: {p.gender || 'N/A'}
+                              <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''} &bull; Gender: {p.gender || 'N/A'}
                             </small>
                           </div>
                           <span className="btn btn-sm btn-outline-teal rounded-pill px-3">
@@ -998,7 +999,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       </span>
                       <h4 className="fw-bold text-dark mb-1">{selectedPatient.name}</h4>
                       <p className="text-muted small mb-0">
-                        Phone: <strong>{selectedPatient.phone || 'N/A'}</strong> &bull; DOB: {selectedPatient.date_of_birth || 'N/A'} &bull; Gender: {selectedPatient.gender || 'N/A'}
+                        Phone: <strong>{selectedPatient.phone || 'N/A'}</strong> &bull; DOB: {selectedPatient.date_of_birth || 'N/A'}{selectedPatient.date_of_birth && calculateAge(selectedPatient.date_of_birth) !== '' ? ` (Age: ${calculateAge(selectedPatient.date_of_birth)} yrs)` : ''} &bull; Gender: {selectedPatient.gender || 'N/A'}
                       </p>
                     </div>
                     <button
@@ -1066,7 +1067,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       </div>
                       <div className="small text-muted mb-3">
                         <div><i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'}</div>
-                        <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth} &bull; {p.gender}</div>
+                        <div><i className="bi bi-calendar me-1"></i>DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''} &bull; {p.gender}</div>
                       </div>
                       <button
                         className="btn btn-outline-teal btn-sm fw-bold w-100 rounded-3"
@@ -1153,7 +1154,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                                     </span>
                                   </div>
                                   <small className="text-muted">
-                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}
+                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''}
                                   </small>
                                 </div>
                                 <span className="btn btn-sm btn-outline-teal rounded-pill px-3" style={{ borderColor: '#0d9488', color: '#0d9488' }}>
@@ -1305,7 +1306,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                                     </span>
                                   </div>
                                   <small className="text-muted">
-                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}
+                                    <i className="bi bi-telephone me-1"></i>{p.phone || 'No phone'} &bull; DOB: {p.date_of_birth || 'N/A'}{p.date_of_birth && calculateAge(p.date_of_birth) !== '' ? ` (Age: ${calculateAge(p.date_of_birth)} yrs)` : ''}
                                   </small>
                                 </div>
                                 <span className="btn btn-sm btn-outline-teal rounded-pill px-3" style={{ borderColor: '#0d9488', color: '#0d9488' }}>

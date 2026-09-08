@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { calculateAge } from '../utils/dateUtils';
 
 export default function DigitalHealthCard({ patient }) {
   const cardRef = useRef(null);
@@ -150,6 +151,11 @@ export default function DigitalHealthCard({ patient }) {
             </div>
             <div className="fw-semibold text-white-50" style={{ fontSize: '0.9rem' }}>
               {patient.dob || patient.dateOfBirth || patient.date_of_birth || '01/01/1990'}
+              {calculateAge(patient.dob || patient.dateOfBirth || patient.date_of_birth) !== '' && (
+                <span className="badge bg-white bg-opacity-25 text-white ms-2" style={{ fontSize: '0.725rem' }}>
+                  Age: {calculateAge(patient.dob || patient.dateOfBirth || patient.date_of_birth)}
+                </span>
+              )}
             </div>
           </div>
           <div className="col-6 text-end">

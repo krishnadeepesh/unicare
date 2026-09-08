@@ -1,8 +1,10 @@
 import json
+import os
 import re
 import secrets
 import hashlib
 import hmac
+from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
@@ -102,6 +104,27 @@ def ensure_recovery_columns():
         cursor.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user' AND COLUMN_NAME='must_change_password'")
         if not cursor.fetchone()[0]:
             cursor.execute("ALTER TABLE tbl_user ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0")
+
+
+def ensure_hospital_registration_columns():
+    """Ensure tbl_hospital has registration and licensing columns."""
+    cols = [
+        ('hospital_registration_number', 'VARCHAR(100) NULL'),
+        ('hospital_license_number', 'VARCHAR(100) NULL'),
+        ('license_issuing_authority', 'VARCHAR(150) NULL'),
+        ('license_issue_date', 'DATE NULL'),
+        ('license_expiry_date', 'DATE NULL'),
+        ('license_document', 'VARCHAR(255) NULL'),
+    ]
+    with connection.cursor() as cursor:
+        for col_name, col_def in cols:
+            cursor.execute(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_hospital' AND COLUMN_NAME=%s",
+                [col_name]
+            )
+            if not cursor.fetchone()[0]:
+                cursor.execute(f"ALTER TABLE tbl_hospital ADD COLUMN {col_name} {col_def}")
+
 
 @csrf_exempt
 def super_admin_login(request):
@@ -421,10 +444,14 @@ def get_hospital_requests(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
 
+    ensure_hospital_registration_columns()
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT h.hospital_id, h.hospital_uid, h.hospital_name, h.hospital_email,
                    h.hospital_phone, h.hospital_address, h.hospital_status, h.hospital_is_active, h.hospital_created_at,
+                   h.hospital_registration_number, h.hospital_license_number,
+                   h.license_issuing_authority, h.license_issue_date, h.license_expiry_date,
+                   h.license_document,
                    u.user_name AS admin_name, u.user_email AS admin_email, u.user_phone AS admin_phone
             FROM tbl_hospital h
             LEFT JOIN tbl_user u ON u.hospital_id = h.hospital_id AND u.role_id = 1
@@ -487,12 +514,15 @@ def get_hospitals(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
 
+    ensure_hospital_registration_columns()
     status_filter = request.GET.get('status', 'all').strip()
     search_query = request.GET.get('search', '').strip()
 
     sql = """
         SELECT hospital_id, hospital_uid, hospital_name, hospital_email, 
-               hospital_phone, hospital_address, hospital_status, hospital_is_active, hospital_created_at
+               hospital_phone, hospital_address, hospital_status, hospital_is_active, hospital_created_at,
+               hospital_registration_number, hospital_license_number, license_issuing_authority,
+               license_issue_date, license_expiry_date, license_document
         FROM tbl_hospital
         WHERE 1=1
     """
@@ -980,45 +1010,109 @@ def submit_hospital_registration(request):
     """Sends hospital details from the admin dashboard for Super Admin approval."""
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+    ensure_hospital_registration_columns()
+
     try:
         data = json.loads(request.body.decode('utf-8'))
     except Exception:
         data = request.POST
-    # The session owns the registration record.  A new account has no hospital
-    # row yet; this request creates it and links it to that account.
+
     admin_user_id = request.session.get('hospital_admin_user_id')
-    hospital_id = request.session.get('hospital_admin_hospital_id')
+    hospital_id = request.session.get('hospital_admin_hospital_id') or data.get('hospital_id')
     if not admin_user_id:
         return JsonResponse({'status': 'error', 'message': 'Please sign in as a hospital administrator.'}, status=401)
+
     name = (data.get('hospital_name') or '').strip()
     email = (data.get('hospital_email') or '').strip()
     phone = (data.get('hospital_phone') or '').strip()
     address = (data.get('hospital_address') or '').strip()
-    if not hospital_id or not name or not email or not phone:
-        if hospital_id:
-            return JsonResponse({'status': 'error', 'message': 'Hospital name, email, and phone are required.'}, status=400)
-        if not name or not email or not phone:
-            return JsonResponse({'status': 'error', 'message': 'Hospital name, email, and phone are required.'}, status=400)
+    reg_number = (data.get('hospital_registration_number') or data.get('registration_number') or '').strip()
+    license_number = (data.get('hospital_license_number') or data.get('license_number') or '').strip()
+    issuing_authority = (data.get('license_issuing_authority') or '').strip()
+    issue_date = (data.get('license_issue_date') or '').strip() or None
+    expiry_date = (data.get('license_expiry_date') or '').strip() or None
+
+    if not name or not email or not phone or not address or not reg_number or not license_number or not issuing_authority or not issue_date:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Hospital Name, Email, Phone, Address, Registration Number, License Number, Issuing Authority, and Issue Date are all required.'
+        }, status=400)
+
     if not is_valid_phone(phone):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit hospital phone number.'}, status=400)
+
+    # Handle license PDF upload
+    license_doc_path = None
+    license_file = request.FILES.get('license_document')
+    if license_file:
+        if not (license_file.name.lower().endswith('.pdf') or getattr(license_file, 'content_type', '') == 'application/pdf'):
+            return JsonResponse({'status': 'error', 'message': 'Only PDF documents are accepted for the hospital license.'}, status=400)
+
+        license_dir = os.path.join(settings.MEDIA_ROOT, 'hospital_licenses')
+        os.makedirs(license_dir, exist_ok=True)
+        safe_suffix = secrets.token_hex(4)
+        clean_filename = f"license_{hospital_id or 'new'}_{safe_suffix}.pdf"
+        file_disk_path = os.path.join(license_dir, clean_filename)
+        with open(file_disk_path, 'wb+') as destination:
+            for chunk in license_file.chunks():
+                destination.write(chunk)
+        license_doc_path = f"hospital_licenses/{clean_filename}"
+
     with connection.cursor() as cursor:
+        if not license_doc_path and hospital_id:
+            cursor.execute("SELECT license_document FROM tbl_hospital WHERE hospital_id = %s", [hospital_id])
+            existing_row = cursor.fetchone()
+            if existing_row and existing_row[0]:
+                license_doc_path = existing_row[0]
+
+        if not license_doc_path:
+            return JsonResponse({'status': 'error', 'message': 'Please upload the hospital license document (PDF format).'}, status=400)
+
         if not hospital_id:
             cursor.execute("SELECT COALESCE(MAX(hospital_id), 0) FROM tbl_hospital")
             next_hid = cursor.fetchone()[0] + 1
             hospital_uid = f"HOS{next_hid:03d}"
-            cursor.execute("""INSERT INTO tbl_hospital (hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active)
-                VALUES (%s,%s,%s,%s,%s,'Pending',0)""", [hospital_uid, name, email, phone, address])
+            cursor.execute("""
+                INSERT INTO tbl_hospital (
+                    hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address,
+                    hospital_registration_number, hospital_license_number, license_issuing_authority,
+                    license_issue_date, license_expiry_date, license_document,
+                    hospital_status, hospital_is_active
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Pending',0)
+            """, [
+                hospital_uid, name, email, phone, address,
+                reg_number, license_number, issuing_authority,
+                issue_date, expiry_date, license_doc_path
+            ])
             hospital_id = cursor.lastrowid
             cursor.execute("UPDATE tbl_user SET hospital_id=%s WHERE user_id=%s AND hospital_id IS NULL", [hospital_id, admin_user_id])
             request.session['hospital_admin_hospital_id'] = hospital_id
             request.session.modified = True
         else:
-            cursor.execute("""UPDATE tbl_hospital SET hospital_name=%s, hospital_email=%s, hospital_phone=%s,
-                hospital_address=%s, hospital_status='Pending', hospital_is_active=0 WHERE hospital_id=%s
-                AND hospital_status IN ('Draft', 'Rejected')""", [name, email, phone, address, hospital_id])
+            cursor.execute("""
+                UPDATE tbl_hospital SET
+                    hospital_name=%s, hospital_email=%s, hospital_phone=%s, hospital_address=%s,
+                    hospital_registration_number=%s, hospital_license_number=%s, license_issuing_authority=%s,
+                    license_issue_date=%s, license_expiry_date=%s, license_document=%s,
+                    hospital_status='Pending', hospital_is_active=0
+                WHERE hospital_id=%s
+                AND hospital_status IN ('Draft', 'Rejected', 'Pending')
+            """, [
+                name, email, phone, address,
+                reg_number, license_number, issuing_authority,
+                issue_date, expiry_date, license_doc_path, hospital_id
+            ])
             if cursor.rowcount == 0:
                 return JsonResponse({'status': 'error', 'message': 'This registration has already been submitted or is not available for editing.'}, status=409)
-    return JsonResponse({'status': 'success', 'message': 'Hospital registration sent to Super Admin for approval.', 'status': 'Pending', 'hospital_id': hospital_id})
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Hospital registration sent to Super Admin for approval.',
+        'status': 'Pending',
+        'hospital_id': hospital_id,
+        'license_document': license_doc_path
+    })
 
 
 @csrf_exempt
@@ -1033,6 +1127,7 @@ def get_hospital_admin_dashboard_data(request):
         res["Access-Control-Allow-Headers"] = "*"
         return res
 
+    ensure_hospital_registration_columns()
     hospital_id = request.session.get('hospital_admin_hospital_id')
     if not hospital_id:
         admin_user_id = request.session.get('hospital_admin_user_id')
@@ -1046,13 +1141,21 @@ def get_hospital_admin_dashboard_data(request):
         return JsonResponse({'status': 'success', 'hospital_info': {
             'hospital_id': None, 'hospital_uid': '', 'name': '', 'hospital_name': '',
             'email': '', 'hospital_email': '', 'phone': '', 'hospital_phone': '',
-            'address': '', 'hospital_address': '', 'status': 'Draft', 'hospital_status': 'Draft',
+            'address': '', 'hospital_address': '',
+            'hospital_registration_number': '', 'registration_number': '',
+            'hospital_license_number': '', 'license_number': '',
+            'license_issuing_authority': '', 'license_issue_date': '', 'license_expiry_date': '',
+            'license_document': '',
+            'status': 'Draft', 'hospital_status': 'Draft',
             'admin_name': admin_row[0], 'admin_email': admin_row[1], 'admin_phone': admin_row[2],
         }, 'stats': {'total_doctors': 0, 'total_receptionists': 0, 'total_patients': 0, 'today_appointments': 0, 'total_departments': 0}})
 
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT hospital_id, hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address, hospital_status, hospital_is_active, hospital_created_at
+            SELECT hospital_id, hospital_uid, hospital_name, hospital_email, hospital_phone, hospital_address,
+                   hospital_status, hospital_is_active, hospital_created_at,
+                   hospital_registration_number, hospital_license_number, license_issuing_authority,
+                   license_issue_date, license_expiry_date, license_document
             FROM tbl_hospital
             WHERE hospital_id = %s
             LIMIT 1
@@ -1062,7 +1165,7 @@ def get_hospital_admin_dashboard_data(request):
         if not h_row:
             return JsonResponse({'status': 'error', 'message': 'Hospital not found.'}, status=404)
 
-        hid, h_uid, h_name, h_email, h_phone, h_address, h_status, h_active, h_created = h_row
+        hid, h_uid, h_name, h_email, h_phone, h_address, h_status, h_active, h_created, h_reg_no, h_lic_no, h_auth, h_issue_date, h_expiry_date, h_doc = h_row
 
         # Counts filtered strictly for hid
         cursor.execute("""
@@ -1096,7 +1199,14 @@ def get_hospital_admin_dashboard_data(request):
         'hospital_id': hid,
         'id': h_uid,
         'hospital_uid': h_uid,
-        'hospital_registration_number': h_uid,
+        'hospital_registration_number': h_reg_no or h_uid,
+        'registration_number': h_reg_no or h_uid,
+        'hospital_license_number': h_lic_no or '',
+        'license_number': h_lic_no or '',
+        'license_issuing_authority': h_auth or '',
+        'license_issue_date': str(h_issue_date) if h_issue_date else '',
+        'license_expiry_date': str(h_expiry_date) if h_expiry_date else '',
+        'license_document': h_doc or '',
         'name': h_name,
         'hospital_name': h_name,
         'email': h_email,

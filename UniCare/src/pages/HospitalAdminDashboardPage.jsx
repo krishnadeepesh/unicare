@@ -23,7 +23,19 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [departmentForm, setDepartmentForm] = useState({ name: '', description: '' });
-  const [hospitalRegistration, setHospitalRegistration] = useState({ name: '', email: '', phone: '', address: '' });
+  const [hospitalRegistration, setHospitalRegistration] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    registration_number: '',
+    license_number: '',
+    license_issuing_authority: '',
+    license_issue_date: '',
+    license_expiry_date: '',
+  });
+  const [licenseFile, setLicenseFile] = useState(null);
+  const [existingLicenseDoc, setExistingLicenseDoc] = useState('');
 
   // Doctors list stored in MySQL database
   const [doctorsList, setDoctorsList] = useState([]);
@@ -93,14 +105,68 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   const getHospErrors = () => {
     const errs = {};
-    if (!hospitalRegistration.name.trim()) errs.name = 'Hospital name is required.';
     const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
-    if (!hospitalRegistration.email.trim()) errs.email = 'Hospital email is required.';
-    else if (!emailRegex.test(hospitalRegistration.email.trim())) errs.email = 'Enter a valid email address.';
 
+    // Hospital Name *
+    if (!hospitalRegistration.name.trim()) {
+      errs.name = 'Hospital name is required.';
+    } else if (hospitalRegistration.name.trim().length < 3) {
+      errs.name = 'Hospital name must be at least 3 characters.';
+    }
+
+    // Hospital Email *
+    if (!hospitalRegistration.email.trim()) {
+      errs.email = 'Hospital email is required.';
+    } else if (!emailRegex.test(hospitalRegistration.email.trim())) {
+      errs.email = 'Enter a valid email address.';
+    }
+
+    // Hospital Phone *
     const d = (hospitalRegistration.phone || '').replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
-    if (!hospitalRegistration.phone || !hospitalRegistration.phone.trim()) errs.phone = 'Phone number is required.';
-    else if (!/^[6-9]\d{9}$/.test(d)) errs.phone = 'Enter a valid 10-digit mobile number.';
+    if (!hospitalRegistration.phone || !hospitalRegistration.phone.trim()) {
+      errs.phone = 'Hospital phone number is required.';
+    } else if (!/^[6-9]\d{9}$/.test(d)) {
+      errs.phone = 'Enter a valid 10-digit mobile number.';
+    }
+
+    // Hospital Address *
+    if (!hospitalRegistration.address.trim()) {
+      errs.address = 'Hospital address is required.';
+    }
+
+    // Hospital Registration Number *
+    if (!hospitalRegistration.registration_number.trim()) {
+      errs.registration_number = 'Hospital registration number is required.';
+    }
+
+    // Hospital License Number *
+    if (!hospitalRegistration.license_number.trim()) {
+      errs.license_number = 'Hospital license number is required.';
+    }
+
+    // License Issuing Authority *
+    if (!hospitalRegistration.license_issuing_authority.trim()) {
+      errs.license_issuing_authority = 'License issuing authority is required.';
+    }
+
+    // License Issue Date *
+    if (!hospitalRegistration.license_issue_date) {
+      errs.license_issue_date = 'License issue date is required.';
+    }
+
+    // License Expiry Date
+    if (hospitalRegistration.license_expiry_date && hospitalRegistration.license_issue_date) {
+      if (new Date(hospitalRegistration.license_expiry_date) < new Date(hospitalRegistration.license_issue_date)) {
+        errs.license_expiry_date = 'Expiry date cannot be before issue date.';
+      }
+    }
+
+    // License Document (PDF file) *
+    if (!licenseFile && !existingLicenseDoc) {
+      errs.license_document = 'Please upload the hospital license document (PDF format).';
+    } else if (licenseFile && !licenseFile.name.toLowerCase().endsWith('.pdf')) {
+      errs.license_document = 'Only PDF files are accepted.';
+    }
 
     return errs;
   };
@@ -132,7 +198,15 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             email: data.hospital_info.hospital_email || data.hospital_info.email || '',
             phone: data.hospital_info.hospital_phone || data.hospital_info.phone || '',
             address: data.hospital_info.hospital_address || data.hospital_info.address || '',
+            registration_number: data.hospital_info.hospital_registration_number || '',
+            license_number: data.hospital_info.hospital_license_number || '',
+            license_issuing_authority: data.hospital_info.license_issuing_authority || '',
+            license_issue_date: data.hospital_info.license_issue_date || '',
+            license_expiry_date: data.hospital_info.license_expiry_date || '',
           });
+          if (data.hospital_info.license_document) {
+            setExistingLicenseDoc(data.hospital_info.license_document);
+          }
         }
         if (data.stats) {
           setStatsData(data.stats);
@@ -337,6 +411,13 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
       name: true,
       email: true,
       phone: true,
+      address: true,
+      registration_number: true,
+      license_number: true,
+      license_issuing_authority: true,
+      license_issue_date: true,
+      license_expiry_date: true,
+      license_document: true,
     });
 
     const errs = getHospErrors();
@@ -346,14 +427,50 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     }
 
     try {
+      const formData = new FormData();
+      formData.append('hospital_id', currentHospitalId || '');
+      formData.append('hospital_name', hospitalRegistration.name);
+      formData.append('hospital_email', hospitalRegistration.email);
+      formData.append('hospital_phone', hospitalRegistration.phone);
+      formData.append('hospital_address', hospitalRegistration.address);
+      formData.append('hospital_registration_number', hospitalRegistration.registration_number);
+      formData.append('hospital_license_number', hospitalRegistration.license_number);
+      formData.append('license_issuing_authority', hospitalRegistration.license_issuing_authority);
+      formData.append('license_issue_date', hospitalRegistration.license_issue_date);
+      formData.append('license_expiry_date', hospitalRegistration.license_expiry_date || '');
+      if (licenseFile) {
+        formData.append('license_document', licenseFile);
+      }
+
       const response = await fetch(`${API_BASE_URL}/hospital-registration/submit/`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
         credentials: 'include',
-        body: JSON.stringify({ hospital_id: currentHospitalId, hospital_name: hospitalRegistration.name, hospital_email: hospitalRegistration.email, hospital_phone: hospitalRegistration.phone, hospital_address: hospitalRegistration.address }),
+        body: formData,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message);
-      setHospitalData((current) => ({ ...current, hospital_name: hospitalRegistration.name, name: hospitalRegistration.name, hospital_email: hospitalRegistration.email, email: hospitalRegistration.email, hospital_phone: hospitalRegistration.phone, phone: hospitalRegistration.phone, hospital_address: hospitalRegistration.address, address: hospitalRegistration.address, status: 'Pending', hospital_status: 'Pending' }));
+      setHospitalData((current) => ({
+        ...current,
+        hospital_name: hospitalRegistration.name,
+        name: hospitalRegistration.name,
+        hospital_email: hospitalRegistration.email,
+        email: hospitalRegistration.email,
+        hospital_phone: hospitalRegistration.phone,
+        phone: hospitalRegistration.phone,
+        hospital_address: hospitalRegistration.address,
+        address: hospitalRegistration.address,
+        hospital_registration_number: hospitalRegistration.registration_number,
+        hospital_license_number: hospitalRegistration.license_number,
+        license_issuing_authority: hospitalRegistration.license_issuing_authority,
+        license_issue_date: hospitalRegistration.license_issue_date,
+        license_expiry_date: hospitalRegistration.license_expiry_date,
+        license_document: data.license_document || current?.license_document,
+        status: 'Pending',
+        hospital_status: 'Pending',
+      }));
+      if (data.license_document) {
+        setExistingLicenseDoc(data.license_document);
+      }
       showToast(data.message);
     } catch (err) { showToast(err.message || 'Could not submit hospital registration.', 'danger'); }
   };
@@ -582,14 +699,128 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       )}
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label fw-semibold small">Hospital Address</label>
+                      <label className="form-label fw-semibold small">Hospital Registration Number <span className="text-danger">*</span></label>
                       <input 
                         type="text"
-                        className="form-control" 
+                        className={`form-control ${hospTouched.registration_number ? (hospErrors.registration_number ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.registration_number} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, registration_number: e.target.value })} 
+                        onBlur={() => markHospTouched('registration_number')}
+                        placeholder="e.g. HOSP-REG-2026-001"
+                        required 
+                      />
+                      {hospTouched.registration_number && hospErrors.registration_number && (
+                        <div className="invalid-feedback small">{hospErrors.registration_number}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">Hospital License Number <span className="text-danger">*</span></label>
+                      <input 
+                        type="text"
+                        className={`form-control ${hospTouched.license_number ? (hospErrors.license_number ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.license_number} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, license_number: e.target.value })} 
+                        onBlur={() => markHospTouched('license_number')}
+                        placeholder="e.g. LIC-KL-2026-987"
+                        required 
+                      />
+                      {hospTouched.license_number && hospErrors.license_number && (
+                        <div className="invalid-feedback small">{hospErrors.license_number}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">License Issuing Authority <span className="text-danger">*</span></label>
+                      <input 
+                        type="text"
+                        className={`form-control ${hospTouched.license_issuing_authority ? (hospErrors.license_issuing_authority ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.license_issuing_authority} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, license_issuing_authority: e.target.value })} 
+                        onBlur={() => markHospTouched('license_issuing_authority')}
+                        placeholder="e.g. State Directorate of Health Services"
+                        required 
+                      />
+                      {hospTouched.license_issuing_authority && hospErrors.license_issuing_authority && (
+                        <div className="invalid-feedback small">{hospErrors.license_issuing_authority}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">License Issue Date <span className="text-danger">*</span></label>
+                      <input 
+                        type="date"
+                        className={`form-control ${hospTouched.license_issue_date ? (hospErrors.license_issue_date ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.license_issue_date} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, license_issue_date: e.target.value })} 
+                        onBlur={() => markHospTouched('license_issue_date')}
+                        required 
+                      />
+                      {hospTouched.license_issue_date && hospErrors.license_issue_date && (
+                        <div className="invalid-feedback small">{hospErrors.license_issue_date}</div>
+                      )}
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold small">License Expiry Date</label>
+                      <input 
+                        type="date"
+                        className={`form-control ${hospTouched.license_expiry_date ? (hospErrors.license_expiry_date ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={hospitalRegistration.license_expiry_date} 
+                        onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, license_expiry_date: e.target.value })} 
+                        onBlur={() => markHospTouched('license_expiry_date')}
+                      />
+                      {hospTouched.license_expiry_date && hospErrors.license_expiry_date && (
+                        <div className="invalid-feedback small">{hospErrors.license_expiry_date}</div>
+                      )}
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label fw-semibold small">Hospital Address <span className="text-danger">*</span></label>
+                      <textarea 
+                        className={`form-control ${hospTouched.address ? (hospErrors.address ? 'is-invalid' : 'is-valid') : ''}`} 
+                        rows="2"
                         value={hospitalRegistration.address} 
                         onChange={(e) => setHospitalRegistration({ ...hospitalRegistration, address: e.target.value })} 
-                        placeholder="Hospital physical address"
+                        onBlur={() => markHospTouched('address')}
+                        placeholder="Complete hospital physical address, city, state, pincode"
+                        required
                       />
+                      {hospTouched.address && hospErrors.address && (
+                        <div className="invalid-feedback small">{hospErrors.address}</div>
+                      )}
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label fw-semibold small">
+                        Upload License Document (PDF only) <span className="text-danger">*</span>
+                      </label>
+                      <input 
+                        type="file" 
+                        accept="application/pdf,.pdf"
+                        className={`form-control ${hospTouched.license_document ? (hospErrors.license_document ? 'is-invalid' : 'is-valid') : ''}`}
+                        onChange={(e) => {
+                          const file = e.target.files && e.target.files[0];
+                          setLicenseFile(file || null);
+                          markHospTouched('license_document');
+                        }}
+                        onBlur={() => markHospTouched('license_document')}
+                      />
+                      {hospTouched.license_document && hospErrors.license_document && (
+                        <div className="invalid-feedback small">{hospErrors.license_document}</div>
+                      )}
+                      {existingLicenseDoc && !licenseFile && (
+                        <small className="text-muted mt-1 d-block">
+                          <i className="bi bi-file-earmark-pdf text-danger me-1"></i> Current document uploaded:{' '}
+                          <a 
+                            href={`http://localhost:8000/media/${existingLicenseDoc}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary text-decoration-underline"
+                          >
+                            View Uploaded PDF
+                          </a>
+                        </small>
+                      )}
+                      {licenseFile && (
+                        <small className="text-success mt-1 d-block">
+                          <i className="bi bi-check-circle me-1"></i> Selected: {licenseFile.name} ({(licenseFile.size / 1024).toFixed(1)} KB)
+                        </small>
+                      )}
                     </div>
                     <div className="col-12">
                       <button className="btn btn-teal text-white px-4 fw-semibold rounded-3 shadow-sm" type="submit" style={{ backgroundColor: '#0d9488' }}>
@@ -679,8 +910,46 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                 </div>
                 <div className="col-md-4">
                   <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">License Number</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.hospital_license_number || hospitalData?.license_number || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">Issuing Authority</span>
+                    <span className="fw-semibold text-dark fs-6">{hospitalData?.license_issuing_authority || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <span className="text-muted small d-block mb-1">License Validity</span>
+                    <span className="fw-semibold text-dark fs-6">
+                      {hospitalData?.license_issue_date ? `Issued: ${hospitalData.license_issue_date}` : 'N/A'}
+                      {hospitalData?.license_expiry_date ? ` · Exp: ${hospitalData.license_expiry_date}` : ''}
+                    </span>
+                  </div>
+                </div>
+                <div className="col-md-8">
+                  <div className="p-3 bg-light rounded-3 border">
                     <span className="text-muted small d-block mb-1">Address</span>
                     <span className="fw-semibold text-dark fs-6">{hospitalData?.address || hospitalData?.hospital_address || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="p-3 bg-light rounded-3 border d-flex flex-column justify-content-between h-100">
+                    <span className="text-muted small d-block mb-1">Hospital License Document</span>
+                    {hospitalData?.license_document ? (
+                      <a 
+                        href={`http://localhost:8000/media/${hospitalData.license_document}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="btn btn-sm btn-outline-danger fw-semibold mt-1"
+                      >
+                        <i className="bi bi-file-earmark-pdf me-1"></i>View Uploaded PDF
+                      </a>
+                    ) : (
+                      <span className="text-muted small">No document uploaded</span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -679,8 +679,9 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                       <tr>
                         <th>UID</th>
                         <th>Hospital Name</th>
-                        <th>Contact Email</th>
-                        <th>Phone</th>
+                        <th>Reg / License No.</th>
+                        <th>Contact</th>
+                        <th>License Document</th>
                         <th>Status</th>
                         <th className="text-end">Actions</th>
                       </tr>
@@ -690,8 +691,29 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                         <tr key={r.hospital_id}>
                           <td><span className="badge bg-secondary-subtle text-secondary font-monospace">{r.hospital_uid}</span></td>
                           <td className="fw-bold text-dark">{r.hospital_name}</td>
-                          <td>{r.hospital_email || 'N/A'}</td>
-                          <td>{r.hospital_phone}</td>
+                          <td>
+                            <div className="small fw-semibold text-dark">{r.hospital_registration_number || 'N/A'}</div>
+                            <div className="small text-muted">Lic: {r.hospital_license_number || 'N/A'}</div>
+                          </td>
+                          <td>
+                            <div className="small">{r.hospital_email || 'N/A'}</div>
+                            <div className="small text-muted">{r.hospital_phone}</div>
+                          </td>
+                          <td>
+                            {r.license_document ? (
+                              <a
+                                href={`http://localhost:8000/media/${r.license_document}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold"
+                                title="View uploaded license PDF"
+                              >
+                                <i className="bi bi-file-earmark-pdf me-1"></i>View PDF
+                              </a>
+                            ) : (
+                              <span className="badge bg-light text-muted border">No Doc</span>
+                            )}
+                          </td>
                           <td><span className="badge bg-warning text-dark">Pending</span></td>
                           <td className="text-end">
                             <div className="btn-group btn-group-sm">
@@ -1139,6 +1161,40 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                   <div className="list-group-item d-flex justify-content-between">
                     <span className="text-muted">Status:</span>
                     <span className="badge bg-warning text-dark">{detailHospital.hospital_status}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">Registration Number:</span>
+                    <span className="fw-semibold">{detailHospital.hospital_registration_number || 'N/A'}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">License Number:</span>
+                    <span className="fw-semibold">{detailHospital.hospital_license_number || 'N/A'}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">Issuing Authority:</span>
+                    <span>{detailHospital.license_issuing_authority || 'N/A'}</span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between">
+                    <span className="text-muted">License Validity:</span>
+                    <span>
+                      {detailHospital.license_issue_date ? `Issued: ${detailHospital.license_issue_date}` : 'N/A'}
+                      {detailHospital.license_expiry_date ? ` · Exp: ${detailHospital.license_expiry_date}` : ''}
+                    </span>
+                  </div>
+                  <div className="list-group-item d-flex justify-content-between align-items-center">
+                    <span className="text-muted">License Document:</span>
+                    {detailHospital.license_document ? (
+                      <a 
+                        href={`http://localhost:8000/media/${detailHospital.license_document}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="btn btn-sm btn-outline-danger fw-semibold"
+                      >
+                        <i className="bi bi-file-earmark-pdf me-1"></i>View Uploaded PDF
+                      </a>
+                    ) : (
+                      <span className="text-muted small">No document uploaded</span>
+                    )}
                   </div>
                   <div className="list-group-item">
                     <span className="text-muted d-block mb-1">Address:</span>
