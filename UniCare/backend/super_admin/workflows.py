@@ -7,14 +7,15 @@ into tbl_appointment (with hospital_id/department_id columns) and
 tbl_doctor (with a hospital_id column).
 """
 import json
-from datetime import date
+from datetime import datetime, date
 
 from django.contrib.auth.hashers import make_password
 from django.db import connection, transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .views import is_valid_phone, verify_password_and_upgrade
+from .views import is_valid_phone, is_valid_email, verify_password_and_upgrade
+
 
 
 def payload(request):
@@ -850,12 +851,14 @@ def update_patient(request):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid date of birth (YYYY-MM-DD).'}, status=400)
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT user_id, patient_uid FROM tbl_patient WHERE patient_id = %s", [patient_id])
+        cursor.execute("SELECT user_id, patient_uid, patient_gender, patient_blood_group FROM tbl_patient WHERE patient_id = %s", [patient_id])
         p_row = cursor.fetchone()
         if not p_row:
             return JsonResponse({'status': 'error', 'message': 'Patient not found.'}, status=404)
 
-        user_id, patient_uid = p_row
+        user_id, patient_uid, existing_gender, existing_blood_group = p_row
+        gender = gender or existing_gender or 'Other'
+        blood_group = blood_group or existing_blood_group
 
         # Check unique email/phone against other users
         if email:
@@ -1197,10 +1200,13 @@ def appointments(request):
     department_id = data.get('department_id') or None
     patient_id = user['patient_id'] if user['role'] == 'patient' else data.get('patient_id')
 
-    if not patient_id or not doctor_id or not data.get('appointment_date') or not data.get('appointment_time'):
+    appt_date = str(data.get('appointment_date') or '').strip()
+    appt_time = str(data.get('appointment_time') or '').strip()
+    if not patient_id or not doctor_id or not appt_date or not appt_time:
         return JsonResponse({'status': 'error', 'message': 'Patient, doctor, date and time are required.'}, status=400)
 
     with connection.cursor() as cursor:
+
         if user['role'] == 'receptionist' and str(hospital_id) != str(user['hospital_id']):
             return JsonResponse({'status': 'error', 'message': 'Appointments must belong to your hospital.'}, status=403)
 
@@ -1215,14 +1221,15 @@ def appointments(request):
         if not cursor.fetchone():
             return JsonResponse({'status': 'error', 'message': 'Doctor is not available at this hospital.'}, status=400)
 
-        # Prevent double-booking
+        # Prevent double-booking for the doctor on this date and time
         cursor.execute(
             "SELECT 1 FROM tbl_appointment WHERE doctor_id=%s AND appointment_date=%s"
-            " AND appointment_time=%s AND appointment_status IN ('Pending','Confirmed')",
-            [doctor_id, data['appointment_date'], data['appointment_time']]
+            " AND (appointment_time=%s OR LEFT(appointment_time, 5)=%s)"
+            " AND appointment_status IN ('Pending','Confirmed')",
+            [doctor_id, appt_date, appt_time, appt_time[:5]]
         )
         if cursor.fetchone():
-            return JsonResponse({'status': 'error', 'message': 'This appointment time is no longer available.'}, status=409)
+            return JsonResponse({'status': 'error', 'message': 'This doctor is already booked for the selected date and time slot. Please choose another slot.'}, status=409)
 
         cursor.execute(
             "INSERT INTO tbl_appointment"
@@ -1230,9 +1237,10 @@ def appointments(request):
             " appointment_time, reason, created_by_user_id, appointment_status)"
             " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Pending')",
             [patient_id, hospital_id, department_id, doctor_id,
-             data['appointment_date'], data['appointment_time'],
+             appt_date, appt_time,
              (data.get('reason') or '').strip(), user['user_id']]
         )
+
     return JsonResponse({'status': 'success', 'message': 'Appointment booked successfully.'})
 
 

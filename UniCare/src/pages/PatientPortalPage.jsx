@@ -141,13 +141,28 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
     }
     fetch(`${API}/appointments/options/?hospital_id=${form.hospital_id}&doctor_id=${encodeURIComponent(form.doctor_id)}&date=${encodeURIComponent(form.appointment_date)}`)
       .then((r) => r.json())
-      .then((d) => setBookedSlots(d.booked_slots || []))
+      .then((d) => {
+        const booked = d.booked_slots || [];
+        setBookedSlots(booked);
+        setForm((prev) => {
+          if (booked.includes(prev.appointment_time)) {
+            const nextFree = availableTimeSlots.find(t => !booked.includes(t));
+            return { ...prev, appointment_time: nextFree || prev.appointment_time };
+          }
+          return prev;
+        });
+      })
       .catch((err) => console.error("Error loading booked slots:", err));
   }, [form.hospital_id, form.doctor_id, form.appointment_date]);
 
   const book = async (e) => {
     e.preventDefault();
     setMessage(null);
+    if (bookedSlots.includes(form.appointment_time)) {
+      setMessage({ text: 'Selected time is already booked for this doctor. Please choose an open slot.', type: 'danger' });
+      return;
+    }
+
     try {
       const r = await fetch(`${API}/appointments/`, {
         method: 'POST',
@@ -729,9 +744,11 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                       type="submit"
                       className="btn w-100 fw-bold py-2.5 rounded-pill text-white shadow-sm mt-2"
                       style={{ backgroundColor: '#0d9488' }}
+                      disabled={!form.hospital_id || !form.doctor_id || !form.appointment_date || bookedSlots.includes(form.appointment_time)}
                     >
                       <i className="bi bi-calendar-check-fill me-1"></i> Confirm & Book Appointment
                     </button>
+
                   </form>
                 </div>
               </div>

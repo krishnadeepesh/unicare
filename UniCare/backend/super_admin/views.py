@@ -26,6 +26,15 @@ def is_valid_phone(phone):
     return len(digits) == 10 and digits[0] in '6789'
 
 
+def is_valid_email(email):
+    """Validate standard email address."""
+    if not email or not isinstance(email, str):
+        return False
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return bool(re.match(pattern, email.strip()))
+
+
+
 def require_hospital_admin(request, require_approved=False):
     """Return the hospital bound to the current hospital-admin session.
     If require_approved=True, verify the hospital status is 'Approved'.

@@ -417,8 +417,17 @@ const RECOVERY_QUESTIONS = [
       const res = await fetch(`${API}/appointments/options/?hospital_id=${activeHid}&doctor_id=${encodeURIComponent(docId)}&date=${encodeURIComponent(date)}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setBookedSlots(data.booked_slots || []);
+        const booked = data.booked_slots || [];
+        setBookedSlots(booked);
+        setBookingTime((current) => {
+          if (booked.includes(current)) {
+            const nextFree = availableTimeSlots.find(t => !booked.includes(t));
+            return nextFree || current;
+          }
+          return current;
+        });
       }
+
     } catch (err) {
       console.error('Error fetching booked slots:', err);
     }
@@ -480,8 +489,13 @@ const RECOVERY_QUESTIONS = [
       setMessage({ text: 'Please fill in Doctor, Date, and Time.', type: 'danger' });
       return;
     }
+    if (bookedSlots.includes(bookingTime)) {
+      setMessage({ text: 'The selected time slot is already booked for this doctor. Please pick an open slot.', type: 'danger' });
+      return;
+    }
 
     setBookingSubmitting(true);
+
     try {
       const res = await fetch(`${API}/appointments/`, {
         method: 'POST',
@@ -631,9 +645,14 @@ const RECOVERY_QUESTIONS = [
         credentials: 'include',
         body: JSON.stringify(editPatientForm)
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        throw new Error(`Server returned status ${res.status} (${res.statusText || 'Error'})`);
+      }
       if (res.ok) {
-        setMessage({ text: data.message, type: 'success' });
+        setMessage({ text: data.message || 'Patient updated successfully.', type: 'success' });
         setEditingPatient(null);
         fetchDirectoryPatients(patientSearch);
         if (selectedPatient && selectedPatient.patient_id === editPatientForm.patient_id) {
@@ -644,7 +663,8 @@ const RECOVERY_QUESTIONS = [
       }
     } catch (err) {
       console.error('Error updating patient details:', err);
-      setMessage({ text: 'Network error updating patient details.', type: 'danger' });
+      setMessage({ text: err.message || 'Network error updating patient details.', type: 'danger' });
+
     } finally {
       setEditPatientSubmitting(false);
     }
@@ -2151,10 +2171,11 @@ const RECOVERY_QUESTIONS = [
                       type="submit"
                       className="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm"
                       style={{ backgroundColor: '#0d9488' }}
-                      disabled={bookingSubmitting || !selectedPatient}
+                      disabled={bookingSubmitting || !selectedPatient || bookedSlots.includes(bookingTime)}
                     >
                       {bookingSubmitting ? 'Booking...' : 'Confirm & Book Appointment'}
                     </button>
+
                   </div>
                 </form>
               </div>
