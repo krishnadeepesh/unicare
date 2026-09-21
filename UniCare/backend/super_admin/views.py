@@ -1722,6 +1722,183 @@ def delete_receptionist(request):
 
 
 @csrf_exempt
+def get_nurses(request):
+    if request.method != 'GET':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    hospital_id, error = require_hospital_admin(request)
+    if error:
+        return error
+    sql = """
+        SELECT n.nurse_id, n.hospital_id, n.department_id, n.nurse_is_active,
+               u.user_name, u.user_email, u.user_phone, u.user_created_at,
+               d.department_name
+        FROM tbl_nurse n
+        JOIN tbl_user u ON n.user_id = u.user_id
+        LEFT JOIN tbl_department d ON d.department_id = n.department_id
+        WHERE n.hospital_id = %s
+        ORDER BY n.nurse_id DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [hospital_id])
+        rows = cursor.fetchall()
+    return JsonResponse({'status': 'success', 'nurses': [
+        {
+            'nurse_id': row[0],
+            'id': f'NUR{row[0]:03d}',
+            'nurse_uid': f'NUR{row[0]:03d}',
+            'hospital_id': row[1],
+            'department_id': row[2],
+            'department_name': row[8] or 'General Ward',
+            'is_active': bool(row[3]),
+            'name': row[4],
+            'email': row[5],
+            'phone': row[6] or '',
+            'created_at': row[7].strftime('%Y-%m-%d') if hasattr(row[7], 'strftime') else str(row[7] or '')
+        }
+        for row in rows
+    ]})
+
+
+@csrf_exempt
+def add_nurse(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
+    if error:
+        return error
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    password = (data.get('password') or '').strip()
+    department_id = data.get('department_id') or None
+    if not hospital_id or not name or not email or len(password) < 8:
+        return JsonResponse({'status': 'error', 'message': 'Name, email, and an 8-character password are required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the nurse.'}, status=400)
+
+    email_clean = email.lower().strip()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email) = LOWER(%s) LIMIT 1", [email_clean])
+        if cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': 'Email address is already registered.'}, status=409)
+
+        if phone:
+            phone_clean = phone.strip()
+            cursor.execute("SELECT 1 FROM tbl_user WHERE user_phone = %s LIMIT 1", [phone_clean])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'Phone number is already registered.'}, status=409)
+
+        # Lookup role_id for Nurse
+        cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='nurse' LIMIT 1")
+        r_row = cursor.fetchone()
+        if not r_row:
+            cursor.execute("INSERT INTO tbl_role (role_name, role_is_active) VALUES ('Nurse', 1)")
+            role_id = cursor.lastrowid
+        else:
+            role_id = r_row[0]
+
+        ensure_recovery_columns()
+        cursor.execute(
+            "INSERT INTO tbl_user (hospital_id, role_id, user_name, user_email, user_phone, user_password, user_is_active, must_change_password)"
+            " VALUES (%s, %s, %s, %s, %s, %s, 1, 1)",
+            [hospital_id, role_id, name, email, phone or None, make_password(password)]
+        )
+        user_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO tbl_nurse (user_id, hospital_id, department_id, nurse_is_active)"
+            " VALUES (%s, %s, %s, 1)",
+            [user_id, hospital_id, department_id]
+        )
+        nurse_id = cursor.lastrowid
+        nurse_uid = f"NUR{nurse_id:03d}"
+    return JsonResponse({'status': 'success', 'message': 'Nurse added successfully.', 'nurse': {'nurse_id': nurse_id, 'id': nurse_uid, 'nurse_uid': nurse_uid}})
+
+
+@csrf_exempt
+def update_nurse(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
+    if error:
+        return error
+    nurse_id = data.get('nurse_id')
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    department_id = data.get('department_id') or None
+    if not nurse_id or not name or not email:
+        return JsonResponse({'status': 'error', 'message': 'Nurse ID, name and email are required.'}, status=400)
+    if phone and not is_valid_phone(phone):
+        return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number for the nurse.'}, status=400)
+
+    if isinstance(nurse_id, str):
+        if nurse_id.startswith('NUR-'):
+            nurse_id = int(nurse_id.replace('NUR-', ''))
+        elif nurse_id.startswith('NUR'):
+            nurse_id = int(nurse_id.replace('NUR', ''))
+
+    email_clean = email.lower().strip()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_nurse WHERE nurse_id=%s AND hospital_id=%s", [nurse_id, hospital_id])
+        row = cursor.fetchone()
+        if not row:
+            return JsonResponse({'status': 'error', 'message': 'Nurse not found.'}, status=404)
+        user_id = row[0]
+
+        cursor.execute("SELECT 1 FROM tbl_user WHERE LOWER(user_email) = LOWER(%s) AND user_id != %s LIMIT 1", [email_clean, user_id])
+        if cursor.fetchone():
+            return JsonResponse({'status': 'error', 'message': 'Email address is already in use by another user.'}, status=409)
+
+        if phone:
+            phone_clean = phone.strip()
+            cursor.execute("SELECT 1 FROM tbl_user WHERE user_phone = %s AND user_id != %s LIMIT 1", [phone_clean, user_id])
+            if cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'Phone number is already in use by another user.'}, status=409)
+
+        cursor.execute("UPDATE tbl_user SET user_name=%s, user_email=%s, user_phone=%s WHERE user_id=%s", [name, email, phone or None, user_id])
+        cursor.execute("UPDATE tbl_nurse SET department_id=%s WHERE nurse_id=%s AND hospital_id=%s", [department_id, nurse_id, hospital_id])
+    return JsonResponse({'status': 'success', 'message': 'Nurse updated successfully.'})
+
+
+@csrf_exempt
+def delete_nurse(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+    hospital_id, error = require_hospital_admin(request, require_approved=True)
+    if error:
+        return error
+    nurse_id = data.get('nurse_id')
+    if not nurse_id:
+        return JsonResponse({'status': 'error', 'message': 'Nurse ID is required.'}, status=400)
+    if isinstance(nurse_id, str):
+        if nurse_id.startswith('NUR-'):
+            nurse_id = int(nurse_id.replace('NUR-', ''))
+        elif nurse_id.startswith('NUR'):
+            nurse_id = int(nurse_id.replace('NUR', ''))
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM tbl_nurse WHERE nurse_id=%s AND hospital_id=%s", [nurse_id, hospital_id])
+        row = cursor.fetchone()
+        if not row:
+            return JsonResponse({'status': 'error', 'message': 'Nurse not found for this hospital.'}, status=404)
+        cursor.execute("DELETE FROM tbl_nurse WHERE nurse_id=%s AND hospital_id=%s", [nurse_id, hospital_id])
+        if row:
+            cursor.execute("DELETE FROM tbl_user WHERE user_id=%s", [row[0]])
+    return JsonResponse({'status': 'success', 'message': 'Nurse deleted successfully.'})
+
+
+@csrf_exempt
 def get_departments(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)

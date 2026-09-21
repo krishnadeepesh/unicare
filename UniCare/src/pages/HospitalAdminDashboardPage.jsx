@@ -12,9 +12,13 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   const [loadingDashboard, setLoadingDashboard] = useState(true);
 
   // Navigation States inside Hospital Admin
-  const [activeSection, setActiveSection] = useState('home'); // 'home' | 'doctors' | 'departments' | 'receptionists'
+  const [activeSection, setActiveSection] = useState('home'); // 'home' | 'doctors' | 'nurses' | 'departments' | 'receptionists'
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
+  const [nursesList, setNursesList] = useState([]);
+  const [showNurseModal, setShowNurseModal] = useState(false);
+  const [editingNurse, setEditingNurse] = useState(null);
+  const [nurseForm, setNurseForm] = useState({ name: '', email: '', phone: '', password: '', department_id: '' });
   const [receptionistsList, setReceptionistsList] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
   const [showReceptionistModal, setShowReceptionistModal] = useState(false);
@@ -55,10 +59,12 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
   // Live validation states
   const [docTouched, setDocTouched] = useState({});
+  const [nurseTouched, setNurseTouched] = useState({});
   const [recTouched, setRecTouched] = useState({});
   const [hospTouched, setHospTouched] = useState({});
 
   const markDocTouched = (f) => setDocTouched(p => ({ ...p, [f]: true }));
+  const markNurseTouched = (f) => setNurseTouched(p => ({ ...p, [f]: true }));
   const markRecTouched = (f) => setRecTouched(p => ({ ...p, [f]: true }));
   const markHospTouched = (f) => setHospTouched(p => ({ ...p, [f]: true }));
 
@@ -80,6 +86,25 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     if (!editingDoctor) {
       if (!docPassword) errs.password = 'Password is required.';
       else if (docPassword.length < 8) errs.password = 'Minimum 8 characters required.';
+    }
+    return errs;
+  };
+
+  const getNurseErrors = () => {
+    const errs = {};
+    if (!nurseForm.name.trim()) errs.name = 'Nurse name is required.';
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    if (!nurseForm.email.trim()) errs.email = 'Email is required.';
+    else if (!emailRegex.test(nurseForm.email.trim())) errs.email = 'Enter a valid email address.';
+
+    if (nurseForm.phone.trim()) {
+      const d = nurseForm.phone.replace(/[^0-9]/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (!/^[6-9]\d{9}$/.test(d)) errs.phone = 'Enter a valid 10-digit mobile number.';
+    }
+
+    if (!editingNurse) {
+      if (!nurseForm.password) errs.password = 'Password is required.';
+      else if (nurseForm.password.length < 8) errs.password = 'Minimum 8 characters.';
     }
     return errs;
   };
@@ -191,6 +216,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
   };
 
   const docErrors = getDocErrors();
+  const nurseErrors = getNurseErrors();
   const recErrors = getRecErrors();
   const hospErrors = getHospErrors();
 
@@ -263,13 +289,19 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     const targetHId = hospitalData?.hospital_id || initialHospitalId;
     if (!targetHId) return;
     try {
-      const [receptionistsResponse, departmentsResponse] = await Promise.all([
+      const [receptionistsResponse, departmentsResponse, nursesResponse] = await Promise.all([
         fetch(`${API_BASE_URL}/receptionists/?hospital_id=${encodeURIComponent(targetHId)}`, { credentials: 'include' }),
         fetch(`${API_BASE_URL}/departments/?hospital_id=${encodeURIComponent(targetHId)}`, { credentials: 'include' }),
+        fetch(`${API_BASE_URL}/nurses/?hospital_id=${encodeURIComponent(targetHId)}`, { credentials: 'include' }),
       ]);
-      const [receptionistsData, departmentsData] = await Promise.all([receptionistsResponse.json(), departmentsResponse.json()]);
+      const [receptionistsData, departmentsData, nursesData] = await Promise.all([
+        receptionistsResponse.json(),
+        departmentsResponse.json(),
+        nursesResponse.json(),
+      ]);
       if (receptionistsResponse.ok) setReceptionistsList(receptionistsData.receptionists || []);
       if (departmentsResponse.ok) setDepartmentsList(departmentsData.departments || []);
+      if (nursesResponse.ok) setNursesList(nursesData.nurses || []);
     } catch (err) {
       console.error('Error fetching management data:', err);
     }
@@ -378,6 +410,66 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
     setDocExperience(doctor?.experience || '');
     setDocPassword('');
     setShowAddDoctorModal(true);
+  };
+
+  const saveNurse = async (e) => {
+    e.preventDefault();
+    setNurseTouched({
+      name: true,
+      email: true,
+      phone: true,
+      password: true,
+    });
+
+    const errs = getNurseErrors();
+    if (Object.keys(errs).length > 0) {
+      showToast(Object.values(errs)[0], 'danger');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/nurses/${editingNurse ? 'update' : 'add'}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          hospital_id: currentHospitalId,
+          ...nurseForm,
+          ...(editingNurse ? { nurse_id: editingNurse.nurse_id } : {})
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message);
+      showToast(data.message);
+      setShowNurseModal(false);
+      setEditingNurse(null);
+      setNurseForm({ name: '', email: '', phone: '', password: '', department_id: '' });
+      setNurseTouched({});
+      fetchManagementData();
+      fetchDashboardData();
+    } catch (err) {
+      showToast(err.message || 'Could not save nurse.', 'danger');
+    }
+  };
+
+  const deleteNurse = async (item) => {
+    if (!window.confirm(`Delete ${item.name}?`)) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/nurses/delete/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ nurse_id: item.nurse_id })
+      });
+      const data = await response.json();
+      showToast(data.message, response.ok ? 'warning' : 'danger');
+      if (response.ok) {
+        fetchManagementData();
+        fetchDashboardData();
+      }
+    } catch (err) {
+      showToast(err.message || 'Could not delete nurse.', 'danger');
+    }
   };
 
   const saveReceptionist = async (e) => {
@@ -575,6 +667,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
           {[
             { id: 'home', icon: 'bi-speedometer2', label: 'Dashboard' },
             { id: 'doctors', icon: 'bi-person-badge', label: 'Doctor Management', count: doctorsList.length },
+            { id: 'nurses', icon: 'bi-heart-pulse', label: 'Nurses & Clinical Staff', count: nursesList.length },
             { id: 'receptionists', icon: 'bi-person-workspace', label: 'Staff & Receptionists', count: receptionistsList.length },
             { id: 'departments', icon: 'bi-diagram-3', label: 'Departments', count: departmentsList.length },
           ].map(item => (
@@ -876,6 +969,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
         <div className="bg-white rounded-4 shadow-sm border p-3 mb-4 d-flex flex-wrap gap-2">
           <button onClick={() => setActiveSection('home')} className={`btn ${activeSection === 'home' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'home' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-grid me-2"></i>Dashboard</button>
           <button onClick={() => setActiveSection('doctors')} className={`btn ${activeSection === 'doctors' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'doctors' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-person-badge me-2"></i>Doctor Management</button>
+          <button onClick={() => setActiveSection('nurses')} className={`btn ${activeSection === 'nurses' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'nurses' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-heart-pulse me-2"></i>Nurse & Clinical Staff</button>
           <button onClick={() => setActiveSection('receptionists')} className={`btn ${activeSection === 'receptionists' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'receptionists' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-person-workspace me-2"></i>Receptionist Management</button>
           <button onClick={() => setActiveSection('departments')} className={`btn ${activeSection === 'departments' ? 'btn-teal text-white' : 'btn-outline-teal'} rounded-3`} style={activeSection === 'departments' ? { backgroundColor: '#0d9488' } : {}}><i className="bi bi-diagram-3 me-2"></i>Department Management</button>
         </div>
@@ -981,7 +1075,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
 
             {/* HOSPITAL-SPECIFIC SUMMARY STATISTICS (CLICKABLE REDIRECTION) */}
             <div className="row g-3 mb-4">
-              <div className="col-6 col-md-4 col-lg">
+              <div className="col-6 col-md-3 col-lg">
                 <div 
                   className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-primary hover-teal cursor-pointer"
                   style={{ cursor: 'pointer' }}
@@ -993,7 +1087,19 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   <small className="text-primary d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
                 </div>
               </div>
-              <div className="col-6 col-md-4 col-lg">
+              <div className="col-6 col-md-3 col-lg">
+                <div 
+                  className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-info hover-teal cursor-pointer"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveSection('nurses')}
+                  title="Click to view Nurses"
+                >
+                  <span className="text-muted small d-block mb-1">Total Nurses</span>
+                  <span className="fs-3 fw-bold text-info">{statsData?.total_nurses ?? nursesList.length}</span>
+                  <small className="text-info d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
+                </div>
+              </div>
+              <div className="col-6 col-md-3 col-lg">
                 <div 
                   className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-warning hover-teal cursor-pointer"
                   style={{ cursor: 'pointer' }}
@@ -1005,7 +1111,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                   <small className="text-warning-emphasis d-block mt-1"><i className="bi bi-arrow-right-circle me-1"></i>Manage</small>
                 </div>
               </div>
-              <div className="col-6 col-md-4 col-lg">
+              <div className="col-6 col-md-3 col-lg">
                 <div 
                   className="card border-0 rounded-4 shadow-sm bg-white p-3 text-center border-bottom border-4 border-success hover-teal cursor-pointer"
                   style={{ cursor: 'pointer' }}
@@ -1023,7 +1129,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
             <div className="card border-0 rounded-4 shadow-sm bg-white p-4 mb-4">
               <h5 className="fw-bold text-dark mb-3"><i className="bi bi-lightning-charge-fill text-teal me-2" style={{ color: '#0d9488' }}></i>Quick Administrative Actions</h5>
               <div className="row g-3">
-                <div className="col-md-4">
+                <div className="col-md-3">
                   <button 
                     className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('doctors'); openDoctorModal(); }}
@@ -1031,11 +1137,23 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <i className="bi bi-person-plus-fill fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Register Doctor</div>
-                      <small className="text-muted">Add doctor with login credentials</small>
+                      <small className="text-muted">Add doctor account</small>
                     </div>
                   </button>
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-3">
+                  <button 
+                    className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
+                    onClick={() => { setActiveSection('nurses'); setEditingNurse(null); setNurseForm({ name: '', email: '', phone: '', password: '', department_id: '' }); setNurseTouched({}); setShowNurseModal(true); }}
+                  >
+                    <i className="bi bi-heart-pulse-fill fs-3 text-teal" style={{ color: '#0d9488' }}></i>
+                    <div>
+                      <div className="fw-bold">Add Nurse / Staff</div>
+                      <small className="text-muted">Clinical vitals staff</small>
+                    </div>
+                  </button>
+                </div>
+                <div className="col-md-3">
                   <button 
                     className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('receptionists'); setShowReceptionistModal(true); }}
@@ -1043,11 +1161,11 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <i className="bi bi-person-workspace fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Add Receptionist</div>
-                      <small className="text-muted">Create desk staff account</small>
+                      <small className="text-muted">Create desk staff</small>
                     </div>
                   </button>
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-3">
                   <button 
                     className="btn btn-outline-teal w-100 p-3 rounded-3 text-start d-flex align-items-center gap-3"
                     onClick={() => { setActiveSection('departments'); setShowDepartmentModal(true); }}
@@ -1055,7 +1173,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <i className="bi bi-diagram-3-fill fs-3 text-teal" style={{ color: '#0d9488' }}></i>
                     <div>
                       <div className="fw-bold">Create Department</div>
-                      <small className="text-muted">Add medical specialty unit</small>
+                      <small className="text-muted">Medical specialty unit</small>
                     </div>
                   </button>
                 </div>
@@ -1135,6 +1253,43 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SECTION 2B: NURSE & CLINICAL STAFF MANAGEMENT VIEW */}
+        {activeSection === 'nurses' && (
+          <div className="card border-0 rounded-4 shadow-sm bg-white p-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h5 className="fw-bold mb-1">Nurses & Clinical Staff Management</h5>
+                <p className="text-muted small mb-0">Create, edit, and manage clinical staff who record pre-consultation vitals.</p>
+              </div>
+              <button 
+                className="btn btn-teal text-white shadow-sm" 
+                style={{ backgroundColor: '#0d9488' }} 
+                onClick={() => { 
+                  setEditingNurse(null); 
+                  setNurseForm({ name: '', email: '', phone: '', password: '', department_id: '' }); 
+                  setNurseTouched({});
+                  setShowNurseModal(true); 
+                }}
+              >
+                <i className="bi bi-plus-circle me-2"></i>Add Nurse
+              </button>
+            </div>
+            <ManagementTable 
+              items={nursesList} 
+              idKey="nurse_id" 
+              codeKey="nurse_uid" 
+              onEdit={(item) => { 
+                setEditingNurse(item); 
+                setNurseForm({ name: item.name, email: item.email, phone: item.phone || '', department_id: item.department_id || '' }); 
+                setNurseTouched({});
+                setShowNurseModal(true); 
+              }} 
+              onDelete={deleteNurse} 
+              emptyText="No nurses or clinical staff registered yet." 
+            />
           </div>
         )}
 
@@ -1312,6 +1467,108 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     disabled={submitting}
                   >
                     {submitting ? 'Saving...' : editingDoctor ? 'Save Changes' : 'Register Doctor'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD / EDIT NURSE MODAL */}
+      {showNurseModal && (
+        <div className="modal show d-block bg-dark bg-opacity-50">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header bg-teal text-white" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold text-white">
+                  <i className="bi bi-heart-pulse me-2"></i>{editingNurse ? 'Edit Nurse / Clinical Staff' : 'Add Nurse / Clinical Staff'}
+                </h5>
+                <button className="btn-close btn-close-white" onClick={() => setShowNurseModal(false)}></button>
+              </div>
+              <form onSubmit={saveNurse} noValidate>
+                <div className="modal-body p-4">
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Full Name <span className="text-danger">*</span></label>
+                    <input 
+                      className={`form-control ${nurseTouched.name ? (nurseErrors.name ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={nurseForm.name} 
+                      onChange={(e) => setNurseForm({ ...nurseForm, name: e.target.value })} 
+                      onBlur={() => markNurseTouched('name')}
+                      placeholder="e.g. Nurse Sarah Jenkins"
+                      required 
+                    />
+                    {nurseTouched.name && nurseErrors.name && (
+                      <div className="invalid-feedback small">{nurseErrors.name}</div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Email <span className="text-danger">*</span></label>
+                    <input 
+                      type="email" 
+                      className={`form-control ${nurseTouched.email ? (nurseErrors.email ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={nurseForm.email} 
+                      onChange={(e) => setNurseForm({ ...nurseForm, email: e.target.value })} 
+                      onBlur={() => markNurseTouched('email')}
+                      placeholder="nurse@hospital.com"
+                      required 
+                    />
+                    {nurseTouched.email && nurseErrors.email && (
+                      <div className="invalid-feedback small">{nurseErrors.email}</div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Phone</label>
+                    <input 
+                      type="tel"
+                      className={`form-control ${nurseTouched.phone ? (nurseErrors.phone ? 'is-invalid' : 'is-valid') : ''}`} 
+                      value={nurseForm.phone} 
+                      onChange={(e) => setNurseForm({ ...nurseForm, phone: e.target.value })} 
+                      onBlur={() => markNurseTouched('phone')}
+                      placeholder="10-digit phone number"
+                    />
+                    {nurseTouched.phone && nurseErrors.phone && (
+                      <div className="invalid-feedback small">{nurseErrors.phone}</div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Assigned Department (Optional)</label>
+                    <select
+                      className="form-select"
+                      value={nurseForm.department_id || ''}
+                      onChange={(e) => setNurseForm({ ...nurseForm, department_id: e.target.value })}
+                    >
+                      <option value="">-- General / OPD Ward --</option>
+                      {departmentsList.filter(d => d.is_active !== false).map(dept => (
+                        <option key={dept.department_id || dept.id} value={dept.department_id || dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {!editingNurse && (
+                    <div className="mb-2">
+                      <label className="form-label fw-semibold small">Password <span className="text-danger">*</span></label>
+                      <input 
+                        type="password" 
+                        minLength="8" 
+                        className={`form-control ${nurseTouched.password ? (nurseErrors.password ? 'is-invalid' : 'is-valid') : ''}`} 
+                        value={nurseForm.password} 
+                        onChange={(e) => setNurseForm({ ...nurseForm, password: e.target.value })} 
+                        onBlur={() => markNurseTouched('password')}
+                        placeholder="Minimum 8 characters"
+                        required 
+                      />
+                      {nurseTouched.password && nurseErrors.password && (
+                        <div className="invalid-feedback small">{nurseErrors.password}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer border-0 p-4 pt-0">
+                  <button className="btn btn-secondary rounded-3 px-4" type="button" onClick={() => setShowNurseModal(false)}>Cancel</button>
+                  <button className="btn btn-teal text-white rounded-3 px-4 fw-bold shadow-sm" type="submit" style={{ backgroundColor: '#0d9488' }}>
+                    {editingNurse ? 'Save Changes' : 'Save Nurse'}
                   </button>
                 </div>
               </form>

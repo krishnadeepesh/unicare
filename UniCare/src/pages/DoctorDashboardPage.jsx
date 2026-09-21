@@ -12,6 +12,125 @@ const RECOVERY_QUESTIONS = [
   "What city were you born in?",
 ];
 
+const STANDARD_MEDICINES = [
+  { name: 'Paracetamol 500mg', dosage: '500mg', frequency: 'Thrice daily', duration: '3 days', instruction: 'After food' },
+  { name: 'Paracetamol 650mg', dosage: '650mg', frequency: 'Thrice daily', duration: '3 days', instruction: 'After food for fever' },
+  { name: 'Amoxicillin 500mg', dosage: '500mg', frequency: 'Thrice daily', duration: '5 days', instruction: 'After food with water' },
+  { name: 'Amoxicillin + Clavulanic Acid 625mg', dosage: '625mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After meal' },
+  { name: 'Azithromycin 500mg', dosage: '500mg', frequency: 'Once daily', duration: '3 days', instruction: '1 hour before or 2 hours after food' },
+  { name: 'Ciprofloxacin 500mg', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'With plenty of fluids' },
+  { name: 'Metformin 500mg', dosage: '500mg', frequency: 'Twice daily', duration: '30 days', instruction: 'With meals' },
+  { name: 'Metformin 1000mg', dosage: '1000mg', frequency: 'Twice daily', duration: '30 days', instruction: 'With breakfast and dinner' },
+  { name: 'Amlodipine 5mg', dosage: '5mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after breakfast' },
+  { name: 'Amlodipine 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after food' },
+  { name: 'Telmisartan 40mg', dosage: '40mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning with or without food' },
+  { name: 'Losartan 50mg', dosage: '50mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning' },
+  { name: 'Atorvastatin 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
+  { name: 'Atorvastatin 20mg', dosage: '20mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
+  { name: 'Pantoprazole 40mg', dosage: '40mg', frequency: 'Once daily', duration: '7 days', instruction: 'Morning 30 mins before breakfast' },
+  { name: 'Omeprazole 20mg', dosage: '20mg', frequency: 'Once daily', duration: '7 days', instruction: 'Empty stomach in morning' },
+  { name: 'Rabeprazole 20mg', dosage: '20mg', frequency: 'Once daily', duration: '14 days', instruction: 'Before breakfast' },
+  { name: 'Cetirizine 10mg', dosage: '10mg', frequency: 'Once daily', duration: '5 days', instruction: 'At bedtime' },
+  { name: 'Levocetirizine 5mg', dosage: '5mg', frequency: 'Once daily', duration: '5 days', instruction: 'Night after food' },
+  { name: 'Montelukast + Levocetirizine', dosage: '10mg/5mg', frequency: 'Once daily', duration: '10 days', instruction: 'At bedtime' },
+  { name: 'Ibuprofen 400mg', dosage: '400mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After food' },
+  { name: 'Aceclofenac + Paracetamol', dosage: '100mg/325mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After meals' },
+  { name: 'Tramadol 50mg', dosage: '50mg', frequency: 'As needed', duration: '3 days', instruction: 'For severe pain only' },
+  { name: 'Doxycycline 100mg', dosage: '100mg', frequency: 'Twice daily', duration: '7 days', instruction: 'After meals with full glass of water' },
+  { name: 'Metronidazole 400mg', dosage: '400mg', frequency: 'Thrice daily', duration: '5 days', instruction: 'After food' },
+  { name: 'Ondansetron 4mg', dosage: '4mg', frequency: 'As needed', duration: '3 days', instruction: '30 mins before food for nausea' },
+  { name: 'Domperidone 10mg', dosage: '10mg', frequency: 'Twice daily', duration: '5 days', instruction: 'Before meals' },
+  { name: 'Salbutamol Inhaler 100mcg', dosage: '2 puffs', frequency: 'As needed', duration: '30 days', instruction: 'Inhale when experiencing breathlessness' },
+  { name: 'Budecort Inhaler 200mcg', dosage: '1 puff', frequency: 'Twice daily', duration: '30 days', instruction: 'Rinse mouth after inhalation' },
+  { name: 'Multivitamin & Minerals', dosage: '1 tab', frequency: 'Once daily', duration: '30 days', instruction: 'After breakfast' },
+  { name: 'Vitamin D3 60,000 IU', dosage: '60000 IU', frequency: 'Once daily', duration: '8 weeks', instruction: 'Once weekly with milk' },
+  { name: 'Calcium + Vitamin D3', dosage: '500mg', frequency: 'Once daily', duration: '30 days', instruction: 'After lunch' },
+  { name: 'Cough Syrup (Dextromethorphan)', dosage: '10ml', frequency: 'Thrice daily', duration: '5 days', instruction: 'After meals' },
+  { name: 'ORS Powder', dosage: '1 sachet', frequency: 'As needed', duration: '3 days', instruction: 'Dissolve in 1 liter clean water' }
+];
+
+function MedicineAutocomplete({ value, onChange, onSelectPreset }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [filtered, setFiltered] = useState([]);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!value || !value.trim()) {
+      setFiltered(STANDARD_MEDICINES.slice(0, 8));
+    } else {
+      const q = value.toLowerCase();
+      const matches = STANDARD_MEDICINES.filter(m => 
+        m.name.toLowerCase().includes(q) || 
+        (m.instruction && m.instruction.toLowerCase().includes(q))
+      );
+      setFiltered(matches.slice(0, 10));
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  return (
+    <div className="position-relative" ref={containerRef}>
+      <div className="input-group input-group-sm">
+        <span className="input-group-text bg-white border-end-0 text-teal" style={{ color: '#0d9488' }}>
+          <i className="bi bi-capsule"></i>
+        </span>
+        <input
+          type="text"
+          className="form-control form-control-sm border-start-0"
+          placeholder="Type medicine (e.g. Paracetamol, Amoxicillin)..."
+          required
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setShowDropdown(true);
+          }}
+          onFocus={() => setShowDropdown(true)}
+          autoComplete="off"
+        />
+      </div>
+      {showDropdown && filtered.length > 0 && (
+        <div 
+          className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 overflow-hidden" 
+          style={{ zIndex: 1055, maxHeight: '220px', overflowY: 'auto' }}
+        >
+          <div className="px-2 py-1 bg-light border-bottom text-muted extra-small fw-bold d-flex justify-content-between">
+            <span>STANDARD CLINICAL MEDICINES</span>
+            <span>Click to auto-fill</span>
+          </div>
+          {filtered.map((item, i) => (
+            <button
+              key={i}
+              type="button"
+              className="dropdown-item px-2 py-1.5 text-start border-bottom small d-flex justify-content-between align-items-center"
+              onClick={() => {
+                onSelectPreset(item);
+                setShowDropdown(false);
+              }}
+            >
+              <div>
+                <span className="fw-semibold text-dark">{item.name}</span>
+                <small className="text-muted d-block extra-small">{item.instruction || item.frequency}</small>
+              </div>
+              <span className="badge bg-light text-teal border extra-small" style={{ color: '#0d9488' }}>
+                {item.dosage}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) {
   // Navigation State
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | appointments | search | patients | consultations | records | prescriptions | reports | schedule | profile | password
@@ -55,6 +174,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   // Doctor Visit Entry Form
   const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '' });
   const [visitSubmitting, setVisitSubmitting] = useState(false);
+  const [currentVisitVitals, setCurrentVisitVitals] = useState(null);
 
   // Quick Allergies Update Modal
   const [showAllergyModal, setShowAllergyModal] = useState(false);
@@ -243,8 +363,20 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     }
   };
 
-  // Open Visit Consultation Modal pre-populated with patient's allergies
+  // Open Visit Consultation Modal pre-populated with patient's allergies and vitals
   const handleOpenVisitModal = () => {
+    const latestWithVitals = patientHistory.find(h => h.blood_pressure || h.weight || h.height);
+    if (latestWithVitals) {
+      setCurrentVisitVitals({
+        height: latestWithVitals.height,
+        weight: latestWithVitals.weight,
+        blood_pressure: latestWithVitals.blood_pressure,
+        vitals_recorded_at: latestWithVitals.vitals_recorded_at,
+        has_vitals: true
+      });
+    } else {
+      setCurrentVisitVitals(null);
+    }
     setVisitForm({
       diagnosis: '',
       medical_notes: '',
@@ -345,6 +477,20 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     setPrescriptionForm(prev => {
       const updated = [...prev.medicines];
       updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, medicines: updated };
+    });
+  };
+
+  const selectMedicinePreset = (index, preset) => {
+    setPrescriptionForm(prev => {
+      const updated = [...prev.medicines];
+      updated[index] = {
+        medicine_name: preset.name,
+        dosage: preset.dosage || updated[index].dosage,
+        frequency: preset.frequency || updated[index].frequency,
+        duration: preset.duration || updated[index].duration,
+        instruction: preset.instruction || updated[index].instruction
+      };
       return { ...prev, medicines: updated };
     });
   };
@@ -794,7 +940,18 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                             <td>
                               <span className="badge bg-light text-dark border font-monospace">{a.patient_uid || a.health_id || `PTA${String(a.patient_id).padStart(3, '0')}`}</span>
                             </td>
-                            <td className="fw-semibold text-secondary">{a.time}</td>
+                            <td className="fw-semibold text-secondary">
+                              <div>{a.time}</div>
+                              {a.has_vitals ? (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill extra-small" title={`BP: ${a.blood_pressure}, Wt: ${a.weight}kg, Ht: ${a.height}cm`}>
+                                  <i className="bi bi-heart-pulse-fill me-1"></i>Vitals In
+                                </span>
+                              ) : (
+                                <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill extra-small">
+                                  <i className="bi bi-clock me-1"></i>Vitals Pending
+                                </span>
+                              )}
+                            </td>
                             <td>
                               <span className={`badge rounded-pill px-3 py-1 ${a.status === 'Completed' ? 'bg-success' : 'bg-primary'}`}>
                                 {a.status}
@@ -809,6 +966,14 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                                     patient_id: a.patient_id,
                                     patient_uid: a.patient_uid || a.health_id,
                                     name: a.patient
+                                  });
+                                  setCurrentVisitVitals({
+                                    height: a.height,
+                                    weight: a.weight,
+                                    blood_pressure: a.blood_pressure,
+                                    vitals_recorded_at: a.vitals_recorded_at,
+                                    vitals_recorded_by: a.vitals_recorded_by,
+                                    has_vitals: a.has_vitals
                                   });
                                   setVisitForm(prev => ({ ...prev, appointment_id: a.appointment_id }));
                                   setShowVisitModal(true);
@@ -939,6 +1104,15 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                         <td className="fw-bold text-dark">
                           <div>{a.date}</div>
                           <small className="text-muted">{a.time}</small>
+                          {a.has_vitals ? (
+                            <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill extra-small ms-1" title={`BP: ${a.blood_pressure}, Wt: ${a.weight}kg, Ht: ${a.height}cm`}>
+                              <i className="bi bi-heart-pulse-fill me-1"></i>Vitals In
+                            </span>
+                          ) : (
+                            <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill extra-small ms-1">
+                              <i className="bi bi-clock me-1"></i>Vitals Pending
+                            </span>
+                          )}
                         </td>
                         <td className="fw-semibold">{a.patient}</td>
                         <td>
@@ -959,6 +1133,14 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                                 patient_id: a.patient_id,
                                 patient_uid: a.patient_uid || a.health_id,
                                 name: a.patient
+                              });
+                              setCurrentVisitVitals({
+                                height: a.height,
+                                weight: a.weight,
+                                blood_pressure: a.blood_pressure,
+                                vitals_recorded_at: a.vitals_recorded_at,
+                                vitals_recorded_by: a.vitals_recorded_by,
+                                has_vitals: a.has_vitals
                               });
                               setVisitForm(prev => ({ ...prev, appointment_id: a.appointment_id }));
                               setShowVisitModal(true);
@@ -1105,6 +1287,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                             <th>Date</th>
                             <th>Doctor</th>
                             <th>Hospital</th>
+                            <th>Vitals</th>
                             <th>Diagnosis</th>
                             <th>Notes</th>
                           </tr>
@@ -1118,6 +1301,17 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                               <td className="fw-bold text-nowrap">{h.visited_at || h.date}</td>
                               <td>{h.doctor_name}</td>
                               <td>{h.hospital_name}</td>
+                              <td>
+                                {h.blood_pressure || h.weight || h.height ? (
+                                  <div className="small">
+                                    {h.blood_pressure && <span className="d-block">BP: <strong>{h.blood_pressure}</strong></span>}
+                                    {h.weight && <span className="d-block">Wt: <strong>{h.weight} kg</strong></span>}
+                                    {h.height && <span className="d-block">Ht: <strong>{h.height} cm</strong></span>}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted">—</span>
+                                )}
+                              </td>
                               <td className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{h.diagnosis}</td>
                               <td>{h.medical_notes}</td>
                             </tr>
@@ -1834,6 +2028,64 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   </div>
                 )}
 
+                {/* PRE-CONSULTATION VITALS RECORDED BY CLINICAL STAFF (READ-ONLY) */}
+                <div className="card border-0 shadow-sm rounded-3 mb-3" style={{ backgroundColor: '#f0fdfa', border: '1px solid #99f6e4' }}>
+                  <div className="card-body p-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom" style={{ borderColor: '#ccfbf1' }}>
+                      <span className="fw-bold text-teal d-flex align-items-center gap-1.5" style={{ color: '#0d9488' }}>
+                        <i className="bi bi-heart-pulse-fill text-danger fs-5"></i>
+                        Pre-Consultation Vitals (Recorded by Clinical Staff)
+                      </span>
+                      {currentVisitVitals?.has_vitals || currentVisitVitals?.blood_pressure || currentVisitVitals?.weight || currentVisitVitals?.height ? (
+                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill extra-small">
+                          <i className="bi bi-check-circle-fill me-1"></i>Vitals Verified
+                        </span>
+                      ) : (
+                        <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 rounded-pill extra-small">
+                          <i className="bi bi-clock me-1"></i>Vitals Pending
+                        </span>
+                      )}
+                    </div>
+                    {currentVisitVitals?.has_vitals || currentVisitVitals?.blood_pressure || currentVisitVitals?.weight || currentVisitVitals?.height ? (
+                      <>
+                        <div className="row g-2 text-center">
+                          <div className="col-4">
+                            <div className="bg-white p-2 rounded-2 border">
+                              <small className="text-muted extra-small d-block">Blood Pressure</small>
+                              <span className="fw-bold text-dark fs-6">{currentVisitVitals.blood_pressure || '—'}</span>
+                              <small className="text-muted extra-small d-block">mmHg</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="bg-white p-2 rounded-2 border">
+                              <small className="text-muted extra-small d-block">Weight</small>
+                              <span className="fw-bold text-dark fs-6">{currentVisitVitals.weight ? `${currentVisitVitals.weight} kg` : '—'}</span>
+                              <small className="text-muted extra-small d-block">Body Mass</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="bg-white p-2 rounded-2 border">
+                              <small className="text-muted extra-small d-block">Height</small>
+                              <span className="fw-bold text-dark fs-6">{currentVisitVitals.height ? `${currentVisitVitals.height} cm` : '—'}</span>
+                              <small className="text-muted extra-small d-block">Stature</small>
+                            </div>
+                          </div>
+                        </div>
+                        {currentVisitVitals.height && currentVisitVitals.weight && !isNaN(Number(currentVisitVitals.height)) && !isNaN(Number(currentVisitVitals.weight)) && (
+                          <div className="text-muted extra-small mt-2 d-flex justify-content-between">
+                            <span>Recorded by Clinical Staff</span>
+                            <span>Calculated BMI: <strong className="text-teal" style={{ color: '#0d9488' }}>{(Number(currentVisitVitals.weight) / Math.pow(Number(currentVisitVitals.height) / 100, 2)).toFixed(1)} kg/m²</strong></span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted small mb-0">
+                        <i className="bi bi-info-circle me-1 text-teal"></i>No pre-consultation vitals recorded by nursing desk for this visit yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <form onSubmit={handleSaveVisit}>
                   <div className="mb-3">
                     <label className="form-label small fw-semibold">Diagnosis / Clinical Finding *</label>
@@ -1989,14 +2241,14 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                         <div key={idx} className="p-3 bg-light rounded-3 border">
                           <div className="row g-2 mb-2">
                             <div className="col-md-5">
-                              <label className="form-label extra-small text-muted mb-1">Medicine Name *</label>
-                              <input
-                                type="text"
-                                className="form-control form-control-sm"
-                                placeholder="e.g. Amoxicillin / Paracetamol"
-                                required
+                              <label className="form-label extra-small text-muted mb-1 d-flex justify-content-between">
+                                <span>Medicine Name *</span>
+                                <span className="text-teal extra-small">Auto-suggest enabled</span>
+                              </label>
+                              <MedicineAutocomplete
                                 value={m.medicine_name}
-                                onChange={(e) => updateMedicineField(idx, 'medicine_name', e.target.value)}
+                                onChange={(val) => updateMedicineField(idx, 'medicine_name', val)}
+                                onSelectPreset={(preset) => selectMedicinePreset(idx, preset)}
                               />
                             </div>
                             <div className="col-md-3">

@@ -12,6 +12,7 @@ import HospitalAdminDashboardPage from './pages/HospitalAdminDashboardPage';
 import SuperAdminDashboardPage from './pages/SuperAdminDashboardPage';
 import StaffDashboardPage from './pages/StaffDashboardPage';
 import DoctorDashboardPage from './pages/DoctorDashboardPage';
+import NurseDashboardPage from './pages/NurseDashboardPage';
 import PatientPortalPage from './pages/PatientPortalPage';
 
 function App() {
@@ -46,10 +47,11 @@ function App() {
       return 'landing';
     }
 
-    if (savedUser && savedView && ['hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard', 'super-admin-dashboard', 'hospital-role-select'].includes(savedView)) {
+    if (savedUser && savedView && ['hospital-admin-dashboard', 'doctor-dashboard', 'nurse-dashboard', 'receptionist-dashboard', 'patient-dashboard', 'super-admin-dashboard', 'hospital-role-select'].includes(savedView)) {
       return savedView;
     }
     if (parsedUser?.role === 'doctor') return 'doctor-dashboard';
+    if (parsedUser?.role === 'nurse') return 'nurse-dashboard';
     if (parsedUser?.role === 'receptionist') return 'receptionist-dashboard';
     if (parsedUser?.role === 'patient') return 'patient-dashboard';
     if (savedUser) {
@@ -96,6 +98,7 @@ function App() {
   const isDashboardView = (view) => {
     return [
       'doctor-dashboard',
+      'nurse-dashboard',
       'receptionist-dashboard',
       'patient-dashboard',
       'hospital-admin-dashboard',
@@ -120,6 +123,7 @@ function App() {
 
     if (!user) return null;
     if (user.role === 'doctor') return 'doctor-dashboard';
+    if (user.role === 'nurse') return 'nurse-dashboard';
     if (user.role === 'receptionist') return 'receptionist-dashboard';
     if (user.role === 'patient' || user.role === 'Patient') return 'patient-dashboard';
     if (user.role === 'super-admin' || user.is_superuser) return 'super-admin-dashboard';
@@ -222,6 +226,8 @@ function App() {
     localStorage.setItem('unicare_active_user', JSON.stringify(user));
     const view = user.role === 'doctor' 
       ? 'doctor-dashboard' 
+      : user.role === 'nurse'
+      ? 'nurse-dashboard'
       : user.role === 'receptionist' 
       ? 'receptionist-dashboard' 
       : 'patient-dashboard';
@@ -290,13 +296,19 @@ function App() {
     setActiveRole(role);
     if (role === 'hospital-admin') {
       navigateView('hospital-admin-dashboard');
+    } else if (role === 'nurse') {
+      navigateView('nurse-dashboard');
+    } else if (role === 'doctor') {
+      navigateView('doctor-dashboard');
+    } else if (role === 'receptionist') {
+      navigateView('receptionist-dashboard');
     } else {
       alert(`Role selected: ${role.toUpperCase()}. Portal login for ${role} selected.`);
     }
   };
 
   const isSuperAdminView = currentView === 'super-admin-dashboard';
-  const isIsolatedDashboard = ['hospital-role-select', 'hospital-admin-dashboard', 'doctor-dashboard', 'receptionist-dashboard', 'patient-dashboard'].includes(currentView);
+  const isIsolatedDashboard = ['hospital-role-select', 'hospital-admin-dashboard', 'doctor-dashboard', 'nurse-dashboard', 'receptionist-dashboard', 'patient-dashboard'].includes(currentView);
   const isAuthView = currentView === 'login' || currentView === 'register';
 
   const renderView = () => {
@@ -341,6 +353,8 @@ function App() {
         );
       case 'doctor-dashboard':
         return <DoctorDashboardPage user={currentUser} onLogout={handleLogout} onNavigateHome={() => navigateView('landing')} />;
+      case 'nurse-dashboard':
+        return <NurseDashboardPage user={currentUser} onLogout={handleLogout} onNavigateHome={() => navigateView('landing')} />;
       case 'receptionist-dashboard':
         return <StaffDashboardPage user={currentUser} onLogout={handleLogout} onNavigateHome={() => navigateView('landing')} />;
       case 'patient-dashboard':

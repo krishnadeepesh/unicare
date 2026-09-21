@@ -60,6 +60,7 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   });
   const [editPatientSubmitting, setEditPatientSubmitting] = useState(false);
   const [showRegistrationSuccessModal, setShowRegistrationSuccessModal] = useState(false);
+  const [sharedPhoneConfirmation, setSharedPhoneConfirmation] = useState(null);
 
   // Doctor Visit Entry
   const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '' });
@@ -528,7 +529,59 @@ const RECOVERY_QUESTIONS = [
     }
   };
 
-  // Register Patient (Receptionist)
+  // Register Patient (Receptionist) with Family Shared Phone Support
+  const executeRegisterPatient = async (confirmShared = false) => {
+    try {
+      const payload = {
+        ...patientForm,
+        password: patientForm.password || 'Patient@123',
+        confirm_shared_phone: confirmShared
+      };
+      const res = await fetch(`${API}/patients/register/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        data = { message: res.statusText || 'Server responded with an unexpected error.' };
+      }
+
+      if (data.status === 'confirm_required' || data.shared_phone) {
+        setSharedPhoneConfirmation({
+          message: data.message || `Phone number ${patientForm.phone} is already registered under an existing family member account. Would you like to register this individual as a new family member with their own unique Health ID?`,
+        });
+        return;
+      }
+
+      if (res.ok && data.patient) {
+        setSharedPhoneConfirmation(null);
+        const p = data.patient;
+        setRegisterResult(p);
+        setShowRegistrationSuccessModal(true);
+        setMessage({
+          text: data.existing ? `Existing patient record found and linked (${p.patient_uid || p.health_id})!` : `New patient registered successfully! Assigned Health ID: ${p.patient_uid || p.health_id}`,
+          type: 'success'
+        });
+        setPatientForm({
+          name: '', email: '', phone: '', password: '', date_of_birth: '',
+          gender: '', blood_group: '', address: '', emergency_contact: ''
+        });
+        setPatientTouched({});
+        loadData();
+        fetchDirectoryPatients(patientSearch);
+      } else {
+        setMessage({ text: data.message || `Failed to register patient (Error ${res.status}).`, type: 'danger' });
+      }
+    } catch (err) {
+      console.error('Patient registration error:', err);
+      setMessage({ text: err.message || 'Failed to connect to registration service. Please check your network.', type: 'danger' });
+    }
+  };
+
   const handleRegisterPatient = async (e) => {
     e.preventDefault();
     setMessage(null);
@@ -551,46 +604,7 @@ const RECOVERY_QUESTIONS = [
       return;
     }
 
-    try {
-      const payload = {
-        ...patientForm,
-        password: patientForm.password || 'Patient@123'
-      };
-      const res = await fetch(`${API}/patients/register/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-      let data = {};
-      try {
-        data = await res.json();
-      } catch (jsonErr) {
-        data = { message: res.statusText || 'Server responded with an unexpected error.' };
-      }
-
-      if (res.ok) {
-        const p = data.patient;
-        setRegisterResult(p);
-        setShowRegistrationSuccessModal(true);
-        setMessage({
-          text: data.existing ? `Existing patient record found and linked (${p.patient_uid || p.health_id})!` : `New patient registered successfully! Assigned Health ID: ${p.patient_uid || p.health_id}`,
-          type: 'success'
-        });
-        setPatientForm({
-          name: '', email: '', phone: '', password: '', date_of_birth: '',
-          gender: '', blood_group: '', address: '', emergency_contact: ''
-        });
-        setPatientTouched({});
-        loadData();
-        fetchDirectoryPatients(patientSearch);
-      } else {
-        setMessage({ text: data.message || `Failed to register patient (Error ${res.status}).`, type: 'danger' });
-      }
-    } catch (err) {
-      console.error('Patient registration error:', err);
-      setMessage({ text: err.message || 'Failed to connect to registration service. Please check your network.', type: 'danger' });
-    }
+    await executeRegisterPatient(false);
   };
 
   // Open Edit Patient Modal
@@ -1566,7 +1580,18 @@ const RECOVERY_QUESTIONS = [
                             </td>
                             <td className="fw-semibold text-dark">
                               <div>{a.date}</div>
-                              <small className="text-muted">{a.time}</small>
+                              <div className="d-flex align-items-center gap-1">
+                                <small className="text-muted">{a.time}</small>
+                                {a.has_vitals ? (
+                                  <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill extra-small" title={`BP: ${a.blood_pressure}, Wt: ${a.weight}kg, Ht: ${a.height}cm`}>
+                                    <i className="bi bi-heart-pulse-fill me-1"></i>Vitals In
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-secondary-subtle text-secondary border rounded-pill extra-small">
+                                    <i className="bi bi-clock me-1"></i>Awaiting Vitals
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td>
                               <div className="fw-bold text-dark">{a.patient}</div>
@@ -1674,6 +1699,17 @@ const RECOVERY_QUESTIONS = [
                           <div className="small text-muted mb-3">
                             <div><i className="bi bi-person-badge me-1"></i>Doctor: {a.doctor}</div>
                             <div><i className="bi bi-clock me-1"></i>Slot: {a.date} at {a.time}</div>
+                            <div className="mt-1">
+                              {a.has_vitals ? (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill extra-small">
+                                  <i className="bi bi-heart-pulse-fill me-1"></i>Vitals In ({a.blood_pressure || 'Recorded'})
+                                </span>
+                              ) : (
+                                <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill extra-small">
+                                  <i className="bi bi-clock me-1"></i>Awaiting Vitals
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="d-flex gap-2">
@@ -2569,6 +2605,52 @@ const RECOVERY_QUESTIONS = [
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SHARED PHONE FAMILY REGISTRATION CONFIRMATION MODAL */}
+      {sharedPhoneConfirmation && (
+        <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header bg-teal text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold fs-5 mb-0">
+                  <i className="bi bi-people-fill me-2"></i>Family Shared Phone Number
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setSharedPhoneConfirmation(null)}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <div className="alert alert-info d-flex align-items-center gap-2 mb-3">
+                  <i className="bi bi-info-circle-fill fs-4 flex-shrink-0 text-teal" style={{ color: '#0d9488' }}></i>
+                  <div>{sharedPhoneConfirmation.message}</div>
+                </div>
+                <p className="text-muted small mb-0">
+                  <i className="bi bi-shield-check text-success me-1"></i>UniCare supports shared family mobile numbers while assigning each family member their own strictly confidential, individual <strong>Health ID</strong> and medical record. Other family members' private medical history remains completely unexposed.
+                </p>
+              </div>
+              <div className="modal-footer border-0 p-3 pt-0 d-flex justify-content-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary rounded-pill px-3"
+                  onClick={() => setSharedPhoneConfirmation(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-teal text-white rounded-pill px-4 fw-bold"
+                  style={{ backgroundColor: '#0d9488' }}
+                  onClick={() => executeRegisterPatient(true)}
+                >
+                  <i className="bi bi-check-lg me-1"></i>Confirm & Register Family Member
+                </button>
+              </div>
             </div>
           </div>
         </div>

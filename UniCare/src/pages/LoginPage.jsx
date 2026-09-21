@@ -147,7 +147,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
           else setView('hospital-admin-dashboard');
           return;
         }
-        if (u.role === 'doctor' || u.role === 'receptionist' || u.role === 'patient') {
+        if (u.role === 'doctor' || u.role === 'nurse' || u.role === 'receptionist' || u.role === 'patient') {
           onRoleLogin?.(u);
           return;
         }
@@ -207,7 +207,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                   <i className="bi bi-shield-plus fs-3" style={{ color: '#0d9488' }}></i>
                 </div>
                 <h3 className="fw-bold text-slate-800 fs-4 mb-1">UniCare Login</h3>
-                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Use your registered email address or phone number to access your portal.</p>
+                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Doctors & Staff use Email or Mobile. Patients use unique Health ID (e.g. PTA001).</p>
               </div>
 
               {errorMsg && (
@@ -218,14 +218,15 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
               )}
 
               <form onSubmit={handleSubmit}>
-                {/* Email / Username Field */}
+                {/* Email / Username / Health ID Field */}
                 <div className="mb-3">
-                  <label className="form-label fw-semibold text-slate-700 small mb-1">Email or Phone Number</label>
+                  <label className="form-label fw-semibold text-slate-700 small mb-1">Email, Phone, or Patient Health ID</label>
                   <div className="input-group">
                     <span className="input-group-text bg-light text-muted border-end-0 px-3"><i className="bi bi-person fs-6"></i></span>
                     <input 
                       type="text" 
                       className="form-control border-start-0 py-2.5 ps-1"
+                      placeholder="e.g. user@unicare.com or Health ID PTA001"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required 

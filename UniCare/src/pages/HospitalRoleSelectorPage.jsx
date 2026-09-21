@@ -170,6 +170,31 @@ function HospitalRoleSelectorPage({ hospitalInfo, onSelectRole, onLogout, onNavi
             </div>
           </div>
 
+          {/* Card 2: Login as Nurse / Clinical Staff */}
+          <div className="col-md-4">
+            <div className="card border-0 rounded-4 shadow-sm h-100 bg-white hover-lift transition-all overflow-hidden border-top border-4" style={{ borderTopColor: '#0891b2' }}>
+              <div className="card-body p-4 text-center d-flex flex-column justify-content-between">
+                <div>
+                  <div className="rounded-circle d-inline-flex align-items-center justify-content-center mb-4" style={{ width: '76px', height: '76px', backgroundColor: '#e0f2fe', color: '#0891b2' }}>
+                    <i className="bi bi-heart-pulse-fill fs-1"></i>
+                  </div>
+                  <h4 className="fw-bold text-dark mb-2">Nurse / Clinical Staff</h4>
+                  <p className="text-muted small mb-4">
+                    Record pre-consultation vitals (Height, Weight, Blood Pressure) and manage today's clinical patient queue.
+                  </p>
+                </div>
+                <button
+                  onClick={() => onSelectRole('nurse')}
+                  className="btn text-white w-100 py-2.5 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  style={{ backgroundColor: '#0891b2' }}
+                >
+                  <span>Login as Nurse</span>
+                  <i className="bi bi-arrow-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
 
 
           {/* Card 3: Login as Receptionist */}

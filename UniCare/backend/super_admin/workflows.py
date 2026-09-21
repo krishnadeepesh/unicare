@@ -72,7 +72,7 @@ def ensure_workflow_schema():
             cursor.execute("ALTER TABLE tbl_patient MODIFY COLUMN patient_email VARCHAR(100) NULL")
         except Exception:
             pass
-        # Ensure tbl_patient_visit has all required columns (table may pre-exist with a different schema)
+        # Ensure tbl_patient_visit has all required columns including pre-consultation vitals
         _ensure_columns(cursor, 'tbl_patient_visit', {
             'patient_id': 'INT NOT NULL',
             'doctor_id': 'INT NOT NULL',
@@ -81,12 +81,78 @@ def ensure_workflow_schema():
             'diagnosis': 'TEXT NULL',
             'medical_notes': 'TEXT NULL',
             'visited_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+            'height': 'VARCHAR(20) NULL',
+            'weight': 'VARCHAR(20) NULL',
+            'blood_pressure': 'VARCHAR(30) NULL',
+            'vitals_recorded_by': 'INT NULL',
+            'vitals_recorded_at': 'DATETIME NULL',
         })
         _ensure_columns(cursor, 'tbl_user', {
             'user_recovery_question': 'VARCHAR(255) NULL',
             'user_recovery_answer': 'VARCHAR(255) NULL',
             'must_change_password': 'TINYINT(1) NOT NULL DEFAULT 0',
         })
+        # Ensure Nurse role exists in tbl_role
+        try:
+            cursor.execute("SELECT role_id FROM tbl_role WHERE LOWER(REPLACE(role_name,' ',''))='nurse' LIMIT 1")
+            if not cursor.fetchone():
+                cursor.execute("INSERT INTO tbl_role (role_name, role_is_active) VALUES ('Nurse', 1)")
+        except Exception:
+            pass
+
+        # Ensure tbl_nurse exists
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_nurse (
+            nurse_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            hospital_id INT NOT NULL,
+            department_id INT NULL,
+            nurse_is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+
+        # Drop UNIQUE constraints on tbl_patient.patient_phone and tbl_user.user_phone to allow shared family phone numbers
+        try:
+            cursor.execute("""
+                SELECT INDEX_NAME FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_patient'
+                AND COLUMN_NAME='patient_phone' AND NON_UNIQUE=0
+            """)
+            p_rows = cursor.fetchall()
+            for r in p_rows:
+                if r[0] != 'PRIMARY':
+                    cursor.execute(f"ALTER TABLE tbl_patient DROP INDEX `{r[0]}`")
+            # Ensure non-unique index exists for performance
+            cursor.execute("""
+                SELECT 1 FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_patient'
+                AND COLUMN_NAME='patient_phone' LIMIT 1
+            """)
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE tbl_patient ADD INDEX idx_patient_phone (patient_phone)")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("""
+                SELECT INDEX_NAME FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user'
+                AND COLUMN_NAME='user_phone' AND NON_UNIQUE=0
+            """)
+            u_rows = cursor.fetchall()
+            for r in u_rows:
+                if r[0] != 'PRIMARY':
+                    cursor.execute(f"ALTER TABLE tbl_user DROP INDEX `{r[0]}`")
+            # Ensure non-unique index exists for performance
+            cursor.execute("""
+                SELECT 1 FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_user'
+                AND COLUMN_NAME='user_phone' LIMIT 1
+            """)
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE tbl_user ADD INDEX idx_user_phone (user_phone)")
+        except Exception:
+            pass
+
         # Ensure doctor_experience column exists (added during schema extension)
         cursor.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tbl_doctor' AND COLUMN_NAME='doctor_experience'""")
@@ -173,6 +239,7 @@ def session_user(request):
         'hospital_id': hospital_id,
         'doctor_id': request.session.get('unicare_doctor_id'),
         'patient_id': request.session.get('unicare_patient_id'),
+        'nurse_id': request.session.get('unicare_nurse_id'),
     }, None
 
 
@@ -191,28 +258,57 @@ def unified_login(request):
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
     ensure_workflow_schema()
     data = payload(request)
-    identifier = (data.get('identifier') or data.get('email') or data.get('phone') or '').strip()
+    identifier = (data.get('identifier') or data.get('email') or data.get('phone') or data.get('health_id') or '').strip()
     password = (data.get('password') or '').strip()
     if not identifier or not password:
-        return JsonResponse({'status': 'error', 'message': 'Email or phone number and password are required.'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'Email, Health ID, or phone number and password are required.'}, status=400)
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
-            " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
-            " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
-            " WHERE (LOWER(u.user_email)=LOWER(%s) OR u.user_phone=%s) AND u.user_is_active=1 LIMIT 1",
-            [identifier, identifier]
-        )
-        row = cursor.fetchone()
+        # Check if identifier matches a patient Health ID / patient_uid
+        cursor.execute("SELECT user_id FROM tbl_patient WHERE LOWER(patient_uid)=LOWER(%s) LIMIT 1", [identifier])
+        p_row = cursor.fetchone()
+        if not p_row:
+            try:
+                cursor.execute("SELECT user_id FROM tbl_patient_profile WHERE LOWER(health_id)=LOWER(%s) LIMIT 1", [identifier])
+                p_row = cursor.fetchone()
+            except Exception:
+                pass
+
+        if p_row:
+            cursor.execute(
+                "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
+                " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
+                " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
+                " WHERE u.user_id=%s AND u.user_is_active=1 LIMIT 1",
+                [p_row[0]]
+            )
+            row = cursor.fetchone()
+        else:
+            cursor.execute(
+                "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
+                " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
+                " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
+                " WHERE (LOWER(u.user_email)=LOWER(%s) OR u.user_phone=%s) AND u.user_is_active=1 LIMIT 1",
+                [identifier, identifier]
+            )
+            row = cursor.fetchone()
+            if row:
+                norm_role = (row[7] or '').lower().replace(' ', '').replace('_', '')
+                if norm_role == 'patient' and (is_valid_phone(identifier) or identifier.isdigit()):
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': 'Patient accounts must log in using your unique Health ID (e.g. PTA001) and Password. Phone number login is disabled for shared family accounts.'
+                    }, status=400)
 
     if not row or not verify_password_and_upgrade(row[0], password, row[6]):
-        return JsonResponse({'status': 'error', 'message': 'Invalid email/phone number or password.'}, status=401)
+        return JsonResponse({'status': 'error', 'message': 'Invalid login credentials.'}, status=401)
 
     normalized = (row[7] or '').lower().replace(' ', '').replace('_', '')
     role = {
         'doctor': 'doctor',
         'receptionist': 'receptionist',
+        'nurse': 'nurse',
+        'clinicalstaff': 'nurse',
         'patient': 'patient',
         'hospitaladmin': 'hospital-admin',
         'hospitaladministrator': 'hospital-admin',
@@ -308,6 +404,23 @@ def unified_login(request):
         elif role == 'receptionist':
             if row[1]:
                 cursor.execute("SELECT hospital_name FROM tbl_hospital WHERE hospital_id=%s", [row[1]])
+                h_name = cursor.fetchone()
+                if h_name:
+                    profile['hospital_name'] = h_name[0]
+
+        elif role == 'nurse':
+            cursor.execute(
+                "SELECT nurse_id, hospital_id, department_id FROM tbl_nurse WHERE user_id=%s",
+                [row[0]]
+            )
+            n_row = cursor.fetchone()
+            n_hosp_id = (n_row[1] if n_row else None) or row[1]
+            profile['nurse_id'] = n_row[0] if n_row else None
+            profile['hospital_id'] = n_hosp_id
+            request.session['unicare_nurse_id'] = n_row[0] if n_row else None
+            request.session['unicare_hospital_id'] = n_hosp_id
+            if n_hosp_id:
+                cursor.execute("SELECT hospital_name FROM tbl_hospital WHERE hospital_id=%s", [n_hosp_id])
                 h_name = cursor.fetchone()
                 if h_name:
                     profile['hospital_name'] = h_name[0]
@@ -549,22 +662,23 @@ def register_patient(request):
 
     try:
         with transaction.atomic(), connection.cursor() as cursor:
-            # If patient already exists, return existing global patient record
-            existing_row = None
-            if email:
+            # 1. Identify unique individual using Name + Date of Birth + Gender
+            cursor.execute(
+                "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
+                " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
+                " FROM tbl_patient p"
+                " WHERE LOWER(TRIM(p.patient_name))=LOWER(TRIM(%s)) AND p.patient_dob=%s AND p.patient_gender=%s LIMIT 1",
+                [name, dob, gender]
+            )
+            existing_row = cursor.fetchone()
+
+            # If not matched by Name+DOB+Gender, also check if email matches an existing patient
+            if not existing_row and email:
                 cursor.execute(
                     "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
                     " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
                     " FROM tbl_patient p WHERE LOWER(p.patient_email)=LOWER(%s) LIMIT 1",
                     [email]
-                )
-                existing_row = cursor.fetchone()
-            if not existing_row and phone:
-                cursor.execute(
-                    "SELECT p.patient_id, p.patient_uid, p.patient_name, p.patient_email, p.patient_phone,"
-                    " p.patient_dob, p.patient_gender, p.patient_blood_group, p.patient_address, p.patient_emergency_contact"
-                    " FROM tbl_patient p WHERE p.patient_phone=%s LIMIT 1",
-                    [phone]
                 )
                 existing_row = cursor.fetchone()
 
@@ -588,17 +702,36 @@ def register_patient(request):
                     }
                 })
 
-            # Check if email or phone is already used by an existing non-patient user in tbl_user
+            # 2. Check if phone is shared with another existing patient (family sharing)
+            if phone:
+                cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_phone=%s LIMIT 1", [phone])
+                if cursor.fetchone():
+                    confirm_shared_phone = bool(data.get('confirm_shared_phone'))
+                    if not confirm_shared_phone:
+                        return JsonResponse({
+                            'status': 'confirm_required',
+                            'shared_phone': True,
+                            'message': 'This contact number is already registered under an existing family member. Would you like to register this individual as a new family member under this shared contact number?'
+                        })
+
+            # Check if email is used by an existing user in tbl_user
             if email:
                 cursor.execute("SELECT user_id, user_name, role_id FROM tbl_user WHERE LOWER(user_email)=LOWER(%s) LIMIT 1", [email])
                 existing_user = cursor.fetchone()
                 if existing_user:
                     return JsonResponse({'status': 'error', 'message': f"A user account with email '{email}' already exists in the system."}, status=400)
+
+            # Ensure phone is not registered to a hospital staff/doctor/admin
             if phone:
-                cursor.execute("SELECT user_id, user_name, role_id FROM tbl_user WHERE user_phone=%s LIMIT 1", [phone])
-                existing_phone_user = cursor.fetchone()
-                if existing_phone_user:
-                    return JsonResponse({'status': 'error', 'message': f"A user account with phone number '{phone}' already exists in the system."}, status=400)
+                cursor.execute(
+                    "SELECT u.user_id, r.role_name FROM tbl_user u"
+                    " JOIN tbl_role r ON r.role_id=u.role_id"
+                    " WHERE u.user_phone=%s AND LOWER(REPLACE(r.role_name,' ',''))!='patient' LIMIT 1",
+                    [phone]
+                )
+                existing_staff_phone = cursor.fetchone()
+                if existing_staff_phone:
+                    return JsonResponse({'status': 'error', 'message': f"Phone number '{phone}' is registered to a staff account ({existing_staff_phone[1]}). Please provide a patient contact number."}, status=400)
 
             if not password:
                 password = 'Patient@123'
@@ -1029,7 +1162,8 @@ def patient_history(request):
         }
 
         cursor.execute(
-            "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name"
+            "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name,"
+            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at"
             " FROM tbl_patient_visit v"
             " JOIN tbl_doctor d ON d.doctor_id = v.doctor_id"
             " JOIN tbl_user du ON du.user_id = d.user_id"
@@ -1050,6 +1184,10 @@ def patient_history(request):
                 'visited_at': str(r[3]),
                 'doctor_name': r[4],
                 'hospital_name': r[5],
+                'height': r[6] or '',
+                'weight': r[7] or '',
+                'blood_pressure': r[8] or '',
+                'vitals_recorded_at': str(r[9]) if r[9] else '',
             }
             for r in v_rows
         ]
@@ -1098,7 +1236,7 @@ def booking_options(request):
 
 @csrf_exempt
 def appointments(request):
-    user, error = require_roles(request, 'patient', 'doctor', 'receptionist')
+    user, error = require_roles(request, 'patient', 'doctor', 'receptionist', 'nurse', 'hospital-admin')
     if error:
         return error
 
@@ -1122,7 +1260,8 @@ def appointments(request):
                 " COALESCE(p.patient_uid, pp.health_id, CONCAT('PTA', LPAD(a.patient_id, 3, '0'))) AS health_id,"
                 " COALESCE(p.patient_name, pu.user_name, 'Patient') AS patient_name,"
                 " a.patient_id, p.patient_phone, p.patient_gender, p.patient_dob, p.patient_blood_group, p.patient_address, p.patient_emergency_contact,"
-                " p.allergies"
+                " p.allergies,"
+                " pv.visit_id, pv.height, pv.weight, pv.blood_pressure, pv.vitals_recorded_at, nu.user_name AS vitals_recorded_by_name"
                 " FROM tbl_appointment a"
                 " LEFT JOIN tbl_hospital h ON h.hospital_id=a.hospital_id"
                 " LEFT JOIN tbl_department dep ON dep.department_id=a.department_id"
@@ -1131,6 +1270,8 @@ def appointments(request):
                 " LEFT JOIN tbl_patient p ON p.patient_id=a.patient_id"
                 " LEFT JOIN tbl_patient_profile pp ON pp.patient_id=a.patient_id"
                 " LEFT JOIN tbl_user pu ON pu.user_id=pp.user_id"
+                " LEFT JOIN tbl_patient_visit pv ON pv.appointment_id=a.appointment_id"
+                " LEFT JOIN tbl_user nu ON nu.user_id=pv.vitals_recorded_by"
                 " WHERE " + ' AND '.join(filters) +
                 " ORDER BY a.appointment_date DESC, a.appointment_time DESC",
                 params
@@ -1156,6 +1297,13 @@ def appointments(request):
                 'blood_group': r[14] or '',
                 'address': r[15] or '',
                 'emergency_contact': r[16] or '',
+                'visit_id': r[18],
+                'has_vitals': bool(r[19] or r[20] or r[21]),
+                'height': r[19] or '',
+                'weight': r[20] or '',
+                'blood_pressure': r[21] or '',
+                'vitals_recorded_at': str(r[22]) if r[22] else '',
+                'vitals_recorded_by': r[23] or '',
                 **({'allergies': r[17] or ''} if user['role'] in ('doctor', 'patient') else {})
             }
             for r in rows
@@ -1171,8 +1319,7 @@ def appointments(request):
             return JsonResponse({'status': 'error', 'message': 'Invalid appointment status.'}, status=400)
 
         with connection.cursor() as cursor:
-            # Verify authorization
-            if user['role'] == 'receptionist':
+            if user['role'] in ('receptionist', 'nurse', 'hospital-admin'):
                 cursor.execute(
                     "UPDATE tbl_appointment SET appointment_status=%s WHERE appointment_id=%s AND hospital_id=%s",
                     [new_status, appointment_id, user['hospital_id']]
@@ -1206,7 +1353,6 @@ def appointments(request):
         return JsonResponse({'status': 'error', 'message': 'Patient, doctor, date and time are required.'}, status=400)
 
     with connection.cursor() as cursor:
-
         if user['role'] == 'receptionist' and str(hospital_id) != str(user['hospital_id']):
             return JsonResponse({'status': 'error', 'message': 'Appointments must belong to your hospital.'}, status=403)
 
@@ -1221,7 +1367,7 @@ def appointments(request):
         if not cursor.fetchone():
             return JsonResponse({'status': 'error', 'message': 'Doctor is not available at this hospital.'}, status=400)
 
-        # Prevent double-booking for the doctor on this date and time
+        # 1. Prevent double-booking for the doctor on this date and time
         cursor.execute(
             "SELECT 1 FROM tbl_appointment WHERE doctor_id=%s AND appointment_date=%s"
             " AND (appointment_time=%s OR LEFT(appointment_time, 5)=%s)"
@@ -1230,6 +1376,23 @@ def appointments(request):
         )
         if cursor.fetchone():
             return JsonResponse({'status': 'error', 'message': 'This doctor is already booked for the selected date and time slot. Please choose another slot.'}, status=409)
+
+        # 2. Prevent simultaneous double-booking for the patient on this date and time
+        cursor.execute(
+            "SELECT a.appointment_id, du.user_name FROM tbl_appointment a"
+            " JOIN tbl_doctor dr ON dr.doctor_id=a.doctor_id"
+            " JOIN tbl_user du ON du.user_id=dr.user_id"
+            " WHERE a.patient_id=%s AND a.appointment_date=%s"
+            " AND (a.appointment_time=%s OR LEFT(a.appointment_time, 5)=%s)"
+            " AND a.appointment_status IN ('Pending','Confirmed')",
+            [patient_id, appt_date, appt_time, appt_time[:5]]
+        )
+        p_conflict = cursor.fetchone()
+        if p_conflict:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'This patient already has an active appointment with Dr. {p_conflict[1]} at {appt_time} on {appt_date}. Please choose a different time slot for the additional doctor consultation.'
+            }, status=409)
 
         cursor.execute(
             "INSERT INTO tbl_appointment"
@@ -1240,8 +1403,246 @@ def appointments(request):
              appt_date, appt_time,
              (data.get('reason') or '').strip(), user['user_id']]
         )
+        appt_id = cursor.lastrowid
 
-    return JsonResponse({'status': 'success', 'message': 'Appointment booked successfully.'})
+    return JsonResponse({'status': 'success', 'message': 'Appointment booked successfully.', 'appointment_id': appt_id})
+
+
+@csrf_exempt
+def nurse_visits(request):
+    """Returns patient visits/appointments for the Nurse clinical vitals queue."""
+    user, error = require_roles(request, 'nurse', 'hospital-admin')
+    if error:
+        return error
+    hospital_id = user['hospital_id']
+    date_filter = request.GET.get('date')
+
+    with connection.cursor() as cursor:
+        query = """
+            SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.reason, a.appointment_status,
+                   COALESCE(p.patient_uid, pp.health_id, CONCAT('PTA', LPAD(a.patient_id, 3, '0'))) AS health_id,
+                   COALESCE(p.patient_name, pu.user_name, 'Patient') AS patient_name,
+                   a.patient_id, p.patient_phone, p.patient_gender, p.patient_dob, p.patient_blood_group,
+                   du.user_name AS doctor_name, dep.department_name,
+                   pv.visit_id, pv.height, pv.weight, pv.blood_pressure, pv.vitals_recorded_at,
+                   nu.user_name AS vitals_recorded_by_name
+            FROM tbl_appointment a
+            JOIN tbl_doctor dr ON dr.doctor_id = a.doctor_id
+            JOIN tbl_user du ON du.user_id = dr.user_id
+            LEFT JOIN tbl_department dep ON dep.department_id = a.department_id
+            LEFT JOIN tbl_patient p ON p.patient_id = a.patient_id
+            LEFT JOIN tbl_patient_profile pp ON pp.patient_id = a.patient_id
+            LEFT JOIN tbl_user pu ON pu.user_id = pp.user_id
+            LEFT JOIN tbl_patient_visit pv ON pv.appointment_id = a.appointment_id
+            LEFT JOIN tbl_user nu ON nu.user_id = pv.vitals_recorded_by
+            WHERE a.hospital_id = %s
+        """
+        params = [hospital_id]
+        if date_filter:
+            query += " AND a.appointment_date = %s"
+            params.append(date_filter)
+        query += " ORDER BY a.appointment_date DESC, a.appointment_time ASC"
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+    visits_list = []
+    for r in rows:
+        has_vitals = bool(r[15] or r[16] or r[17])
+        visits_list.append({
+            'appointment_id': r[0],
+            'id': f"APT{r[0]:03d}",
+            'apt_uid': f"APT{r[0]:03d}",
+            'appointment_uid': f"APT{r[0]:03d}",
+            'date': str(r[1]),
+            'time': r[2],
+            'reason': r[3] or '',
+            'status': r[4],
+            'health_id': r[5],
+            'patient_uid': r[5],
+            'patient_name': r[6],
+            'patient_id': r[7],
+            'phone': r[8] or '',
+            'gender': r[9] or '',
+            'date_of_birth': str(r[10]) if r[10] else '',
+            'blood_group': r[11] or '',
+            'doctor_name': r[12] or '',
+            'department_name': r[13] or '',
+            'visit_id': r[14],
+            'has_vitals': has_vitals,
+            'height': r[15] or '',
+            'weight': r[16] or '',
+            'blood_pressure': r[17] or '',
+            'vitals_recorded_at': str(r[18]) if r[18] else '',
+            'vitals_recorded_by': r[19] or '',
+        })
+    return JsonResponse({'status': 'success', 'visits': visits_list})
+
+
+@csrf_exempt
+def record_vitals(request):
+    """Record pre-consultation vitals (Height, Weight, Blood Pressure) for an appointment/visit."""
+    user, error = require_roles(request, 'nurse', 'doctor')
+    if error:
+        return error
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+    ensure_workflow_schema()
+    data = payload(request)
+    appointment_id = data.get('appointment_id')
+    height = (data.get('height') or '').strip()
+    weight = (data.get('weight') or '').strip()
+    blood_pressure = (data.get('blood_pressure') or '').strip()
+
+    if not appointment_id:
+        return JsonResponse({'status': 'error', 'message': 'Appointment ID is required to record vitals.'}, status=400)
+    if not (height or weight or blood_pressure):
+        return JsonResponse({'status': 'error', 'message': 'At least one vital (Height, Weight, or Blood Pressure) must be provided.'}, status=400)
+
+    import re
+    if blood_pressure and not re.match(r'^\d{2,3}/\d{2,3}(\s*mmHg)?$', blood_pressure, re.IGNORECASE):
+        return JsonResponse({'status': 'error', 'message': 'Blood pressure must be in SYS/DIA format (e.g. 120/80 mmHg).'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT patient_id, doctor_id, hospital_id FROM tbl_appointment WHERE appointment_id=%s",
+            [appointment_id]
+        )
+        appt_row = cursor.fetchone()
+        if not appt_row:
+            return JsonResponse({'status': 'error', 'message': 'Appointment not found.'}, status=404)
+        patient_id, doctor_id, appt_hospital_id = appt_row
+
+        cursor.execute(
+            "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
+            [appointment_id]
+        )
+        v_row = cursor.fetchone()
+        if v_row:
+            visit_id = v_row[0]
+            cursor.execute(
+                "UPDATE tbl_patient_visit"
+                " SET height=%s, weight=%s, blood_pressure=%s, vitals_recorded_by=%s, vitals_recorded_at=NOW()"
+                " WHERE visit_id=%s",
+                [height or None, weight or None, blood_pressure or None, user['user_id'], visit_id]
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO tbl_patient_visit"
+                " (patient_id, doctor_id, hospital_id, appointment_id, height, weight, blood_pressure, vitals_recorded_by, vitals_recorded_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+                [patient_id, doctor_id, appt_hospital_id, appointment_id,
+                 height or None, weight or None, blood_pressure or None, user['user_id']]
+            )
+            visit_id = cursor.lastrowid
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Pre-consultation vitals saved successfully.',
+        'visit_id': visit_id,
+        'vitals': {
+            'height': height,
+            'weight': weight,
+            'blood_pressure': blood_pressure,
+        }
+    })
+
+
+@csrf_exempt
+def vitals_history(request):
+    """Retrieve chronological vitals recorded per visit for a given patient."""
+    user, error = require_roles(request, 'nurse', 'doctor', 'patient', 'receptionist', 'hospital-admin')
+    if error:
+        return error
+    patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
+    if user['role'] == 'patient':
+        patient_param = user['patient_id']
+    if not patient_param:
+        return JsonResponse({'status': 'error', 'message': 'Patient ID is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+        p_row = cursor.fetchone()
+        if not p_row:
+            return JsonResponse({'status': 'success', 'history': []})
+        patient_id = p_row[0]
+
+        cursor.execute(
+            "SELECT pv.visit_id, pv.height, pv.weight, pv.blood_pressure, pv.vitals_recorded_at, pv.visited_at,"
+            " du.user_name AS doctor_name, h.hospital_name, nu.user_name AS recorded_by_name"
+            " FROM tbl_patient_visit pv"
+            " LEFT JOIN tbl_doctor d ON d.doctor_id = pv.doctor_id"
+            " LEFT JOIN tbl_user du ON du.user_id = d.user_id"
+            " LEFT JOIN tbl_hospital h ON h.hospital_id = pv.hospital_id"
+            " LEFT JOIN tbl_user nu ON nu.user_id = pv.vitals_recorded_by"
+            " WHERE pv.patient_id = %s AND (pv.height IS NOT NULL OR pv.weight IS NOT NULL OR pv.blood_pressure IS NOT NULL)"
+            " ORDER BY COALESCE(pv.vitals_recorded_at, pv.visited_at) DESC",
+            [patient_id]
+        )
+        rows = cursor.fetchall()
+
+    history = [
+        {
+            'visit_id': r[0],
+            'height': r[1] or '',
+            'weight': r[2] or '',
+            'blood_pressure': r[3] or '',
+            'recorded_at': str(r[4] or r[5]),
+            'doctor_name': r[6] or 'General Practitioner',
+            'hospital_name': r[7] or '',
+            'recorded_by': r[8] or 'Clinical Staff',
+        }
+        for r in rows
+    ]
+    return JsonResponse({'status': 'success', 'history': history})
+
+
+STANDARD_MEDICINES = [
+    {"name": "Paracetamol", "dosage": "500mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food with a glass of water"},
+    {"name": "Amoxicillin", "dosage": "500mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals at regular intervals"},
+    {"name": "Azithromycin", "dosage": "500mg", "frequency": "Once daily", "duration": "3 days", "instruction": "1 hour before meals or 2 hours after"},
+    {"name": "Metformin", "dosage": "500mg", "frequency": "Twice daily", "duration": "30 days", "instruction": "With or immediately after meals"},
+    {"name": "Pantoprazole", "dosage": "40mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Morning empty stomach, 30 min before breakfast"},
+    {"name": "Cetirizine", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "At bedtime with water"},
+    {"name": "Ibuprofen", "dosage": "400mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food to avoid stomach irritation"},
+    {"name": "Atorvastatin", "dosage": "20mg", "frequency": "Once daily", "duration": "30 days", "instruction": "At night after dinner"},
+    {"name": "Amlodipine", "dosage": "5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with or without food"},
+    {"name": "Losartan", "dosage": "50mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Once daily in the morning"},
+    {"name": "Ciprofloxacin", "dosage": "500mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "Drink plenty of fluids"},
+    {"name": "Cefixime", "dosage": "200mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "After food"},
+    {"name": "Omeprazole", "dosage": "20mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Empty stomach in morning"},
+    {"name": "Doxycycline", "dosage": "100mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "With a full glass of water, do not lie down immediately"},
+    {"name": "Telmisartan", "dosage": "40mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
+    {"name": "Montelukast", "dosage": "10mg", "frequency": "Once daily", "duration": "10 days", "instruction": "At night before sleeping"},
+    {"name": "Glimepiride", "dosage": "1mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Shortly before or during breakfast"},
+    {"name": "Salbutamol Inhaler", "dosage": "100mcg", "frequency": "As needed", "duration": "30 days", "instruction": "2 puffs when short of breath"},
+    {"name": "Hydrochlorothiazide", "dosage": "12.5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
+    {"name": "Clopidogrel", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After food"},
+    {"name": "Aspirin (Ecosprin)", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After meals"},
+    {"name": "Levothyroxine", "dosage": "50mcg", "frequency": "Once daily", "duration": "30 days", "instruction": "First thing in the morning empty stomach"},
+    {"name": "Domperidone", "dosage": "10mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "30 minutes before food"},
+    {"name": "Ondansetron", "dosage": "4mg", "frequency": "As needed", "duration": "3 days", "instruction": "For nausea or vomiting"},
+    {"name": "Metronidazole", "dosage": "400mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals, strictly avoid alcohol"},
+    {"name": "Ranitidine", "dosage": "150mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "Before meals"},
+    {"name": "Amoxicillin + Clavulanic Acid (Augmentin)", "dosage": "625mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "At start of meal"},
+    {"name": "Levofloxacin", "dosage": "500mg", "frequency": "Once daily", "duration": "5 days", "instruction": "With water, avoid antacids"},
+    {"name": "Diclofenac", "dosage": "50mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food"},
+    {"name": "Tramadol", "dosage": "50mg", "frequency": "As needed", "duration": "3 days", "instruction": "Take with food for severe pain"},
+    {"name": "Prednisolone", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "Morning after breakfast with milk"},
+    {"name": "Vitamin D3", "dosage": "60,000 IU", "frequency": "Once weekly", "duration": "8 weeks", "instruction": "After milk or fatty meal"},
+    {"name": "Vitamin B Complex", "dosage": "1 capsule", "frequency": "Once daily", "duration": "30 days", "instruction": "After breakfast"},
+    {"name": "Calcium + Vitamin D3", "dosage": "500mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After dinner with water"}
+]
+
+@csrf_exempt
+def medicines_list(request):
+    """Returns matching clinical medicines for autocomplete in doctor prescription."""
+    q = (request.GET.get('q') or request.GET.get('query') or '').strip().lower()
+    if not q:
+        matches = STANDARD_MEDICINES[:25]
+    else:
+        matches = [m for m in STANDARD_MEDICINES if q in m['name'].lower()]
+    return JsonResponse({'status': 'success', 'medicines': matches})
 
 
 @csrf_exempt
@@ -1305,13 +1706,27 @@ def visits(request):
             )
             appointment_id = cursor.lastrowid
 
-        # Insert clinical visit record
+        # Check if tbl_patient_visit already exists for this appointment_id (e.g. nurse recorded vitals)
         cursor.execute(
-            "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes)"
-            " VALUES (%s,%s,%s,%s,%s,%s)",
-            [patient_id, user['doctor_id'], user['hospital_id'], appointment_id,
-             (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip()]
+            "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
+            [appointment_id]
         )
+        existing_v = cursor.fetchone()
+        if existing_v:
+            cursor.execute(
+                "UPDATE tbl_patient_visit"
+                " SET diagnosis=%s, medical_notes=%s, doctor_id=%s, hospital_id=%s"
+                " WHERE visit_id=%s",
+                [(data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(),
+                 user['doctor_id'], user['hospital_id'], existing_v[0]]
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes)"
+                " VALUES (%s,%s,%s,%s,%s,%s)",
+                [patient_id, user['doctor_id'], user['hospital_id'], appointment_id,
+                 (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip()]
+            )
 
         # Mark appointment as completed
         cursor.execute(
