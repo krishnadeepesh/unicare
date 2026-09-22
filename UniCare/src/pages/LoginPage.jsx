@@ -207,7 +207,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                   <i className="bi bi-shield-plus fs-3" style={{ color: '#0d9488' }}></i>
                 </div>
                 <h3 className="fw-bold text-slate-800 fs-4 mb-1">UniCare Login</h3>
-                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}>Doctors & Staff use Email or Mobile. Patients use unique Health ID (e.g. PTA001).</p>
+                <p className="text-muted mb-0" style={{ fontSize: '0.825rem' }}></p>
               </div>
 
               {errorMsg && (
@@ -226,7 +226,6 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
                     <input 
                       type="text" 
                       className="form-control border-start-0 py-2.5 ps-1"
-                      placeholder="e.g. user@unicare.com or Health ID PTA001"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required 
