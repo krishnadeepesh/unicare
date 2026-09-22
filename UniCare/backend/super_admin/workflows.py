@@ -9,12 +9,13 @@ tbl_doctor (with a hospital_id column).
 import json
 from datetime import datetime, date
 
-from django.contrib.auth.hashers import make_password
-from django.db import connection, transaction
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+# pyrefly: ignore [missing-import]
+from django.contrib.auth.hashers import make_password  # type: ignore
+from django.db import connection, transaction  # type: ignore
+from django.http import JsonResponse  # type: ignore
+from django.views.decorators.csrf import csrf_exempt  # type: ignore
 
-from .views import is_valid_phone, is_valid_email, verify_password_and_upgrade
+from .views import is_valid_phone, is_valid_email, verify_password_and_upgrade  # type: ignore
 
 
 
@@ -59,8 +60,8 @@ def ensure_workflow_schema():
         })
         # Ensure tbl_patient_profile has all required columns (table may pre-exist with a different schema)
         _ensure_columns(cursor, 'tbl_patient_profile', {
-            'user_id': 'INT NOT NULL UNIQUE',
-            'health_id': 'VARCHAR(40) NOT NULL UNIQUE',
+            'user_id': 'INT NULL',
+            'health_id': 'VARCHAR(40) NULL',
             'date_of_birth': 'DATE NULL',
             'gender': 'VARCHAR(30) NULL',
             'address': 'TEXT NULL',
@@ -233,13 +234,51 @@ def session_user(request):
             hospital_id = request.session.get('hospital_admin_hospital_id')
     if not user_id or not role:
         return None, JsonResponse({'status': 'error', 'message': 'Please sign in.'}, status=401)
+
+    doctor_id = request.session.get('unicare_doctor_id')
+    patient_id = request.session.get('unicare_patient_id')
+    nurse_id = request.session.get('unicare_nurse_id')
+
+    if role == 'patient' and not patient_id:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT patient_id FROM tbl_patient WHERE user_id=%s LIMIT 1", [user_id])
+                pr = cursor.fetchone()
+                if pr:
+                    patient_id = pr[0]
+                    request.session['unicare_patient_id'] = patient_id
+        except Exception:
+            pass
+
+    if role == 'doctor' and not doctor_id:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT doctor_id FROM tbl_doctor WHERE user_id=%s LIMIT 1", [user_id])
+                dr = cursor.fetchone()
+                if dr:
+                    doctor_id = dr[0]
+                    request.session['unicare_doctor_id'] = doctor_id
+        except Exception:
+            pass
+
+    if role == 'nurse' and not nurse_id:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT nurse_id FROM tbl_nurse WHERE user_id=%s LIMIT 1", [user_id])
+                nr = cursor.fetchone()
+                if nr:
+                    nurse_id = nr[0]
+                    request.session['unicare_nurse_id'] = nurse_id
+        except Exception:
+            pass
+
     return {
         'user_id': user_id,
         'role': role,
         'hospital_id': hospital_id,
-        'doctor_id': request.session.get('unicare_doctor_id'),
-        'patient_id': request.session.get('unicare_patient_id'),
-        'nurse_id': request.session.get('unicare_nurse_id'),
+        'doctor_id': doctor_id,
+        'patient_id': patient_id,
+        'nurse_id': nurse_id,
     }, None
 
 
@@ -614,6 +653,40 @@ def doctor_hospitals(request):
     return JsonResponse({'status': 'success', 'hospital_id': int(hospital_id)})
 
 
+def _next_patient_uid(last_uid, cursor):
+    """Generate the next globally-unique patient UID in format PT{LETTER}{3-DIGITS}.
+    Examples: PTA001, PTA002 … PTA999, PTB001 …
+    """
+    import string
+    LETTERS = string.ascii_uppercase  # A-Z
+
+    def uid_to_parts(uid):
+        if uid and len(uid) == 6 and uid.startswith('PT') and uid[2].isalpha() and uid[3:].isdigit():
+            return LETTERS.index(uid[2].upper()), int(uid[3:])
+        return None
+
+    parts = uid_to_parts(last_uid)
+    letter_idx, number = (0, 0) if parts is None else parts
+
+    for _ in range(26 * 999):
+        number += 1
+        if number > 999:
+            number = 1
+            letter_idx = (letter_idx + 1) % 26
+        candidate = f"PT{LETTERS[letter_idx]}{number:03d}"
+        cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_uid=%s LIMIT 1", [candidate])
+        if cursor.fetchone():
+            continue
+        try:
+            cursor.execute("SELECT 1 FROM tbl_patient_profile WHERE health_id=%s LIMIT 1", [candidate])
+            if cursor.fetchone():
+                continue
+        except Exception:
+            pass
+        return candidate
+    raise RuntimeError("Could not generate a unique patient_uid — space exhausted.")
+
+
 @csrf_exempt
 def register_patient(request):
     user, error = require_roles(request, 'receptionist', 'hospital-admin')
@@ -634,14 +707,11 @@ def register_patient(request):
     address        = (data.get('address') or data.get('patient_address') or '').strip() or None
     emergency_contact = (data.get('emergency_contact') or data.get('patient_emergency_contact') or '').strip() or None
 
-    import re
-    from datetime import date
-
     if not name:
         return JsonResponse({'status': 'error', 'message': 'Patient name is required.'}, status=400)
     if not (email or phone):
         return JsonResponse({'status': 'error', 'message': 'Email or phone number is required.'}, status=400)
-    if email and not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email):
+    if email and not is_valid_email(email):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid email address.'}, status=400)
     if phone and not is_valid_phone(phone):
         return JsonResponse({'status': 'error', 'message': 'Enter a valid 10-digit phone number.'}, status=400)
@@ -812,40 +882,6 @@ def register_patient(request):
                 return JsonResponse({'status': 'error', 'message': f"A patient or user with phone '{phone}' already exists."}, status=400)
             return JsonResponse({'status': 'error', 'message': 'Duplicate record detected with provided details.'}, status=400)
         return JsonResponse({'status': 'error', 'message': f'Failed to register patient: {msg}'}, status=500)
-
-
-def _next_patient_uid(last_uid, cursor):
-    """Generate the next globally-unique patient UID in format PT{LETTER}{3-DIGITS}.
-    Examples: PTA001, PTA002 … PTA999, PTB001 …
-    """
-    import string
-    LETTERS = string.ascii_uppercase  # A-Z
-
-    def uid_to_parts(uid):
-        if uid and len(uid) == 6 and uid.startswith('PT') and uid[2].isalpha() and uid[3:].isdigit():
-            return LETTERS.index(uid[2].upper()), int(uid[3:])
-        return None
-
-    parts = uid_to_parts(last_uid)
-    letter_idx, number = (0, 0) if parts is None else parts
-
-    for _ in range(26 * 999):
-        number += 1
-        if number > 999:
-            number = 1
-            letter_idx = (letter_idx + 1) % 26
-        candidate = f"PT{LETTERS[letter_idx]}{number:03d}"
-        cursor.execute("SELECT 1 FROM tbl_patient WHERE patient_uid=%s LIMIT 1", [candidate])
-        if cursor.fetchone():
-            continue
-        try:
-            cursor.execute("SELECT 1 FROM tbl_patient_profile WHERE health_id=%s LIMIT 1", [candidate])
-            if cursor.fetchone():
-                continue
-        except Exception:
-            pass
-        return candidate
-    raise RuntimeError("Could not generate a unique patient_uid — space exhausted.")
 
 
 def patient_lookup(request):

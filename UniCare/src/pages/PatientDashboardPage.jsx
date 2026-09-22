@@ -9,9 +9,11 @@ export default function PatientDashboardPage({ patientInfo }) {
   const [appTime, setAppTime] = useState('09:00 AM');
   const [reason, setReason] = useState('');
   
+  const pId = patientInfo?.patientId || patientInfo?.patient_id || patientInfo?.health_id || 'default';
+
   // Load mock appointments from local storage or set defaults
   useEffect(() => {
-    const cached = localStorage.getItem(`unicare_appointments_${patientInfo.patientId}`);
+    const cached = localStorage.getItem(`unicare_appointments_${pId}`);
     if (cached) {
       setAppointments(JSON.parse(cached));
     } else {
@@ -36,9 +38,9 @@ export default function PatientDashboardPage({ patientInfo }) {
         }
       ];
       setAppointments(defaults);
-      localStorage.setItem(`unicare_appointments_${patientInfo.patientId}`, JSON.stringify(defaults));
+      localStorage.setItem(`unicare_appointments_${pId}`, JSON.stringify(defaults));
     }
-  }, [patientInfo.patientId]);
+  }, [pId]);
 
   // Book a new appointment
   const handleBookAppointment = (e) => {
@@ -56,7 +58,7 @@ export default function PatientDashboardPage({ patientInfo }) {
 
     const updated = [newApp, ...appointments];
     setAppointments(updated);
-    localStorage.setItem(`unicare_appointments_${patientInfo.patientId}`, JSON.stringify(updated));
+    localStorage.setItem(`unicare_appointments_${pId}`, JSON.stringify(updated));
     
     // Reset form
     setReason('');
