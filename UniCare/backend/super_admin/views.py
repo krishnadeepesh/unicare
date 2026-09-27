@@ -9,7 +9,6 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 from .models import Hospital
-# pyrefly: ignore [missing-import]
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from datetime import datetime, date
