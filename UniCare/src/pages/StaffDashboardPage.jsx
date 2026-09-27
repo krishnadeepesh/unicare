@@ -2152,8 +2152,8 @@ const RECOVERY_QUESTIONS = [
                       <label className="form-label fw-semibold small text-muted">
                         Step 4: Available Time Slot *
                         {bookedSlots.length > 0 && (
-                          <span className="badge bg-warning text-dark ms-2 extra-small">
-                            {bookedSlots.length} slot(s) booked
+                          <span className="badge bg-danger-subtle text-danger ms-2 extra-small">
+                            {bookedSlots.length} Booked
                           </span>
                         )}
                       </label>
@@ -2167,19 +2167,55 @@ const RECOVERY_QUESTIONS = [
                           const isBooked = bookedSlots.includes(t);
                           return (
                             <option key={t} value={t} disabled={isBooked}>
-                              {t} {isBooked ? '(Booked - Unavailable)' : ''}
+                              {t} {isBooked ? '— Not Available (Booked)' : '— Available'}
                             </option>
                           );
                         })}
                       </select>
                       {bookedSlots.includes(bookingTime) && (
                         <small className="text-danger d-block mt-1">
-                          <i className="bi bi-exclamation-circle me-1"></i>
-                          Selected time slot is already booked for this doctor. Please pick another time.
+                          <i className="bi bi-x-circle-fill me-1"></i>
+                          Selected time slot is already booked for this doctor. Please choose an open slot.
                         </small>
                       )}
                     </div>
                   </div>
+
+                  {/* Visual Live Slot Availability Grid */}
+                  {selectedDocId && bookingDate && (
+                    <div className="mb-3 p-2.5 bg-light rounded-3 border">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <small className="fw-bold text-muted extra-small text-uppercase">Live Doctor Slot Grid</small>
+                        <small className="extra-small text-muted">
+                          <span className="text-success fw-bold">&bull; Free</span> &nbsp;|&nbsp; <span className="text-danger fw-bold">&bull; Booked</span>
+                        </small>
+                      </div>
+                      <div className="d-flex flex-wrap gap-1.5">
+                        {availableTimeSlots.map((t) => {
+                          const isBooked = bookedSlots.includes(t);
+                          const isSelected = bookingTime === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              disabled={isBooked}
+                              onClick={() => setBookingTime(t)}
+                              className={`btn btn-sm py-1 px-2 extra-small rounded-2 ${
+                                isBooked
+                                  ? 'btn-light text-muted border text-decoration-line-through opacity-75'
+                                  : isSelected
+                                  ? 'btn-primary text-white shadow-sm fw-bold'
+                                  : 'btn-outline-secondary bg-white'
+                              }`}
+                              title={isBooked ? `${t} is already booked` : `Select ${t}`}
+                            >
+                              {t} {isBooked && '✕'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mb-4">
                     <label className="form-label fw-semibold small text-muted">Reason for Consultation (Optional)</label>

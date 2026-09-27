@@ -531,9 +531,14 @@ def profile(request):
                 d = cursor.fetchone()
                 if d:
                     result.update({
+                        'doctor_id': user['doctor_id'],
                         'specialization': d[0], 'license': d[1], 'experience': d[2] or '',
                         'hospital_name': d[3] or result.get('hospital_name', ''),
                     })
+                else:
+                    result['doctor_id'] = user['doctor_id']
+            elif user['role'] == 'nurse':
+                result['nurse_id'] = user.get('nurse_id')
         return JsonResponse({'status': 'success', 'profile': result})
 
     if request.method != 'POST':
@@ -1199,7 +1204,7 @@ def patient_history(request):
 
         cursor.execute(
             "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name,"
-            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at"
+            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at, v.doctor_id"
             " FROM tbl_patient_visit v"
             " JOIN tbl_doctor d ON d.doctor_id = v.doctor_id"
             " JOIN tbl_user du ON du.user_id = d.user_id"
@@ -1224,6 +1229,7 @@ def patient_history(request):
                 'weight': r[7] or '',
                 'blood_pressure': r[8] or '',
                 'vitals_recorded_at': str(r[9]) if r[9] else '',
+                'doctor_id': r[10],
             }
             for r in v_rows
         ]
@@ -1265,7 +1271,14 @@ def booking_options(request):
                 " AND appointment_status IN ('Pending','Confirmed')",
                 [doc_param, date_param]
             )
-            booked_slots = [r[0][:5] if len(r[0]) >= 5 else r[0] for r in cursor.fetchall()]
+            raw_slots = cursor.fetchall()
+            for r in raw_slots:
+                if r and r[0] is not None:
+                    t_str = str(r[0]).strip()
+                    if len(t_str) >= 5:
+                        booked_slots.append(t_str[:5])
+                    elif t_str:
+                        booked_slots.append(t_str)
 
     return JsonResponse({'status': 'success', 'departments': departments, 'doctors': doctors, 'booked_slots': booked_slots})
 
@@ -1634,50 +1647,64 @@ def vitals_history(request):
 
 
 STANDARD_MEDICINES = [
-    {"name": "Paracetamol", "dosage": "500mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food with a glass of water"},
-    {"name": "Amoxicillin", "dosage": "500mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals at regular intervals"},
-    {"name": "Azithromycin", "dosage": "500mg", "frequency": "Once daily", "duration": "3 days", "instruction": "1 hour before meals or 2 hours after"},
-    {"name": "Metformin", "dosage": "500mg", "frequency": "Twice daily", "duration": "30 days", "instruction": "With or immediately after meals"},
-    {"name": "Pantoprazole", "dosage": "40mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Morning empty stomach, 30 min before breakfast"},
-    {"name": "Cetirizine", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "At bedtime with water"},
-    {"name": "Ibuprofen", "dosage": "400mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food to avoid stomach irritation"},
-    {"name": "Atorvastatin", "dosage": "20mg", "frequency": "Once daily", "duration": "30 days", "instruction": "At night after dinner"},
-    {"name": "Amlodipine", "dosage": "5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with or without food"},
-    {"name": "Losartan", "dosage": "50mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Once daily in the morning"},
-    {"name": "Ciprofloxacin", "dosage": "500mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "Drink plenty of fluids"},
-    {"name": "Cefixime", "dosage": "200mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "After food"},
-    {"name": "Omeprazole", "dosage": "20mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Empty stomach in morning"},
-    {"name": "Doxycycline", "dosage": "100mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "With a full glass of water, do not lie down immediately"},
-    {"name": "Telmisartan", "dosage": "40mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
-    {"name": "Montelukast", "dosage": "10mg", "frequency": "Once daily", "duration": "10 days", "instruction": "At night before sleeping"},
-    {"name": "Glimepiride", "dosage": "1mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Shortly before or during breakfast"},
-    {"name": "Salbutamol Inhaler", "dosage": "100mcg", "frequency": "As needed", "duration": "30 days", "instruction": "2 puffs when short of breath"},
-    {"name": "Hydrochlorothiazide", "dosage": "12.5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
-    {"name": "Clopidogrel", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After food"},
-    {"name": "Aspirin (Ecosprin)", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After meals"},
-    {"name": "Levothyroxine", "dosage": "50mcg", "frequency": "Once daily", "duration": "30 days", "instruction": "First thing in the morning empty stomach"},
-    {"name": "Domperidone", "dosage": "10mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "30 minutes before food"},
-    {"name": "Ondansetron", "dosage": "4mg", "frequency": "As needed", "duration": "3 days", "instruction": "For nausea or vomiting"},
-    {"name": "Metronidazole", "dosage": "400mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals, strictly avoid alcohol"},
-    {"name": "Ranitidine", "dosage": "150mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "Before meals"},
-    {"name": "Amoxicillin + Clavulanic Acid (Augmentin)", "dosage": "625mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "At start of meal"},
-    {"name": "Levofloxacin", "dosage": "500mg", "frequency": "Once daily", "duration": "5 days", "instruction": "With water, avoid antacids"},
-    {"name": "Diclofenac", "dosage": "50mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food"},
-    {"name": "Tramadol", "dosage": "50mg", "frequency": "As needed", "duration": "3 days", "instruction": "Take with food for severe pain"},
-    {"name": "Prednisolone", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "Morning after breakfast with milk"},
-    {"name": "Vitamin D3", "dosage": "60,000 IU", "frequency": "Once weekly", "duration": "8 weeks", "instruction": "After milk or fatty meal"},
+    {"name": "Paracetamol 500mg", "dosage": "500mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food with a glass of water"},
+    {"name": "Amoxicillin 500mg", "dosage": "500mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals at regular intervals"},
+    {"name": "Azithromycin 500mg", "dosage": "500mg", "frequency": "Once daily", "duration": "3 days", "instruction": "1 hour before meals or 2 hours after"},
+    {"name": "Aerocort Inhaler (Levosalbutamol + Beclomethasone)", "dosage": "2 puffs", "frequency": "Twice daily", "duration": "30 days", "instruction": "Rinse mouth thoroughly after inhalation"},
+    {"name": "Aerolin Inhaler 100mcg (Salbutamol)", "dosage": "2 puffs", "frequency": "As needed", "duration": "30 days", "instruction": "Inhale when experiencing acute breathlessness"},
+    {"name": "Aerodil Syrup (Terbutaline + Bromhexine)", "dosage": "10ml", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After food for productive cough"},
+    {"name": "Aerozest Inhaler", "dosage": "1 puff", "frequency": "Twice daily", "duration": "30 days", "instruction": "Use as maintenance inhaler"},
+    {"name": "Aethoxysklerol 1% Injection", "dosage": "2ml", "frequency": "Single dose", "duration": "1 day", "instruction": "Administer under specialist clinical supervision"},
+    {"name": "Aequamen 100mg", "dosage": "100mg", "frequency": "Once daily", "duration": "10 days", "instruction": "Take with breakfast"},
+    {"name": "Aceclofenac 100mg", "dosage": "100mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food with full glass of water"},
+    {"name": "Aceclofenac + Paracetamol", "dosage": "100mg/325mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After meals for pain relief"},
+    {"name": "Albendazole 400mg", "dosage": "400mg", "frequency": "Single dose", "duration": "1 day", "instruction": "Chew thoroughly at bedtime"},
+    {"name": "Allopurinol 100mg", "dosage": "100mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After meal with abundant water"},
+    {"name": "Metformin 500mg", "dosage": "500mg", "frequency": "Twice daily", "duration": "30 days", "instruction": "With or immediately after meals"},
+    {"name": "Pantoprazole 40mg", "dosage": "40mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Morning empty stomach, 30 min before breakfast"},
+    {"name": "Cetirizine 10mg", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "At bedtime with water"},
+    {"name": "Ibuprofen 400mg", "dosage": "400mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food to avoid stomach irritation"},
+    {"name": "Atorvastatin 20mg", "dosage": "20mg", "frequency": "Once daily", "duration": "30 days", "instruction": "At night after dinner"},
+    {"name": "Amlodipine 5mg", "dosage": "5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with or without food"},
+    {"name": "Losartan 50mg", "dosage": "50mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Once daily in the morning"},
+    {"name": "Ciprofloxacin 500mg", "dosage": "500mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "Drink plenty of fluids"},
+    {"name": "Cefixime 200mg", "dosage": "200mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "After food"},
+    {"name": "Omeprazole 20mg", "dosage": "20mg", "frequency": "Once daily", "duration": "14 days", "instruction": "Empty stomach in morning"},
+    {"name": "Doxycycline 100mg", "dosage": "100mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "With a full glass of water, do not lie down immediately"},
+    {"name": "Telmisartan 40mg", "dosage": "40mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
+    {"name": "Montelukast 10mg", "dosage": "10mg", "frequency": "Once daily", "duration": "10 days", "instruction": "At night before sleeping"},
+    {"name": "Glimepiride 1mg", "dosage": "1mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Shortly before or during breakfast"},
+    {"name": "Salbutamol Inhaler 100mcg", "dosage": "100mcg", "frequency": "As needed", "duration": "30 days", "instruction": "2 puffs when short of breath"},
+    {"name": "Hydrochlorothiazide 12.5mg", "dosage": "12.5mg", "frequency": "Once daily", "duration": "30 days", "instruction": "Morning with water"},
+    {"name": "Clopidogrel 75mg", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After food"},
+    {"name": "Aspirin (Ecosprin 75mg)", "dosage": "75mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After meals"},
+    {"name": "Levothyroxine 50mcg", "dosage": "50mcg", "frequency": "Once daily", "duration": "30 days", "instruction": "First thing in the morning empty stomach"},
+    {"name": "Domperidone 10mg", "dosage": "10mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "30 minutes before food"},
+    {"name": "Ondansetron 4mg", "dosage": "4mg", "frequency": "As needed", "duration": "3 days", "instruction": "For nausea or vomiting"},
+    {"name": "Metronidazole 400mg", "dosage": "400mg", "frequency": "Thrice daily", "duration": "5 days", "instruction": "After meals, strictly avoid alcohol"},
+    {"name": "Ranitidine 150mg", "dosage": "150mg", "frequency": "Twice daily", "duration": "7 days", "instruction": "Before meals"},
+    {"name": "Amoxicillin + Clavulanic Acid 625mg", "dosage": "625mg", "frequency": "Twice daily", "duration": "5 days", "instruction": "At start of meal"},
+    {"name": "Levofloxacin 500mg", "dosage": "500mg", "frequency": "Once daily", "duration": "5 days", "instruction": "With water, avoid antacids"},
+    {"name": "Diclofenac 50mg", "dosage": "50mg", "frequency": "Twice daily", "duration": "3 days", "instruction": "After food"},
+    {"name": "Tramadol 50mg", "dosage": "50mg", "frequency": "As needed", "duration": "3 days", "instruction": "Take with food for severe pain"},
+    {"name": "Prednisolone 10mg", "dosage": "10mg", "frequency": "Once daily", "duration": "5 days", "instruction": "Morning after breakfast with milk"},
+    {"name": "Vitamin D3 60,000 IU", "dosage": "60,000 IU", "frequency": "Once weekly", "duration": "8 weeks", "instruction": "After milk or fatty meal"},
     {"name": "Vitamin B Complex", "dosage": "1 capsule", "frequency": "Once daily", "duration": "30 days", "instruction": "After breakfast"},
     {"name": "Calcium + Vitamin D3", "dosage": "500mg", "frequency": "Once daily", "duration": "30 days", "instruction": "After dinner with water"}
 ]
 
 @csrf_exempt
 def medicines_list(request):
-    """Returns matching clinical medicines for autocomplete in doctor prescription."""
+    """Returns matching clinical medicines for autocomplete in doctor prescription, prioritizing prefix matches."""
+    import re
     q = (request.GET.get('q') or request.GET.get('query') or '').strip().lower()
     if not q:
         matches = STANDARD_MEDICINES[:25]
     else:
-        matches = [m for m in STANDARD_MEDICINES if q in m['name'].lower()]
+        starts = [m for m in STANDARD_MEDICINES if m['name'].lower().startswith(q)]
+        word_starts = [m for m in STANDARD_MEDICINES if not m['name'].lower().startswith(q) and re.search(r'\b' + re.escape(q), m['name'].lower())]
+        contains = [m for m in STANDARD_MEDICINES if not m['name'].lower().startswith(q) and not re.search(r'\b' + re.escape(q), m['name'].lower()) and q in m['name'].lower()]
+        matches = (starts + word_starts + contains)[:25]
     return JsonResponse({'status': 'success', 'medicines': matches})
 
 
@@ -1686,6 +1713,38 @@ def visits(request):
     user, error = require_roles(request, 'doctor')
     if error:
         return error
+
+    if request.method == 'DELETE':
+        visit_param = request.GET.get('visit_id') or payload(request).get('visit_id')
+        if not visit_param:
+            return JsonResponse({'status': 'error', 'message': 'visit_id is required.'}, status=400)
+        try:
+            visit_id = int(visit_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid visit_id format.'}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT doctor_id, height, weight, blood_pressure FROM tbl_patient_visit WHERE visit_id=%s",
+                [visit_id]
+            )
+            v_row = cursor.fetchone()
+            if not v_row:
+                return JsonResponse({'status': 'error', 'message': 'Visit record not found.'}, status=404)
+            if v_row[0] != user['doctor_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only delete your own clinical notes and visit records.'}, status=403)
+
+            # If nurse vitals exist on this record, clear diagnosis and notes to preserve pre-consult vitals; otherwise delete record
+            if v_row[1] or v_row[2] or v_row[3]:
+                cursor.execute(
+                    "UPDATE tbl_patient_visit SET diagnosis=NULL, medical_notes=NULL WHERE visit_id=%s",
+                    [visit_id]
+                )
+            else:
+                cursor.execute("DELETE FROM tbl_patient_visit WHERE visit_id=%s", [visit_id])
+
+        return JsonResponse({'status': 'success', 'message': 'Clinical consultation record deleted successfully.'})
+
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
     ensure_workflow_schema()
@@ -1836,10 +1895,12 @@ def prescriptions(request):
     if request.method == 'GET':
         patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
         params = []
-        where = []
+        where = ["p.prescription_is_active = 1"]
         if user['role'] == 'patient':
             where.append("p.patient_id = %s")
             params.append(user['patient_id'])
+            # Only return prescriptions explicitly allowed/shared by the doctor
+            where.append("p.prescription_share_flag = 1")
         elif user['role'] == 'doctor':
             if patient_param:
                 with connection.cursor() as cursor:
@@ -1852,6 +1913,9 @@ def prescriptions(request):
                             return JsonResponse({'status': 'error', 'message': 'Not authorized to view prescriptions for this patient.'}, status=403)
                         where.append("p.patient_id = %s")
                         params.append(target_pid)
+                        # Hide medicines from other doctors who haven't prescribed that medicine
+                        where.append("p.doctor_id = %s")
+                        params.append(user['doctor_id'])
                     else:
                         return JsonResponse({'status': 'success', 'prescriptions': []})
             else:
@@ -1862,7 +1926,7 @@ def prescriptions(request):
         sql = f"""
             SELECT p.prescription_id, p.patient_id, p.doctor_id, p.hospital_id, p.appointment_id, p.visit_id,
                    p.prescription_date, p.remarks, pt.patient_name, pt.patient_uid, du.user_name, h.hospital_name,
-                   p.prescription_created_at
+                   p.prescription_created_at, COALESCE(p.prescription_share_flag, 1)
             FROM tbl_prescription p
             LEFT JOIN tbl_patient pt ON pt.patient_id = p.patient_id
             LEFT JOIN tbl_doctor d ON d.doctor_id = p.doctor_id
@@ -1901,6 +1965,7 @@ def prescriptions(request):
                     'patient_name': r[8] or '',
                     'patient_uid': r[9] or f"PTA{r[1]:03d}",
                     'health_id': r[9] or f"PTA{r[1]:03d}",
+                    'doctor_id': r[2],
                     'doctor_name': r[10] or 'Dr. Practitioner',
                     'hospital_name': r[11] or 'UniCare Partner Hospital',
                     'appointment_id': r[4],
@@ -1909,9 +1974,61 @@ def prescriptions(request):
                     'visit_uid': f"VIS{r[5]:03d}" if r[5] else 'N/A',
                     'date': str(r[6] or (r[12].strftime('%Y-%m-%d') if r[12] else '')),
                     'remarks': r[7] or '',
+                    'is_shared': bool(r[13]),
+                    'prescription_share_flag': r[13],
                     'medicines': medicines,
                 })
         return JsonResponse({'status': 'success', 'prescriptions': presc_list})
+
+    if request.method == 'DELETE':
+        if user['role'] != 'doctor':
+            return JsonResponse({'status': 'error', 'message': 'Only doctors can delete prescriptions.'}, status=403)
+        presc_param = request.GET.get('prescription_id') or payload(request).get('prescription_id')
+        if not presc_param:
+            return JsonResponse({'status': 'error', 'message': 'prescription_id is required.'}, status=400)
+        try:
+            presc_id = int(presc_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid prescription_id format.'}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM tbl_prescription WHERE prescription_id = %s", [presc_id])
+            p_row = cursor.fetchone()
+            if not p_row:
+                return JsonResponse({'status': 'error', 'message': 'Prescription not found.'}, status=404)
+            if p_row[0] != user['doctor_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only delete prescriptions authored by yourself.'}, status=403)
+
+            cursor.execute("DELETE FROM tbl_prescription_item WHERE prescription_id = %s", [presc_id])
+            cursor.execute("DELETE FROM tbl_prescription WHERE prescription_id = %s", [presc_id])
+
+        return JsonResponse({'status': 'success', 'message': 'Prescription deleted successfully.'})
+
+    if request.method == 'PATCH':
+        if user['role'] != 'doctor':
+            return JsonResponse({'status': 'error', 'message': 'Only doctors can update prescription sharing.'}, status=403)
+        data = payload(request)
+        presc_param = data.get('prescription_id')
+        if not presc_param:
+            return JsonResponse({'status': 'error', 'message': 'prescription_id is required.'}, status=400)
+        try:
+            presc_id = int(presc_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid prescription_id format.'}, status=400)
+
+        is_shared_flag = 1 if data.get('is_shared', True) else 0
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM tbl_prescription WHERE prescription_id = %s", [presc_id])
+            p_row = cursor.fetchone()
+            if not p_row:
+                return JsonResponse({'status': 'error', 'message': 'Prescription not found.'}, status=404)
+            if p_row[0] != user['doctor_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only manage sharing for your own prescriptions.'}, status=403)
+
+            cursor.execute("UPDATE tbl_prescription SET prescription_share_flag = %s WHERE prescription_id = %s", [is_shared_flag, presc_id])
+
+        return JsonResponse({'status': 'success', 'message': f"Prescription sharing updated ({'Shared with Patient' if is_shared_flag else 'Internal Only'}).", 'is_shared': bool(is_shared_flag)})
 
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
@@ -1924,6 +2041,7 @@ def prescriptions(request):
     raw_appointment_id = data.get('appointment_id')
     raw_visit_id = data.get('visit_id')
     remarks = (data.get('remarks') or '').strip()
+    is_shared = 1 if data.get('is_shared', True) else 0
     medicines = data.get('medicines') or []
 
     if not patient_param:
@@ -1948,8 +2066,8 @@ def prescriptions(request):
 
         cursor.execute(
             "INSERT INTO tbl_prescription (patient_id, doctor_id, hospital_id, appointment_id, visit_id, prescription_date, remarks, prescription_share_flag, prescription_is_active)"
-            " VALUES (%s, %s, %s, %s, %s, CURRENT_DATE(), %s, 1, 1)",
-            [patient_id, user['doctor_id'], user['hospital_id'], app_id, vis_id, remarks]
+            " VALUES (%s, %s, %s, %s, %s, CURRENT_DATE(), %s, %s, 1)",
+            [patient_id, user['doctor_id'], user['hospital_id'], app_id, vis_id, remarks, is_shared]
         )
         presc_id = cursor.lastrowid
 
@@ -1969,6 +2087,7 @@ def prescriptions(request):
             'prescription_id': presc_id,
             'id': f"PRE{presc_id:03d}",
             'prescription_uid': f"PRE{presc_id:03d}",
+            'is_shared': bool(is_shared),
         }
     })
 

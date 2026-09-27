@@ -18,15 +18,25 @@ const STANDARD_MEDICINES = [
   { name: 'Amoxicillin 500mg', dosage: '500mg', frequency: 'Thrice daily', duration: '5 days', instruction: 'After food with water' },
   { name: 'Amoxicillin + Clavulanic Acid 625mg', dosage: '625mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After meal' },
   { name: 'Azithromycin 500mg', dosage: '500mg', frequency: 'Once daily', duration: '3 days', instruction: '1 hour before or 2 hours after food' },
+  { name: 'Aerocort Inhaler (Levosalbutamol + Beclomethasone)', dosage: '2 puffs', frequency: 'Twice daily', duration: '30 days', instruction: 'Rinse mouth after inhalation' },
+  { name: 'Aerolin Inhaler 100mcg (Salbutamol)', dosage: '2 puffs', frequency: 'As needed', duration: '30 days', instruction: 'Inhale when experiencing breathlessness' },
+  { name: 'Aerodil Syrup (Terbutaline + Bromhexine)', dosage: '10ml', frequency: 'Thrice daily', duration: '5 days', instruction: 'After food for productive cough' },
+  { name: 'Aerozest Inhaler', dosage: '1 puff', frequency: 'Twice daily', duration: '30 days', instruction: 'Maintenance inhaler' },
+  { name: 'Aethoxysklerol 1% Injection', dosage: '2ml', frequency: 'Single dose', duration: '1 day', instruction: 'Administer under clinical supervision' },
+  { name: 'Aequamen 100mg', dosage: '100mg', frequency: 'Once daily', duration: '10 days', instruction: 'Take with breakfast' },
+  { name: 'Aceclofenac 100mg', dosage: '100mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After food' },
+  { name: 'Aceclofenac + Paracetamol', dosage: '100mg/325mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After meals' },
+  { name: 'Albendazole 400mg', dosage: '400mg', frequency: 'Single dose', duration: '1 day', instruction: 'Chew at bedtime' },
+  { name: 'Allopurinol 100mg', dosage: '100mg', frequency: 'Once daily', duration: '30 days', instruction: 'After meal with plenty of water' },
+  { name: 'Amlodipine 5mg', dosage: '5mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after breakfast' },
+  { name: 'Amlodipine 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after food' },
+  { name: 'Atorvastatin 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
+  { name: 'Atorvastatin 20mg', dosage: '20mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
   { name: 'Ciprofloxacin 500mg', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'With plenty of fluids' },
   { name: 'Metformin 500mg', dosage: '500mg', frequency: 'Twice daily', duration: '30 days', instruction: 'With meals' },
   { name: 'Metformin 1000mg', dosage: '1000mg', frequency: 'Twice daily', duration: '30 days', instruction: 'With breakfast and dinner' },
-  { name: 'Amlodipine 5mg', dosage: '5mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after breakfast' },
-  { name: 'Amlodipine 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning after food' },
   { name: 'Telmisartan 40mg', dosage: '40mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning with or without food' },
   { name: 'Losartan 50mg', dosage: '50mg', frequency: 'Once daily', duration: '30 days', instruction: 'Morning' },
-  { name: 'Atorvastatin 10mg', dosage: '10mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
-  { name: 'Atorvastatin 20mg', dosage: '20mg', frequency: 'Once daily', duration: '30 days', instruction: 'At bedtime' },
   { name: 'Pantoprazole 40mg', dosage: '40mg', frequency: 'Once daily', duration: '7 days', instruction: 'Morning 30 mins before breakfast' },
   { name: 'Omeprazole 20mg', dosage: '20mg', frequency: 'Once daily', duration: '7 days', instruction: 'Empty stomach in morning' },
   { name: 'Rabeprazole 20mg', dosage: '20mg', frequency: 'Once daily', duration: '14 days', instruction: 'Before breakfast' },
@@ -34,7 +44,6 @@ const STANDARD_MEDICINES = [
   { name: 'Levocetirizine 5mg', dosage: '5mg', frequency: 'Once daily', duration: '5 days', instruction: 'Night after food' },
   { name: 'Montelukast + Levocetirizine', dosage: '10mg/5mg', frequency: 'Once daily', duration: '10 days', instruction: 'At bedtime' },
   { name: 'Ibuprofen 400mg', dosage: '400mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After food' },
-  { name: 'Aceclofenac + Paracetamol', dosage: '100mg/325mg', frequency: 'Twice daily', duration: '3 days', instruction: 'After meals' },
   { name: 'Tramadol 50mg', dosage: '50mg', frequency: 'As needed', duration: '3 days', instruction: 'For severe pain only' },
   { name: 'Doxycycline 100mg', dosage: '100mg', frequency: 'Twice daily', duration: '7 days', instruction: 'After meals with full glass of water' },
   { name: 'Metronidazole 400mg', dosage: '400mg', frequency: 'Thrice daily', duration: '5 days', instruction: 'After food' },
@@ -56,14 +65,19 @@ function MedicineAutocomplete({ value, onChange, onSelectPreset }) {
 
   useEffect(() => {
     if (!value || !value.trim()) {
-      setFiltered(STANDARD_MEDICINES.slice(0, 8));
+      setFiltered(STANDARD_MEDICINES);
     } else {
-      const q = value.toLowerCase();
-      const matches = STANDARD_MEDICINES.filter(m => 
-        m.name.toLowerCase().includes(q) || 
-        (m.instruction && m.instruction.toLowerCase().includes(q))
-      );
-      setFiltered(matches.slice(0, 10));
+      const q = value.toLowerCase().trim();
+      const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 1. Direct prefix matches on medicine name
+      const starts = STANDARD_MEDICINES.filter(m => m.name.toLowerCase().startsWith(q));
+      // 2. Word boundary matches on medicine name
+      const wordStarts = STANDARD_MEDICINES.filter(m => !m.name.toLowerCase().startsWith(q) && new RegExp(`\\b${escapedQ}`, 'i').test(m.name));
+      // 3. Substring matches on medicine name
+      const contains = STANDARD_MEDICINES.filter(m => !m.name.toLowerCase().startsWith(q) && !new RegExp(`\\b${escapedQ}`, 'i').test(m.name) && m.name.toLowerCase().includes(q));
+      
+      const combined = [...starts, ...wordStarts, ...contains];
+      setFiltered(combined);
     }
   }, [value]);
 
@@ -86,7 +100,7 @@ function MedicineAutocomplete({ value, onChange, onSelectPreset }) {
         <input
           type="text"
           className="form-control form-control-sm border-start-0"
-          placeholder="Type medicine (e.g. Paracetamol, Amoxicillin)..."
+          placeholder="Type medicine (e.g. Paracetamol, Aerocort)..."
           required
           value={value}
           onChange={(e) => {
@@ -99,28 +113,35 @@ function MedicineAutocomplete({ value, onChange, onSelectPreset }) {
       </div>
       {showDropdown && filtered.length > 0 && (
         <div 
-          className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1 overflow-hidden" 
-          style={{ zIndex: 1055, maxHeight: '220px', overflowY: 'auto' }}
+          className="position-absolute w-100 bg-white border rounded-3 shadow-lg mt-1" 
+          style={{ 
+            zIndex: 1060, 
+            maxHeight: '260px', 
+            overflowY: 'auto', 
+            overflowX: 'hidden',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch'
+          }}
         >
-          <div className="px-2 py-1 bg-light border-bottom text-muted extra-small fw-bold d-flex justify-content-between">
-            <span>STANDARD CLINICAL MEDICINES</span>
-            <span>Click to auto-fill</span>
+          <div className="px-2.5 py-1.5 bg-light border-bottom text-muted extra-small fw-bold d-flex justify-content-between sticky-top">
+            <span>STANDARD CLINICAL MEDICINES ({filtered.length})</span>
+            <span className="text-teal extra-small">Scroll &bull; Click to choose</span>
           </div>
           {filtered.map((item, i) => (
             <button
               key={i}
               type="button"
-              className="dropdown-item px-2 py-1.5 text-start border-bottom small d-flex justify-content-between align-items-center"
+              className="dropdown-item px-2.5 py-2 text-start border-bottom small d-flex justify-content-between align-items-center"
               onClick={() => {
                 onSelectPreset(item);
                 setShowDropdown(false);
               }}
             >
               <div>
-                <span className="fw-semibold text-dark">{item.name}</span>
+                <span className="fw-semibold text-dark d-block">{item.name}</span>
                 <small className="text-muted d-block extra-small">{item.instruction || item.frequency}</small>
               </div>
-              <span className="badge bg-light text-teal border extra-small" style={{ color: '#0d9488' }}>
+              <span className="badge bg-light text-teal border extra-small ms-2" style={{ color: '#0d9488' }}>
                 {item.dosage}
               </span>
             </button>
@@ -161,6 +182,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   const [prescriptionSubmitting, setPrescriptionSubmitting] = useState(false);
   const [prescriptionForm, setPrescriptionForm] = useState({
     remarks: '',
+    is_shared: true,
     medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
   });
   const [showLabReportModal, setShowLabReportModal] = useState(false);
@@ -511,6 +533,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         body: JSON.stringify({
           patient_id: selectedPatient.patient_id || selectedPatient.patient_uid,
           remarks: prescriptionForm.remarks,
+          is_shared: prescriptionForm.is_shared,
           medicines: prescriptionForm.medicines
         })
       });
@@ -519,6 +542,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         setMessage({ text: `Prescription ${data.prescription?.prescription_uid || 'PRE001'} issued successfully!`, type: 'success' });
         setPrescriptionForm({
           remarks: '',
+          is_shared: true,
           medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
         });
         setShowPrescriptionModal(false);
@@ -530,6 +554,78 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       setMessage({ text: 'Error saving prescription.', type: 'danger' });
     } finally {
       setPrescriptionSubmitting(false);
+    }
+  };
+
+  // Delete Prescription (Doctor Scoped)
+  const handleDeletePrescription = async (prescriptionId, prescUid) => {
+    if (!window.confirm(`Are you sure you want to permanently delete prescription ${prescUid}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/prescriptions/?prescription_id=${prescriptionId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: `Prescription ${prescUid} deleted successfully.`, type: 'success' });
+        if (selectedPatient) {
+          handleSelectPatient(selectedPatient);
+        }
+      } else {
+        setMessage({ text: data.message || 'Failed to delete prescription.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error communicating with server while deleting prescription.', type: 'danger' });
+    }
+  };
+
+  // Toggle Sharing of Prescription with Patient Portal
+  const handleToggleSharePrescription = async (prescriptionId, currentShared) => {
+    try {
+      const res = await fetch(`${API}/prescriptions/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          prescription_id: prescriptionId,
+          is_shared: !currentShared
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: data.message || 'Prescription sharing updated.', type: 'success' });
+        setPrescriptionsList(prev => prev.map(p => p.prescription_id === prescriptionId ? { ...p, is_shared: !currentShared, prescription_share_flag: !currentShared ? 1 : 0 } : p));
+      } else {
+        setMessage({ text: data.message || 'Failed to update sharing.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error updating prescription sharing status.', type: 'danger' });
+    }
+  };
+
+  // Delete Clinical Consultation Notes / Diagnosis (Doctor Scoped)
+  const handleDeleteVisit = async (visitId, visitUid) => {
+    if (!window.confirm(`Are you sure you want to delete your consultation notes for ${visitUid}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/visits/?visit_id=${visitId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ text: `Clinical consultation record ${visitUid} deleted successfully.`, type: 'success' });
+        if (selectedPatient) {
+          handleSelectPatient(selectedPatient);
+        }
+      } else {
+        setMessage({ text: data.message || 'Failed to delete clinical record.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error communicating with server while deleting record.', type: 'danger' });
     }
   };
 
@@ -650,6 +746,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   const completedApps = appointments.filter(a => a.status === 'Completed').length;
 
   const doctorName = profile?.name || user?.name || 'Doctor';
+  const currentDoctorId = profile?.doctor_id || user?.doctor_id;
   const displayHospital = hospitalName || 'UniCare Network Hospital';
 
   // Extract distinct patients from doctor's appointments
@@ -1290,32 +1387,51 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                             <th>Vitals</th>
                             <th>Diagnosis</th>
                             <th>Notes</th>
+                            <th className="text-end pe-3">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {patientHistory.map((h, i) => (
-                            <tr key={i}>
-                              <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
-                                {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (i + 1)).padStart(3, '0')}`}
-                              </td>
-                              <td className="fw-bold text-nowrap">{h.visited_at || h.date}</td>
-                              <td>{h.doctor_name}</td>
-                              <td>{h.hospital_name}</td>
-                              <td>
-                                {h.blood_pressure || h.weight || h.height ? (
-                                  <div className="small">
-                                    {h.blood_pressure && <span className="d-block">BP: <strong>{h.blood_pressure}</strong></span>}
-                                    {h.weight && <span className="d-block">Wt: <strong>{h.weight} kg</strong></span>}
-                                    {h.height && <span className="d-block">Ht: <strong>{h.height} cm</strong></span>}
-                                  </div>
-                                ) : (
-                                  <span className="text-muted">—</span>
-                                )}
-                              </td>
-                              <td className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{h.diagnosis}</td>
-                              <td>{h.medical_notes}</td>
-                            </tr>
-                          ))}
+                          {patientHistory.map((h, i) => {
+                            const isMyRecord = !h.doctor_id || String(h.doctor_id) === String(currentDoctorId);
+                            return (
+                              <tr key={i}>
+                                <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                                  {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (i + 1)).padStart(3, '0')}`}
+                                </td>
+                                <td className="fw-bold text-nowrap">{h.visited_at || h.date}</td>
+                                <td>{h.doctor_name}</td>
+                                <td>{h.hospital_name}</td>
+                                <td>
+                                  {h.blood_pressure || h.weight || h.height ? (
+                                    <div className="small">
+                                      {h.blood_pressure && <span className="d-block">BP: <strong>{h.blood_pressure}</strong></span>}
+                                      {h.weight && <span className="d-block">Wt: <strong>{h.weight} kg</strong></span>}
+                                      {h.height && <span className="d-block">Ht: <strong>{h.height} cm</strong></span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted">—</span>
+                                  )}
+                                </td>
+                                <td className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{h.diagnosis}</td>
+                                <td>{h.medical_notes}</td>
+                                <td className="text-end pe-3">
+                                  {isMyRecord ? (
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-danger btn-sm rounded-circle p-1"
+                                      style={{ width: '30px', height: '30px' }}
+                                      onClick={() => handleDeleteVisit(h.visit_id, h.visit_uid || h.vis_uid || `VIS${h.visit_id}`)}
+                                      title="Delete your clinical notes"
+                                    >
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  ) : (
+                                    <span className="badge bg-light text-muted border extra-small" title="Only the authoring doctor can delete this note">Protected</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1497,23 +1613,42 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                           <th>Diagnosis</th>
                           <th>Clinical Notes & Treatment</th>
                           <th>Doctor</th>
+                          <th className="text-end pe-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {patientHistory.map((h, idx) => (
-                          <tr key={idx}>
-                            <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
-                              {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (idx + 1)).padStart(3, '0')}`}
-                            </td>
-                            <td className="fw-bold">{h.visited_at || h.date}</td>
-                            <td><span className="badge bg-light text-dark border">{h.hospital_name || displayHospital}</span></td>
-                            <td className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{h.diagnosis}</td>
-                            <td className="text-secondary small">{h.medical_notes}</td>
-                            <td>{h.doctor_name}</td>
-                          </tr>
-                        ))}
+                        {patientHistory.map((h, idx) => {
+                          const isMyRecord = !h.doctor_id || String(h.doctor_id) === String(currentDoctorId);
+                          return (
+                            <tr key={idx}>
+                              <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                                {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (idx + 1)).padStart(3, '0')}`}
+                              </td>
+                              <td className="fw-bold">{h.visited_at || h.date}</td>
+                              <td><span className="badge bg-light text-dark border">{h.hospital_name || displayHospital}</span></td>
+                              <td className="fw-semibold text-teal" style={{ color: '#0d9488' }}>{h.diagnosis}</td>
+                              <td className="text-secondary small">{h.medical_notes}</td>
+                              <td>{h.doctor_name}</td>
+                              <td className="text-end pe-3">
+                                {isMyRecord ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-danger btn-sm rounded-circle p-1"
+                                    style={{ width: '30px', height: '30px' }}
+                                    onClick={() => handleDeleteVisit(h.visit_id, h.visit_uid || h.vis_uid || `VIS${h.visit_id}`)}
+                                    title="Delete your consultation record"
+                                  >
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                ) : (
+                                  <span className="badge bg-light text-muted border extra-small" title="Only the authoring doctor can delete this note">Protected</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                         {!patientHistory.length && (
-                          <tr><td colSpan="6" className="text-center text-muted py-5">No clinical records found for this patient.</td></tr>
+                          <tr><td colSpan="7" className="text-center text-muted py-5">No clinical records found for this patient.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1651,43 +1786,80 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                     </div>
                   </div>
                   
-                  <div className="table-responsive">
+                  <div className="table-responsive" style={{ maxHeight: '420px', overflowY: 'auto' }}>
                     <table className="table table-hover align-middle mb-0">
-                      <thead className="table-light">
+                      <thead className="table-light sticky-top">
                         <tr>
                           <th>Prescription ID</th>
                           <th>Date</th>
                           <th>Medications & Dosage</th>
                           <th>Instructions / Remarks</th>
-                          <th>Doctor</th>
+                          <th>Patient Portal Access</th>
+                          <th className="text-end pe-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {prescriptionsList.map((p, idx) => (
-                          <tr key={idx}>
-                            <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
-                              {p.prescription_uid || p.id || `PRE${String(p.prescription_id || (idx + 1)).padStart(3, '0')}`}
-                            </td>
-                            <td className="fw-bold">{p.date}</td>
-                            <td>
-                              {p.medicines && p.medicines.length ? (
-                                <div className="d-flex flex-column gap-1">
-                                  {p.medicines.map((m, mIdx) => (
-                                    <div key={mIdx} className="small">
-                                      <strong className="text-dark">{m.medicine_name}</strong> — {m.dosage} ({m.frequency}, {m.duration})
-                                    </div>
-                                  ))}
+                        {prescriptionsList.filter(p => !p.doctor_id || String(p.doctor_id) === String(currentDoctorId)).map((p, idx) => {
+                          const isMyPrescription = true;
+                          const isShared = p.is_shared !== undefined ? Boolean(p.is_shared) : (p.prescription_share_flag !== undefined ? Boolean(p.prescription_share_flag) : true);
+                          return (
+                            <tr key={idx}>
+                              <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                                {p.prescription_uid || p.id || `PRE${String(p.prescription_id || (idx + 1)).padStart(3, '0')}`}
+                              </td>
+                              <td className="fw-bold">{p.date}</td>
+                              <td>
+                                {p.medicines && p.medicines.length ? (
+                                  <div className="d-flex flex-column gap-1">
+                                    {p.medicines.map((m, mIdx) => (
+                                      <div key={mIdx} className="small">
+                                        <strong className="text-dark">{m.medicine_name}</strong> — {m.dosage} ({m.frequency}, {m.duration})
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted small">Standard prescription</span>
+                                )}
+                              </td>
+                              <td className="text-secondary small">{p.remarks || 'Take as prescribed'}</td>
+                              <td>
+                                {isShared ? (
+                                  <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1">
+                                    <i className="bi bi-eye-fill me-1"></i> Shared with Patient
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-secondary-subtle text-secondary border rounded-pill px-2.5 py-1">
+                                    <i className="bi bi-eye-slash-fill me-1"></i> Internal Only
+                                  </span>
+                                )}
+                              </td>
+                              <td className="text-end pe-3">
+                                <div className="d-flex justify-content-end align-items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    className={`btn btn-sm rounded-pill px-2.5 py-0.5 extra-small fw-semibold ${isShared ? 'btn-outline-secondary' : 'btn-outline-success'}`}
+                                    onClick={() => handleToggleSharePrescription(p.prescription_id, isShared)}
+                                    title={isShared ? "Revoke patient sharing (hide from portal)" : "Share this prescription with Patient Portal"}
+                                  >
+                                    <i className={`bi bi-${isShared ? 'eye-slash' : 'share'} me-1`}></i>
+                                    {isShared ? 'Unshare' : 'Share'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-danger btn-sm rounded-circle p-1"
+                                    style={{ width: '28px', height: '28px' }}
+                                    onClick={() => handleDeletePrescription(p.prescription_id, p.prescription_uid || p.id || `PRE${p.prescription_id}`)}
+                                    title="Delete Prescription"
+                                  >
+                                    <i className="bi bi-trash"></i>
+                                  </button>
                                 </div>
-                              ) : (
-                                <span className="text-muted small">Standard prescription</span>
-                              )}
-                            </td>
-                            <td className="text-secondary small">{p.remarks || 'Take as prescribed'}</td>
-                            <td>{p.doctor_name || `Dr. ${doctorName}`}</td>
-                          </tr>
-                        ))}
-                        {!prescriptionsList.length && (
-                          <tr><td colSpan="5" className="text-center text-muted py-5">No prescriptions issued yet for this patient. Click <strong>Issue Prescription</strong> to write one.</td></tr>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {!prescriptionsList.filter(p => !p.doctor_id || String(p.doctor_id) === String(currentDoctorId)).length && (
+                          <tr><td colSpan="6" className="text-center text-muted py-5">No prescriptions authored by you yet for this patient. Click <strong>+ Write Prescription</strong> to issue one.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -2034,8 +2206,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                     <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom" style={{ borderColor: '#ccfbf1' }}>
                       <span className="fw-bold text-teal d-flex align-items-center gap-1.5" style={{ color: '#0d9488' }}>
                         <i className="bi bi-heart-pulse-fill text-danger fs-5"></i>
-                        Pre-Consultation Vitals (Recorded by Clinical Staff)
-                      </span>
+                        Pre-Consultation Vitals                       </span>
                       {currentVisitVitals?.has_vitals || currentVisitVitals?.blood_pressure || currentVisitVitals?.weight || currentVisitVitals?.height ? (
                         <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill extra-small">
                           <i className="bi bi-check-circle-fill me-1"></i>Vitals Verified
@@ -2197,7 +2368,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       {/* ISSUE DIGITAL PRESCRIPTION MODAL */}
       {showPrescriptionModal && selectedPatient && (
         <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
             <div className="modal-content rounded-4 border-0 shadow-lg">
               <div className="modal-header text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
                 <h5 className="modal-title fw-bold fs-5 mb-0">
@@ -2209,7 +2380,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                   onClick={() => setShowPrescriptionModal(false)}
                 ></button>
               </div>
-              <div className="modal-body p-4">
+              <div className="modal-body p-4" style={{ maxHeight: '78vh', overflowY: 'auto' }}>
                 <div className="alert alert-light border py-2 px-3 small mb-3 d-flex justify-content-between align-items-center">
                   <div>
                     Patient: <strong>{selectedPatient.name}</strong> ({selectedPatient.patient_uid || selectedPatient.health_id})
@@ -2236,7 +2407,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       </button>
                     </div>
 
-                    <div className="d-flex flex-column gap-2">
+                    <div className="d-flex flex-column gap-2" style={{ maxHeight: '380px', overflowY: 'auto', paddingRight: '4px' }}>
                       {prescriptionForm.medicines.map((m, idx) => (
                         <div key={idx} className="p-3 bg-light rounded-3 border">
                           <div className="row g-2 mb-2">
@@ -2323,6 +2494,29 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       value={prescriptionForm.remarks}
                       onChange={(e) => setPrescriptionForm({ ...prescriptionForm, remarks: e.target.value })}
                     ></textarea>
+                  </div>
+
+                  {/* Selective Patient Sharing Control */}
+                  <div className="form-check form-switch p-3 bg-light rounded-3 border mb-3.5 d-flex align-items-center justify-content-between">
+                    <div>
+                      <label className="form-check-label fw-bold text-dark mb-0 d-block cursor-pointer" htmlFor="sharePrescriptionToggle">
+                        <i className="bi bi-share-fill me-1.5 text-teal" style={{ color: '#0d9488' }}></i>
+                        Share with Patient Portal
+                      </label>
+                      <small className="text-muted extra-small d-block mt-0.5">
+                        {prescriptionForm.is_shared
+                          ? 'Patient can view and access this prescription immediately in their Patient Portal.'
+                          : 'Kept private and internal. Only authorized hospital clinical staff can see this prescription.'}
+                      </small>
+                    </div>
+                    <input
+                      className="form-check-input ms-3 fs-5"
+                      type="checkbox"
+                      role="switch"
+                      id="sharePrescriptionToggle"
+                      checked={prescriptionForm.is_shared}
+                      onChange={(e) => setPrescriptionForm({ ...prescriptionForm, is_shared: e.target.checked })}
+                    />
                   </div>
 
                   <div className="d-flex justify-content-end gap-2">

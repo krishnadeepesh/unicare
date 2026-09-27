@@ -711,8 +711,8 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                         <label className="form-label fw-semibold small text-secondary">
                           Time Slot *
                           {bookedSlots.length > 0 && (
-                            <span className="badge bg-warning text-dark ms-1 extra-small">
-                              {bookedSlots.length} booked
+                            <span className="badge bg-danger-subtle text-danger ms-1 extra-small">
+                              {bookedSlots.length} Booked
                             </span>
                           )}
                         </label>
@@ -726,17 +726,55 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                             const isBooked = bookedSlots.includes(t);
                             return (
                               <option key={t} value={t} disabled={isBooked}>
-                                {t} {isBooked ? '(Booked)' : ''}
+                                {t} {isBooked ? '— Not Available (Booked)' : '— Available'}
                               </option>
                             );
                           })}
                         </select>
                       </div>
                     </div>
+
+                    {/* Visual Interactive Time Slot Grid */}
+                    {form.doctor_id && form.appointment_date && (
+                      <div className="mb-3 p-2.5 bg-light rounded-3 border">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <small className="fw-bold text-muted extra-small text-uppercase">Live Slot Availability</small>
+                          <small className="extra-small text-muted">
+                            <span className="text-success fw-bold">&bull; Free</span> &nbsp;|&nbsp; <span className="text-danger fw-bold">&bull; Booked</span>
+                          </small>
+                        </div>
+                        <div className="d-flex flex-wrap gap-1.5">
+                          {availableTimeSlots.map((t) => {
+                            const isBooked = bookedSlots.includes(t);
+                            const isSelected = form.appointment_time === t;
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                disabled={isBooked}
+                                onClick={() => setForm({ ...form, appointment_time: t })}
+                                className={`btn btn-sm py-1 px-2 extra-small rounded-2 ${
+                                  isBooked
+                                    ? 'btn-light text-muted border text-decoration-line-through opacity-75'
+                                    : isSelected
+                                    ? 'btn-teal text-white shadow-sm fw-bold'
+                                    : 'btn-outline-secondary bg-white'
+                                }`}
+                                style={isSelected && !isBooked ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
+                                title={isBooked ? `${t} is already booked` : `Select ${t}`}
+                              >
+                                {t} {isBooked && '✕'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {bookedSlots.includes(form.appointment_time) && (
-                      <div className="alert alert-danger py-1 px-3 small mb-3">
-                        <i className="bi bi-exclamation-triangle me-1"></i>
-                        Selected time is already booked for Dr. {doctors.find(d => String(d.doctor_id) === String(form.doctor_id))?.name || 'this doctor'}. Please choose an open slot.
+                      <div className="alert alert-danger py-1.5 px-3 small mb-3 rounded-3">
+                        <i className="bi bi-x-circle-fill me-1"></i>
+                        <strong>Not Available:</strong> The selected time slot is already booked for this doctor. Please pick an available open slot above.
                       </div>
                     )}
 
