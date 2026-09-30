@@ -13,8 +13,6 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from datetime import datetime, date
 
-
-
 def is_valid_phone(phone):
     """Validate a 10-digit Indian mobile number (starts with 6-9)."""
     if not phone:

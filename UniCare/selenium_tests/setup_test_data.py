@@ -73,7 +73,29 @@ def setup_selenium_fixtures():
                 VALUES (%s, 'PTA001', 'Arjun', '1995-06-15', 'Male', '9632574107', 'arjun@gmail.com', 1)
             """, [new_pat_uid])
 
+        # 6. Ensure Nurse exists: sarah.kurian@sunrise.com / Nurse@123
+        cursor.execute("SELECT user_id FROM tbl_user WHERE user_email = 'sarah.kurian@sunrise.com'")
+        nurse = cursor.fetchone()
+        if nurse:
+            cursor.execute("UPDATE tbl_user SET user_password=%s, must_change_password=0, user_is_active=1 WHERE user_id=%s",
+                           [make_password('Nurse@123'), nurse[0]])
+
+        # 7. Ensure Receptionist exists: neha@sunrise.com / Staff@123
+        cursor.execute("SELECT user_id FROM tbl_user WHERE user_email = 'neha@sunrise.com'")
+        rec = cursor.fetchone()
+        if rec:
+            cursor.execute("UPDATE tbl_user SET user_password=%s, must_change_password=0, user_is_active=1 WHERE user_id=%s",
+                           [make_password('Staff@123'), rec[0]])
+
+        # 8. Ensure Hospital Admin exists: anil@sunrise.com / HospAdmin@123
+        cursor.execute("SELECT user_id FROM tbl_user WHERE user_email = 'anil@sunrise.com'")
+        ha = cursor.fetchone()
+        if ha:
+            cursor.execute("UPDATE tbl_user SET user_password=%s, must_change_password=0, user_is_active=1 WHERE user_id=%s",
+                           [make_password('HospAdmin@123'), ha[0]])
+
     print("Test fixtures successfully verified and configured.")
 
 if __name__ == '__main__':
     setup_selenium_fixtures()
+
