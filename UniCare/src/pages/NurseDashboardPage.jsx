@@ -55,6 +55,23 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
   const [vitalsHistoryList, setVitalsHistoryList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Tab & Lab Reports State
+  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'reports'
+  const [labReportsList, setLabReportsList] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [labReportSearch, setLabReportSearch] = useState('');
+  const [showLabReportModal, setShowLabReportModal] = useState(false);
+  const [labReportSubmitting, setLabReportSubmitting] = useState(false);
+  const [labReportForm, setLabReportForm] = useState({
+    patient_id: '',
+    patient_name: '',
+    patient_uid: '',
+    report_type: 'Blood Test',
+    report_title: '',
+    report_file: '',
+    is_shared: true,
+  });
+
   // Close profile dropdown on click outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -108,14 +125,149 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
     }
   };
 
+  // Load Hospital Lab Reports
+  const loadLabReports = async () => {
+    setLoadingReports(true);
+    try {
+      const res = await fetch(`${API}/lab-reports/`, { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setLabReportsList(data.reports || []);
+      }
+    } catch (err) {
+      console.error('Error fetching lab reports:', err);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
   useEffect(() => {
     loadVisitsQueue();
     loadProfile();
+    loadLabReports();
   }, []);
 
   const showToast = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 4000);
+  };
+
+  // Open Lab Report Modal for patient
+  const handleOpenLabReportModal = (visit = null) => {
+    if (visit) {
+      setLabReportForm({
+        patient_id: visit.patient_id || visit.health_id,
+        patient_name: visit.patient_name || visit.patient || '',
+        patient_uid: visit.health_id || visit.patient_uid || '',
+        report_type: 'Blood Test',
+        report_title: '',
+        report_file: '',
+        is_shared: true,
+      });
+    } else {
+      const defaultPatient = visits[0];
+      setLabReportForm({
+        patient_id: defaultPatient?.patient_id || defaultPatient?.health_id || '',
+        patient_name: defaultPatient?.patient_name || defaultPatient?.patient || '',
+        patient_uid: defaultPatient?.health_id || defaultPatient?.patient_uid || '',
+        report_type: 'Blood Test',
+        report_title: '',
+        report_file: '',
+        is_shared: true,
+      });
+    }
+    setShowLabReportModal(true);
+  };
+
+  // Save Diagnostic Lab Report (Nurse)
+  const handleSaveLabReport = async (e) => {
+    e.preventDefault();
+    if (!labReportForm.patient_id) {
+      showToast('Please select or enter a Patient ID / Health ID.', 'danger');
+      return;
+    }
+    setLabReportSubmitting(true);
+    try {
+      const res = await fetch(`${API}/lab-reports/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patient_id: labReportForm.patient_id,
+          report_type: labReportForm.report_type,
+          report_title: labReportForm.report_title,
+          report_file: labReportForm.report_file,
+          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : true,
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`Diagnostic Report ${data.report?.lab_report_uid || 'LAB001'} uploaded successfully!`, 'success');
+        setShowLabReportModal(false);
+        setLabReportForm({
+          patient_id: '',
+          patient_name: '',
+          patient_uid: '',
+          report_type: 'Blood Test',
+          report_title: '',
+          report_file: '',
+          is_shared: true,
+        });
+        loadLabReports();
+      } else {
+        showToast(data.message || 'Failed to upload diagnostic report.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error uploading diagnostic report.', 'danger');
+    } finally {
+      setLabReportSubmitting(false);
+    }
+  };
+
+  // Toggle Sharing of Lab Report Across Network vs Local to Facility
+  const handleToggleLabReportShare = async (reportId, currentShared) => {
+    try {
+      const res = await fetch(`${API}/lab-reports/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          report_id: reportId,
+          is_shared: !currentShared
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLabReportsList(prev => prev.map(r => r.report_id === reportId ? { ...r, is_shared: !currentShared, report_share_flag: !currentShared ? 1 : 0 } : r));
+        showToast(data.message || 'Report sharing status updated.', 'success');
+      } else {
+        showToast(data.message || 'Failed to update sharing.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error updating report sharing.', 'danger');
+    }
+  };
+
+  // Delete Diagnostic Lab Report (Nurse)
+  const handleDeleteLabReport = async (reportId, reportUid) => {
+    if (!window.confirm(`Are you sure you want to delete report ${reportUid}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/lab-reports/?report_id=${reportId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLabReportsList(prev => prev.filter(r => r.report_id !== reportId));
+        showToast(`Report ${reportUid} deleted successfully.`, 'success');
+      } else {
+        showToast(data.message || 'Failed to delete report.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error communicating with server while deleting report.', 'danger');
+    }
   };
 
   // Open Vitals Modal
@@ -504,7 +656,44 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
           </div>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="d-flex align-items-center gap-2 mb-4 border-bottom pb-3">
+          <button
+            type="button"
+            className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
+              activeTab === 'queue' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
+            }`}
+            style={activeTab === 'queue' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
+            onClick={() => setActiveTab('queue')}
+          >
+            <i className="bi bi-clipboard2-pulse"></i>
+            <span>Pre-Consult Intake Queue</span>
+            <span className={`badge rounded-pill ${activeTab === 'queue' ? 'bg-white text-dark' : 'bg-warning text-dark'}`}>
+              {pendingCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
+              activeTab === 'reports' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
+            }`}
+            style={activeTab === 'reports' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
+            onClick={() => {
+              setActiveTab('reports');
+              loadLabReports();
+            }}
+          >
+            <i className="bi bi-file-earmark-medical"></i>
+            <span>Diagnostic & Lab Reports</span>
+            <span className={`badge rounded-pill ${activeTab === 'reports' ? 'bg-white text-dark' : 'bg-teal text-white'}`} style={activeTab !== 'reports' ? { backgroundColor: '#0d9488' } : {}}>
+              {labReportsList.length}
+            </span>
+          </button>
+        </div>
+
         {/* Clinical Queue Section */}
+        {activeTab === 'queue' && (
         <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
           <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
@@ -670,6 +859,17 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
 
                             <button
                               type="button"
+                              className="btn btn-outline-teal btn-sm rounded-pill px-2.5 d-flex align-items-center gap-1 extra-small fw-semibold"
+                              style={{ color: '#0d9488', borderColor: '#0d9488' }}
+                              onClick={() => handleOpenLabReportModal(visit)}
+                              title="Upload or log diagnostic lab report"
+                            >
+                              <i className="bi bi-file-earmark-medical"></i>
+                              <span>+ Report</span>
+                            </button>
+
+                            <button
+                              type="button"
                               className="btn btn-outline-secondary btn-sm rounded-circle p-1.5"
                               style={{ width: '32px', height: '32px' }}
                               onClick={() => handleOpenHistory(visit)}
@@ -753,6 +953,15 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                       </button>
                       <button
                         type="button"
+                        className="btn btn-sm btn-outline-teal rounded-pill px-2.5 fw-semibold extra-small"
+                        style={{ color: '#0d9488', borderColor: '#0d9488' }}
+                        onClick={() => handleOpenLabReportModal(visit)}
+                        title="Upload Diagnostic Report"
+                      >
+                        <i className="bi bi-file-earmark-medical me-1"></i>Report
+                      </button>
+                      <button
+                        type="button"
                         className="btn btn-sm btn-outline-secondary rounded-pill px-3"
                         onClick={() => handleOpenHistory(visit)}
                         title="History"
@@ -766,6 +975,173 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
             )}
           </div>
         </div>
+        )}
+
+        {/* Diagnostic & Lab Reports Section */}
+        {activeTab === 'reports' && (
+          <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
+            <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+              <div>
+                <div className="d-flex align-items-center gap-2">
+                  <i className="bi bi-file-earmark-medical fs-5" style={{ color: '#0d9488' }}></i>
+                  <h5 className="fw-bold mb-0 text-dark">Diagnostic & Laboratory Reports</h5>
+                </div>
+                <small className="text-muted">
+                  Log clinical lab findings or review patient investigation reports for {hospitalName}.
+                </small>
+              </div>
+
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                {/* Search Bar */}
+                <div className="input-group input-group-sm" style={{ minWidth: '240px' }}>
+                  <span className="input-group-text bg-light border-end-0"><i className="bi bi-search text-muted"></i></span>
+                  <input
+                    type="text"
+                    className="form-control bg-light border-start-0"
+                    placeholder="Search report, patient, category..."
+                    value={labReportSearch}
+                    onChange={(e) => setLabReportSearch(e.target.value)}
+                  />
+                  {labReportSearch && (
+                    <button className="btn btn-light border-start-0" onClick={() => setLabReportSearch('')}>
+                      <i className="bi bi-x"></i>
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  className="btn btn-outline-secondary btn-sm rounded-pill px-3"
+                  onClick={loadLabReports}
+                  title="Refresh Reports"
+                >
+                  <i className={`bi bi-arrow-clockwise ${loadingReports ? 'spin' : ''}`}></i>
+                </button>
+
+                <button
+                  className="btn btn-teal text-white btn-sm rounded-pill px-3 fw-bold shadow-sm"
+                  style={{ backgroundColor: '#0d9488' }}
+                  onClick={() => handleOpenLabReportModal()}
+                >
+                  <i className="bi bi-cloud-arrow-up me-1"></i> Upload Test Report
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop Reports Table */}
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light text-muted extra-small text-uppercase">
+                  <tr>
+                    <th className="ps-4">Report ID</th>
+                    <th>Category</th>
+                    <th>Report Title</th>
+                    <th>Patient Name / Health ID</th>
+                    <th>Date Uploaded</th>
+                    <th>Lab Findings / Summary</th>
+                    <th>Interoperability</th>
+                    <th className="pe-4 text-end">Sharing Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingReports ? (
+                    <tr>
+                      <td colSpan="8" className="text-center py-5">
+                        <div className="spinner-border text-teal" role="status" style={{ color: '#0d9488' }}></div>
+                        <p className="text-muted small mt-2 mb-0">Loading diagnostic reports...</p>
+                      </td>
+                    </tr>
+                  ) : labReportsList.filter(r => {
+                      const q = labReportSearch.toLowerCase();
+                      return !q ||
+                        (r.report_title && r.report_title.toLowerCase().includes(q)) ||
+                        (r.report_type && r.report_type.toLowerCase().includes(q)) ||
+                        (r.patient_name && r.patient_name.toLowerCase().includes(q)) ||
+                        (r.patient_uid && r.patient_uid.toLowerCase().includes(q)) ||
+                        (r.health_id && r.health_id.toLowerCase().includes(q)) ||
+                        (r.lab_report_uid && r.lab_report_uid.toLowerCase().includes(q));
+                    }).length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="text-center py-5">
+                        <div className="text-muted mb-2"><i className="bi bi-file-earmark-medical fs-1"></i></div>
+                        <h6 className="fw-semibold text-dark">No diagnostic reports found</h6>
+                        <p className="text-muted small mb-0">
+                          {labReportSearch ? 'No reports match your search query.' : 'Click "Upload Test Report" to log patient lab results.'}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    labReportsList.filter(r => {
+                      const q = labReportSearch.toLowerCase();
+                      return !q ||
+                        (r.report_title && r.report_title.toLowerCase().includes(q)) ||
+                        (r.report_type && r.report_type.toLowerCase().includes(q)) ||
+                        (r.patient_name && r.patient_name.toLowerCase().includes(q)) ||
+                        (r.patient_uid && r.patient_uid.toLowerCase().includes(q)) ||
+                        (r.health_id && r.health_id.toLowerCase().includes(q)) ||
+                        (r.lab_report_uid && r.lab_report_uid.toLowerCase().includes(q));
+                    }).map((r, idx) => (
+                      <tr key={r.report_id || idx}>
+                        <td className="ps-4 font-monospace fw-bold" style={{ color: '#0d9488' }}>
+                          {r.lab_report_uid || r.id || `LAB${String(r.report_id || (idx + 1)).padStart(3, '0')}`}
+                        </td>
+                        <td>
+                          <span className="badge bg-light text-primary border">{r.report_type}</span>
+                        </td>
+                        <td className="fw-bold text-dark">{r.report_title}</td>
+                        <td>
+                          <div className="fw-semibold text-dark small">{r.patient_name || 'Patient'}</div>
+                          <small className="badge bg-light text-secondary border font-monospace extra-small">
+                            {r.patient_uid || r.health_id || `PTA${r.patient_id}`}
+                          </small>
+                        </td>
+                        <td className="small text-muted">{r.uploaded_at || 'Today'}</td>
+                        <td className="small text-secondary" style={{ maxWidth: '240px' }}>
+                          <span className="text-truncate d-block" title={r.report_file}>
+                            {r.report_file || 'Normal parameters verified.'}
+                          </span>
+                        </td>
+                        <td>
+                          {r.is_shared ? (
+                            <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill">
+                              <i className="bi bi-globe me-1"></i>Shared Across Network
+                            </span>
+                          ) : (
+                            <span className="badge bg-secondary-subtle text-secondary border px-2.5 py-1 rounded-pill">
+                              <i className="bi bi-lock-fill me-1"></i>Local to Facility
+                            </span>
+                          )}
+                        </td>
+                        <td className="pe-4 text-end">
+                          <div className="d-flex justify-content-end align-items-center gap-1.5">
+                            <button
+                              type="button"
+                              className={`btn btn-sm rounded-pill px-3 fw-semibold ${r.is_shared ? 'btn-outline-secondary' : 'btn-outline-teal'}`}
+                              style={!r.is_shared ? { color: '#0d9488', borderColor: '#0d9488' } : {}}
+                              onClick={() => handleToggleLabReportShare(r.report_id, r.is_shared)}
+                              title={r.is_shared ? 'Restrict this report to this hospital only' : 'Share report across partner network & patient portal'}
+                            >
+                              <i className={`bi ${r.is_shared ? 'bi-lock me-1' : 'bi-share me-1'}`}></i>
+                              {r.is_shared ? 'Keep Local' : 'Share'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-sm rounded-circle p-1"
+                              style={{ width: '30px', height: '30px' }}
+                              onClick={() => handleDeleteLabReport(r.report_id, r.lab_report_uid || `LAB${r.report_id}`)}
+                              title="Delete report"
+                            >
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* CHANGE PASSWORD & SECURITY MODAL FOR NURSE */}
@@ -1142,6 +1518,147 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UPLOAD LAB REPORT MODAL FOR NURSE */}
+      {showLabReportModal && (
+        <div className="modal show d-block bg-dark bg-opacity-50 z-4" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header text-white rounded-top-4 p-3 px-4" style={{ backgroundColor: '#0d9488' }}>
+                <h5 className="modal-title fw-bold fs-5 mb-0">
+                  <i className="bi bi-file-earmark-medical me-2"></i>Log Diagnostic Lab Report
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowLabReportModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <form onSubmit={handleSaveLabReport}>
+                  {/* Patient Selection */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Patient *</label>
+                    {visits.length > 0 ? (
+                      <select
+                        className="form-select"
+                        required
+                        value={labReportForm.patient_id}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const found = visits.find(v => String(v.patient_id || v.health_id) === String(val));
+                          setLabReportForm(prev => ({
+                            ...prev,
+                            patient_id: val,
+                            patient_name: found ? (found.patient_name || found.patient) : '',
+                            patient_uid: found ? (found.health_id || found.patient_uid) : val,
+                          }));
+                        }}
+                      >
+                        <option value="">-- Choose Queued Patient --</option>
+                        {visits.map((v, i) => (
+                          <option key={i} value={v.patient_id || v.health_id}>
+                            {v.patient_name || v.patient} ({v.health_id || v.patient_uid || `PTA${v.patient_id}`})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="form-control"
+                        required
+                        placeholder="Enter Patient ID or Health ID (e.g. PTA001)"
+                        value={labReportForm.patient_id}
+                        onChange={(e) => setLabReportForm({ ...labReportForm, patient_id: e.target.value })}
+                      />
+                    )}
+                  </div>
+
+                  {/* Test Category */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Test Category *</label>
+                    <select
+                      className="form-select"
+                      value={labReportForm.report_type}
+                      onChange={(e) => setLabReportForm({ ...labReportForm, report_type: e.target.value })}
+                    >
+                      <option value="Blood Test">Blood Test (CBC, Lipid, HbA1c)</option>
+                      <option value="Radiology">Radiology (X-Ray, Ultrasound, CT)</option>
+                      <option value="Pathology">Pathology / Biopsy</option>
+                      <option value="Urine Analysis">Urine Analysis</option>
+                      <option value="Cardiology">Cardiology (ECG, Echo)</option>
+                      <option value="General Diagnostics">General Diagnostic Report</option>
+                    </select>
+                  </div>
+
+                  {/* Report Title */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Report Title *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      placeholder="e.g. Complete Blood Count (CBC) Panel"
+                      value={labReportForm.report_title}
+                      onChange={(e) => setLabReportForm({ ...labReportForm, report_title: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Lab Findings / Observations */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Lab Findings / Summary Result *</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      required
+                      placeholder="Enter test values, parameters (e.g. Hemoglobin 14.2 g/dL, WBC 7500), and lab observations..."
+                      value={labReportForm.report_file}
+                      onChange={(e) => setLabReportForm({ ...labReportForm, report_file: e.target.value })}
+                    ></textarea>
+                  </div>
+
+                  {/* Share / Keep Local Interoperability Toggle */}
+                  <div className="form-check form-switch p-3 bg-light rounded-3 border mb-3 d-flex align-items-center justify-content-between">
+                    <div>
+                      <label className="form-check-label fw-bold text-dark mb-0 d-block cursor-pointer" htmlFor="nurseShareLabReportToggle">
+                        <i className="bi bi-share-fill me-1.5 text-teal" style={{ color: '#0d9488' }}></i>
+                        Share Report (Participating Hospitals & Patient Portal)
+                      </label>
+                      <small className="text-muted extra-small d-block mt-0.5">
+                        {labReportForm.is_shared
+                          ? 'Shared across network: Legitimate diagnostic report visible to patient and treating doctors in partner hospitals.'
+                          : 'Keep Local: Report remains confidential strictly within this hospital facility.'}
+                      </small>
+                    </div>
+                    <input
+                      className="form-check-input ms-3 fs-5"
+                      type="checkbox"
+                      role="switch"
+                      id="nurseShareLabReportToggle"
+                      checked={labReportForm.is_shared}
+                      onChange={(e) => setLabReportForm({ ...labReportForm, is_shared: e.target.checked })}
+                    />
+                  </div>
+
+                  <div className="d-flex justify-content-end gap-2">
+                    <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setShowLabReportModal(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn text-white rounded-pill px-4 fw-bold shadow-sm"
+                      style={{ backgroundColor: '#0d9488' }}
+                      disabled={labReportSubmitting}
+                    >
+                      {labReportSubmitting ? 'Uploading...' : 'Save & Log Report'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

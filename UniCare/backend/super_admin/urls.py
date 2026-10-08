@@ -75,6 +75,7 @@ urlpatterns = [
     path('visits/', workflows.visits, name='visits'),
     path('prescriptions/', workflows.prescriptions, name='prescriptions'),
     path('lab-reports/', workflows.lab_reports, name='lab_reports'),
+    path('audit-logs/', workflows.audit_logs, name='audit_logs'),
 
     # Analytics
     path('analytics/', views.analytics_data, name='analytics_data'),

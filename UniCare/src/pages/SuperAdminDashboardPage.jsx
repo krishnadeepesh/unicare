@@ -49,12 +49,40 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Audit Trail State
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditModuleFilter, setAuditModuleFilter] = useState('all');
+
   // Feedback Notification Message
   const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Fetch System Audit Trail Logs
+  const fetchAuditLogs = async () => {
+    setAuditLoading(true);
+    try {
+      const q = encodeURIComponent(auditSearch.trim());
+      const mod = encodeURIComponent(auditModuleFilter);
+      const response = await fetch(`${API_BASE_URL}/audit-logs/?search=${q}&module=${mod}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        setAuditLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Error fetching audit logs:', err);
+    } finally {
+      setAuditLoading(false);
+    }
   };
 
   // 1. Fetch Dashboard Stats
@@ -148,6 +176,8 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
       fetchHospitals();
     } else if (activeTab === 'analytics') {
       fetchAnalytics();
+    } else if (activeTab === 'audit') {
+      fetchAuditLogs();
     }
   }, [activeTab]);
 
@@ -159,6 +189,15 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
       return () => clearTimeout(delayDebounce);
     }
   }, [searchQuery, statusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      const delayDebounce = setTimeout(() => {
+        fetchAuditLogs();
+      }, 300);
+      return () => clearTimeout(delayDebounce);
+    }
+  }, [auditSearch, auditModuleFilter]);
 
   // Handle Approve / Reject Actions
   const handleRequestAction = async (hospitalId, action) => {
@@ -352,6 +391,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
             { id: 'requests', icon: 'bi-clock-history', label: 'Hospital Approvals', count: stats.pending_hospitals },
             { id: 'hospitals', icon: 'bi-hospital', label: 'Manage Hospitals' },
             { id: 'analytics', icon: 'bi-graph-up-arrow', label: 'Platform Analytics' },
+            { id: 'audit', icon: 'bi-shield-check', label: 'Audit Trail & Logs' },
           ].map(item => (
             <button
               key={item.id}
@@ -452,6 +492,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                 {activeTab === 'requests' && 'Hospital Registration Requests'}
                 {activeTab === 'hospitals' && 'Manage Hospitals'}
                 {activeTab === 'analytics' && 'Platform Analytics & System Intelligence'}
+                {activeTab === 'audit' && 'System Audit Trail & Security Logs'}
               </h3>
             </div>
             <button 
@@ -460,10 +501,11 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                 if (activeTab === 'requests') fetchHospitalRequests();
                 if (activeTab === 'hospitals') fetchHospitals();
                 if (activeTab === 'analytics') fetchAnalytics();
+                if (activeTab === 'audit') fetchAuditLogs();
               }} 
               className="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2"
             >
-              <i className={`bi bi-arrow-repeat ${statsLoading || requestsLoading || hospitalsLoading || analyticsLoading ? 'spin' : ''}`}></i>
+              <i className={`bi bi-arrow-repeat ${statsLoading || requestsLoading || hospitalsLoading || analyticsLoading || auditLoading ? 'spin' : ''}`}></i>
               <span>Refresh Data</span>
             </button>
           </div>
@@ -1001,6 +1043,154 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                       </table>
                     </div>
                   </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: AUDIT TRAIL & SYSTEM ACTIVITY LOGS */}
+          {activeTab === 'audit' && (
+            <div className="card border-0 rounded-4 shadow-sm bg-white mb-4 overflow-hidden">
+              <div className="card-header bg-white p-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                  <h5 className="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                    <i className="bi bi-shield-check text-teal fs-4" style={{ color: '#0d9488' }}></i>
+                    Immutable System Audit Trail & Security Logs
+                  </h5>
+                  <p className="text-secondary small mb-0">
+                    Comprehensive chronological record of all clinical consultations, vitals, prescriptions, logins, and lab uploads.
+                  </p>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-teal-subtle text-teal px-3 py-2 rounded-pill fw-semibold" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                    <i className="bi bi-database-check me-1"></i> {auditLogs.length} Events Logged
+                  </span>
+                  <button
+                    className="btn btn-outline-secondary btn-sm rounded-pill px-3 py-1.5"
+                    onClick={fetchAuditLogs}
+                    disabled={auditLoading}
+                  >
+                    <i className={`bi bi-arrow-repeat me-1 ${auditLoading ? 'spin' : ''}`}></i>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter & Search Bar */}
+              <div className="p-4 border-bottom bg-light bg-opacity-50">
+                <div className="row g-3">
+                  <div className="col-md-6 col-lg-7">
+                    <div className="input-group">
+                      <span className="input-group-text bg-white border-end-0">
+                        <i className="bi bi-search text-muted"></i>
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control border-start-0 bg-white"
+                        placeholder="Search audit trail by user, email, action keywords..."
+                        value={auditSearch}
+                        onChange={(e) => setAuditSearch(e.target.value)}
+                      />
+                      {auditSearch && (
+                        <button className="btn btn-outline-secondary bg-white border-start-0" type="button" onClick={() => setAuditSearch('')}>
+                          <i className="bi bi-x"></i>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-md-6 col-lg-5">
+                    <div className="input-group">
+                      <span className="input-group-text bg-white">
+                        <i className="bi bi-filter text-muted me-1"></i> Module:
+                      </span>
+                      <select
+                        className="form-select bg-white"
+                        value={auditModuleFilter}
+                        onChange={(e) => setAuditModuleFilter(e.target.value)}
+                      >
+                        <option value="all">All System Modules</option>
+                        <option value="Authentication">Authentication & Access</option>
+                        <option value="Clinical Consultations">Clinical Consultations</option>
+                        <option value="Pharmacy & Prescriptions">Pharmacy & Prescriptions</option>
+                        <option value="Laboratory">Laboratory & Diagnostics</option>
+                        <option value="Nurse Station">Nurse Station & Vitals</option>
+                        <option value="Appointments">Appointments Scheduling</option>
+                        <option value="Patient Registration">Patient Registration</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="card-body p-0">
+                {auditLoading ? (
+                  <div className="text-center py-5">
+                    <div className="spinner-border text-teal mb-3" role="status" style={{ color: '#0d9488' }}></div>
+                    <p className="text-muted small mb-0">Retrieving secure audit events...</p>
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <div className="text-center py-5 text-muted">
+                    <i className="bi bi-shield-slash fs-1 text-secondary mb-2 d-block"></i>
+                    <h6 className="fw-bold text-dark">No Audit Events Found</h6>
+                    <p className="small text-muted mb-0">No matching activities recorded for the selected search and module criteria.</p>
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="table-light text-uppercase extra-small fw-bold">
+                        <tr>
+                          <th className="ps-4">Audit ID</th>
+                          <th>Timestamp</th>
+                          <th>User / Actor</th>
+                          <th>Module</th>
+                          <th>Action & Event Details</th>
+                          <th>IP Address</th>
+                          <th className="pe-4 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLogs.map((log) => (
+                          <tr key={log.audit_id}>
+                            <td className="ps-4 font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
+                              {log.id || `AUD${String(log.audit_id).padStart(4, '0')}`}
+                            </td>
+                            <td className="small text-muted" style={{ whiteSpace: 'nowrap' }}>
+                              <i className="bi bi-clock me-1 text-secondary"></i>
+                              {log.timestamp}
+                            </td>
+                            <td>
+                              <div className="fw-bold text-dark small">{log.user_name}</div>
+                              <small className="text-muted extra-small d-block">{log.user_email || log.role_name}</small>
+                            </td>
+                            <td>
+                              <span className={`badge px-2.5 py-1 rounded-pill ${
+                                log.module === 'Authentication' ? 'bg-primary-subtle text-primary border border-primary-subtle' :
+                                log.module === 'Clinical Consultations' ? 'bg-success-subtle text-success border border-success-subtle' :
+                                log.module === 'Pharmacy & Prescriptions' ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' :
+                                log.module === 'Laboratory' ? 'bg-info-subtle text-info border border-info-subtle' :
+                                log.module === 'Nurse Station' ? 'bg-danger-subtle text-danger border border-danger-subtle' :
+                                'bg-secondary-subtle text-secondary border'
+                              }`}>
+                                {log.module}
+                              </span>
+                            </td>
+                            <td className="small text-dark fw-medium">
+                              {log.action}
+                            </td>
+                            <td className="font-monospace extra-small text-muted">
+                              {log.ip_address}
+                            </td>
+                            <td className="pe-4 text-center">
+                              <span className="badge bg-success text-white rounded-pill px-2 py-1 extra-small">
+                                <i className="bi bi-check-circle-fill me-1"></i>Verified
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>

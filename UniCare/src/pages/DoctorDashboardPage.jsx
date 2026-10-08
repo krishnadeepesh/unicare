@@ -183,6 +183,8 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   const [prescriptionForm, setPrescriptionForm] = useState({
     remarks: '',
     is_shared: true,
+    visit_id: null,
+    appointment_id: null,
     medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
   });
   const [showLabReportModal, setShowLabReportModal] = useState(false);
@@ -190,13 +192,15 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   const [labReportForm, setLabReportForm] = useState({
     report_type: 'Blood Test',
     report_title: '',
-    report_file: ''
+    report_file: '',
+    is_shared: true,
   });
 
   // Doctor Visit Entry Form
-  const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '' });
+  const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '', is_shared: true });
   const [visitSubmitting, setVisitSubmitting] = useState(false);
   const [currentVisitVitals, setCurrentVisitVitals] = useState(null);
+  const [lastSavedVisit, setLastSavedVisit] = useState(null);
 
   // Quick Allergies Update Modal
   const [showAllergyModal, setShowAllergyModal] = useState(false);
@@ -386,24 +390,55 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   };
 
   // Open Visit Consultation Modal pre-populated with patient's allergies and vitals
-  const handleOpenVisitModal = () => {
-    const latestWithVitals = patientHistory.find(h => h.blood_pressure || h.weight || h.height);
-    if (latestWithVitals) {
+  const handleOpenVisitModal = (appt = null) => {
+    let vitalsSource = null;
+    let appointmentId = appt?.appointment_id || '';
+
+    if (appt && (appt.height || appt.weight || appt.blood_pressure || appt.has_vitals)) {
+      vitalsSource = appt;
+    } else {
+      // Look in appointments list for active appointment for this patient with vitals recorded by nursing desk
+      const apptWithVitals = appointments.find(a =>
+        (a.patient_id === selectedPatient?.patient_id || a.health_id === selectedPatient?.health_id || a.patient_uid === selectedPatient?.patient_uid) &&
+        (a.blood_pressure || a.weight || a.height || a.has_vitals)
+      );
+      if (apptWithVitals) {
+        vitalsSource = apptWithVitals;
+        if (!appointmentId) appointmentId = apptWithVitals.appointment_id;
+      } else {
+        const latestWithVitals = patientHistory.find(h => h.blood_pressure || h.weight || h.height);
+        if (latestWithVitals) vitalsSource = latestWithVitals;
+      }
+    }
+
+    if (vitalsSource) {
       setCurrentVisitVitals({
-        height: latestWithVitals.height,
-        weight: latestWithVitals.weight,
-        blood_pressure: latestWithVitals.blood_pressure,
-        vitals_recorded_at: latestWithVitals.vitals_recorded_at,
+        height: vitalsSource.height || '',
+        weight: vitalsSource.weight || '',
+        blood_pressure: vitalsSource.blood_pressure || '',
+        vitals_recorded_at: vitalsSource.vitals_recorded_at || '',
+        vitals_recorded_by: vitalsSource.vitals_recorded_by_name || vitalsSource.vitals_recorded_by || 'Nurse Station',
         has_vitals: true
       });
     } else {
       setCurrentVisitVitals(null);
     }
+
+    // Auto-detect appointment_id if direct visit from patient history
+    if (!appointmentId) {
+      const activeAppt = appointments.find(a =>
+        (a.patient_id === selectedPatient?.patient_id || a.health_id === selectedPatient?.health_id || a.patient_uid === selectedPatient?.patient_uid) &&
+        a.status !== 'Cancelled'
+      );
+      if (activeAppt) appointmentId = activeAppt.appointment_id;
+    }
+
     setVisitForm({
       diagnosis: '',
       medical_notes: '',
-      appointment_id: '',
-      allergies: selectedPatient?.allergies || ''
+      appointment_id: appointmentId,
+      allergies: selectedPatient?.allergies || '',
+      is_shared: true,
     });
     setShowVisitModal(true);
   };
@@ -423,14 +458,36 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         credentials: 'include',
         body: JSON.stringify({
           ...visitForm,
-          patient_id: selectedPatient.patient_id
+          patient_id: selectedPatient.patient_id || selectedPatient.patient_uid
         })
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ text: 'Patient consultation visit record saved successfully!', type: 'success' });
         const updatedAllergies = visitForm.allergies;
-        setVisitForm({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '' });
+        const savedVisitId = data.visit_id;
+        const savedApptId = data.appointment_id || visitForm.appointment_id;
+
+        setMessage({
+          text: `Patient consultation record VIS${String(savedVisitId).padStart(3, '0')} saved successfully!`,
+          type: 'success'
+        });
+
+        // Prompt doctor to issue a prescription linked to this consultation
+        setLastSavedVisit({
+          visit_id: savedVisitId,
+          appointment_id: savedApptId,
+          patient_name: selectedPatient.name,
+          health_id: selectedPatient.patient_uid || selectedPatient.health_id,
+        });
+
+        // Automatically pre-link this visit_id into prescription form
+        setPrescriptionForm(prev => ({
+          ...prev,
+          visit_id: savedVisitId,
+          appointment_id: savedApptId,
+        }));
+
+        setVisitForm({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '', is_shared: true });
         setShowVisitModal(false);
         setSelectedPatient(prev => (prev ? { ...prev, allergies: updatedAllergies } : null));
         handleSelectPatient(selectedPatient);
@@ -534,6 +591,8 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
           patient_id: selectedPatient.patient_id || selectedPatient.patient_uid,
           remarks: prescriptionForm.remarks,
           is_shared: prescriptionForm.is_shared,
+          visit_id: prescriptionForm.visit_id,
+          appointment_id: prescriptionForm.appointment_id,
           medicines: prescriptionForm.medicines
         })
       });
@@ -543,6 +602,8 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         setPrescriptionForm({
           remarks: '',
           is_shared: true,
+          visit_id: null,
+          appointment_id: null,
           medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
         });
         setShowPrescriptionModal(false);
@@ -629,6 +690,52 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     }
   };
 
+  // Quick Direct Patient Auto-fill by UPID / Health ID
+  const handleDirectLookup = async (queryOverride = null) => {
+    const q = (queryOverride || searchQuery).trim();
+    if (!q) return;
+    try {
+      const res = await fetch(`${API}/patients/lookup/?health_id=${encodeURIComponent(q)}`, { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.patient) {
+        handleSelectPatient(data.patient);
+        setShowSuggestions(false);
+        setMessage({ text: `Patient details auto-filled: ${data.patient.name} (${data.patient.patient_uid || data.patient.health_id})`, type: 'success' });
+        return;
+      }
+    } catch (err) {
+      console.error("Direct lookup error:", err);
+    }
+    if (suggestions.length > 0) {
+      handleSelectPatient(suggestions[0]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Toggle Sharing of Lab Report Across Network vs Local to Facility
+  const handleToggleLabReportShare = async (reportId, currentShared) => {
+    try {
+      const res = await fetch(`${API}/lab-reports/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          report_id: reportId,
+          is_shared: !currentShared
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLabReportsList(prev => prev.map(r => r.report_id === reportId ? { ...r, is_shared: !currentShared, report_share_flag: !currentShared ? 1 : 0 } : r));
+        setMessage({ text: data.message || 'Report sharing status updated.', type: 'success' });
+      } else {
+        setMessage({ text: data.message || 'Failed to update sharing.', type: 'danger' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error updating report sharing.', type: 'danger' });
+    }
+  };
+
   // Save Diagnostic Lab Report (Doctor)
   const handleSaveLabReport = async (e) => {
     e.preventDefault();
@@ -647,13 +754,14 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
           report_type: labReportForm.report_type,
           report_title: labReportForm.report_title,
           report_file: labReportForm.report_file,
+          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : true,
           hospital_id: hospitalId
         })
       });
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: `Diagnostic Report ${data.report?.lab_report_uid || 'LAB001'} logged successfully!`, type: 'success' });
-        setLabReportForm({ report_type: 'Blood Test', report_title: '', report_file: '' });
+        setLabReportForm({ report_type: 'Blood Test', report_title: '', report_file: '', is_shared: true });
         setShowLabReportModal(false);
         handleSelectPatient(selectedPatient);
       } else {
@@ -1271,18 +1379,32 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
               </p>
 
               <div className="position-relative mb-4">
-                <div className="input-group input-group-lg">
+                <div className="input-group input-group-lg shadow-sm rounded-3 overflow-hidden">
                   <span className="input-group-text bg-light border-end-0">
                     {isSearching ? <span className="spinner-border spinner-border-sm text-teal" role="status"></span> : <i className="bi bi-search text-muted"></i>}
                   </span>
                   <input
                     type="text"
                     className="form-control border-start-0 fs-6"
-                    placeholder="Type patient name or Health ID e.g. PTA001..."
+                    placeholder="Type patient name or Health ID e.g. PTA001 (Press Enter to Auto-fill)..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleDirectLookup();
+                      }
+                    }}
                     onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
                   />
+                  <button
+                    type="button"
+                    className="btn btn-teal text-white px-3.5 fw-semibold d-inline-flex align-items-center gap-1.5"
+                    style={{ backgroundColor: '#0d9488' }}
+                    onClick={() => handleDirectLookup()}
+                  >
+                    <i className="bi bi-person-check-fill"></i> Auto-fill Patient
+                  </button>
                 </div>
 
                 {/* LIVE SUGGESTIONS DROPDOWN */}
@@ -1324,6 +1446,48 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
               {/* Selected Patient Record View */}
               {selectedPatient && (
                 <div className="bg-light p-4 rounded-4 border">
+                  {/* WORKFLOW AUTOMATION BANNER: Consultation -> Prescription Linking */}
+                  {lastSavedVisit && (
+                    <div className="alert alert-success border-0 shadow-sm rounded-4 p-3 mb-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 animate-soft-entrance" style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                      <div className="d-flex align-items-center gap-3">
+                        <div className="bg-success text-white p-2.5 rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: '42px', height: '42px' }}>
+                          <i className="bi bi-check2-circle fs-4"></i>
+                        </div>
+                        <div>
+                          <h6 className="fw-bold text-dark mb-0.5">Consultation Visit Saved (VIS{String(lastSavedVisit.visit_id).padStart(3, '0')})</h6>
+                          <p className="text-secondary small mb-0">
+                            Clinical notes and vitals are recorded for <strong>{lastSavedVisit.patient_name}</strong>. Proceed to write and sign the digital prescription.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm rounded-pill px-3"
+                          onClick={() => setLastSavedVisit(null)}
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-teal text-white btn-sm rounded-pill px-3.5 fw-bold shadow-sm"
+                          style={{ backgroundColor: '#0d9488' }}
+                          onClick={() => {
+                            setPrescriptionForm(prev => ({
+                              ...prev,
+                              visit_id: lastSavedVisit.visit_id,
+                              appointment_id: lastSavedVisit.appointment_id,
+                            }));
+                            setShowPrescriptionModal(true);
+                            setLastSavedVisit(null);
+                          }}
+                        >
+                          <i className="bi bi-capsule me-1"></i> Issue Linked Prescription
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="d-flex justify-content-between align-items-start mb-3">
                     <div>
                       <span className="badge bg-teal text-white rounded-pill px-3 py-1 font-monospace mb-2" style={{ backgroundColor: '#0d9488' }}>
@@ -1921,6 +2085,8 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                           <th>Date Uploaded</th>
                           <th>Facility / Lab</th>
                           <th>Results / Summary</th>
+                          <th>Interoperability</th>
+                          <th className="text-end">Sharing Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1934,10 +2100,31 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                             <td className="small text-muted">{r.uploaded_at || 'Today'}</td>
                             <td>{r.hospital_name || displayHospital}</td>
                             <td className="text-secondary small">{r.report_file || 'Normal findings recorded'}</td>
+                            <td>
+                              {r.is_shared ? (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill">
+                                  <i className="bi bi-globe me-1"></i>Shared Across Network
+                                </span>
+                              ) : (
+                                <span className="badge bg-secondary-subtle text-secondary border px-2.5 py-1 rounded-pill">
+                                  <i className="bi bi-lock-fill me-1"></i>Local to Facility
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-end">
+                              <button
+                                className={`btn btn-sm rounded-pill px-3 fw-semibold ${r.is_shared ? 'btn-outline-secondary' : 'btn-outline-teal'}`}
+                                onClick={() => handleToggleLabReportShare(r.report_id, r.is_shared)}
+                                title={r.is_shared ? 'Make this report local only' : 'Share report across network & patient portal'}
+                              >
+                                <i className={`bi ${r.is_shared ? 'bi-lock me-1' : 'bi-share me-1'}`}></i>
+                                {r.is_shared ? 'Keep Local' : 'Share'}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                         {!labReportsList.length && (
-                          <tr><td colSpan="6" className="text-center text-muted py-5">No lab reports found for this patient. Click <strong>Upload Lab Report</strong> to add one.</td></tr>
+                          <tr><td colSpan="8" className="text-center text-muted py-5">No lab reports found for this patient. Click <strong>Upload Lab Report</strong> to add one.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -2302,6 +2489,29 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       onChange={(e) => setVisitForm({ ...visitForm, medical_notes: e.target.value })}
                     ></textarea>
                   </div>
+
+                  <div className="form-check form-switch p-3 bg-light rounded-3 border mb-3 d-flex align-items-center justify-content-between">
+                    <div>
+                      <label className="form-check-label fw-bold text-dark mb-0 d-block cursor-pointer" htmlFor="shareVisitToggle">
+                        <i className="bi bi-share-fill me-1.5 text-teal" style={{ color: '#0d9488' }}></i>
+                        Interoperable Record (Share across participating hospitals)
+                      </label>
+                      <small className="text-muted extra-small d-block mt-0.5">
+                        {visitForm.is_shared
+                          ? 'Shared: Notes are securely accessible to treating doctors across partner hospitals in the UniCare network.'
+                          : 'Keep Local: Notes remain private strictly within this hospital facility.'}
+                      </small>
+                    </div>
+                    <input
+                      className="form-check-input ms-3 fs-5"
+                      type="checkbox"
+                      role="switch"
+                      id="shareVisitToggle"
+                      checked={visitForm.is_shared}
+                      onChange={(e) => setVisitForm({ ...visitForm, is_shared: e.target.checked })}
+                    />
+                  </div>
+
                   <div className="d-flex justify-content-end gap-2">
                     <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setShowVisitModal(false)}>
                       Cancel
@@ -2591,6 +2801,29 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                       onChange={(e) => setLabReportForm({ ...labReportForm, report_file: e.target.value })}
                     ></textarea>
                   </div>
+
+                  <div className="form-check form-switch p-3 bg-light rounded-3 border mb-3 d-flex align-items-center justify-content-between">
+                    <div>
+                      <label className="form-check-label fw-bold text-dark mb-0 d-block cursor-pointer" htmlFor="shareLabReportModalToggle">
+                        <i className="bi bi-share-fill me-1.5 text-teal" style={{ color: '#0d9488' }}></i>
+                        Share Report (Participating Hospitals & Patient Portal)
+                      </label>
+                      <small className="text-muted extra-small d-block mt-0.5">
+                        {labReportForm.is_shared
+                          ? 'Shared across network: Legitimate diagnostic report visible to patient and treating doctors in partner hospitals.'
+                          : 'Keep Local: Report remains confidential strictly within this hospital facility.'}
+                      </small>
+                    </div>
+                    <input
+                      className="form-check-input ms-3 fs-5"
+                      type="checkbox"
+                      role="switch"
+                      id="shareLabReportModalToggle"
+                      checked={labReportForm.is_shared}
+                      onChange={(e) => setLabReportForm({ ...labReportForm, is_shared: e.target.checked })}
+                    />
+                  </div>
+
                   <div className="d-flex justify-content-end gap-2">
                     <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setShowLabReportModal(false)}>
                       Cancel

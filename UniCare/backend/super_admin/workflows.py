@@ -19,6 +19,30 @@ from .views import is_valid_phone, is_valid_email, verify_password_and_upgrade  
 
 
 
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip or '127.0.0.1'
+
+
+def log_audit(user_id, action, module, ip_address='127.0.0.1'):
+    """Record an immutable audit event in tbl_audit_log."""
+    if not user_id:
+        return
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO tbl_audit_log (user_id, audit_action, audit_module, audit_ip_address, audit_datetime) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                [user_id, str(action)[:200], str(module)[:100], str(ip_address)[:50], datetime.now()]
+            )
+    except Exception:
+        pass
+
+
 def payload(request):
     try:
         return json.loads(request.body.decode('utf-8'))
@@ -39,9 +63,7 @@ def _ensure_columns(cursor, table, columns):
 
 
 def ensure_workflow_schema():
-    """Ensure the patient_profile and patient_visit support tables exist with the required columns.
-    tbl_appointment and tbl_doctor already have the required columns after migration.
-    """
+    """Ensure the patient_profile, patient_visit, audit_log, and support tables exist with required columns."""
     with connection.cursor() as cursor:
         cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_patient_profile (
             patient_id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL UNIQUE,
@@ -53,6 +75,14 @@ def ensure_workflow_schema():
             visit_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NOT NULL, doctor_id INT NOT NULL,
             hospital_id INT NOT NULL, appointment_id INT NULL, diagnosis TEXT NULL, medical_notes TEXT NULL,
             visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_audit_log (
+            audit_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            audit_action VARCHAR(200) NOT NULL,
+            audit_module VARCHAR(100) NOT NULL,
+            audit_ip_address VARCHAR(50) NULL,
+            audit_datetime DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
         # Ensure tbl_patient and tbl_patient_profile have allergies column
         _ensure_columns(cursor, 'tbl_patient', {
@@ -73,7 +103,7 @@ def ensure_workflow_schema():
             cursor.execute("ALTER TABLE tbl_patient MODIFY COLUMN patient_email VARCHAR(100) NULL")
         except Exception:
             pass
-        # Ensure tbl_patient_visit has all required columns including pre-consultation vitals
+        # Ensure tbl_patient_visit has all required columns including pre-consultation vitals and share flag
         _ensure_columns(cursor, 'tbl_patient_visit', {
             'patient_id': 'INT NOT NULL',
             'doctor_id': 'INT NOT NULL',
@@ -87,6 +117,7 @@ def ensure_workflow_schema():
             'blood_pressure': 'VARCHAR(30) NULL',
             'vitals_recorded_by': 'INT NULL',
             'vitals_recorded_at': 'DATETIME NULL',
+            'record_share_flag': 'TINYINT(1) DEFAULT 1',
         })
         _ensure_columns(cursor, 'tbl_user', {
             'user_recovery_question': 'VARCHAR(255) NULL',
@@ -232,6 +263,12 @@ def session_user(request):
             user_id = admin_uid
             role = 'hospital-admin'
             hospital_id = request.session.get('hospital_admin_hospital_id')
+        else:
+            admin_id = request.session.get('admin_id')
+            if admin_id:
+                user_id = admin_id
+                role = 'super-admin'
+                hospital_id = None
     if not user_id or not role:
         return None, JsonResponse({'status': 'error', 'message': 'Please sign in.'}, status=401)
 
@@ -484,11 +521,15 @@ def unified_login(request):
         'unicare_hospital_id': profile.get('hospital_id') or row[1],
     })
     request.session.modified = True
+    log_audit(row[0], f"User signed in successfully as {role}", "Authentication", get_client_ip(request))
     return JsonResponse({'status': 'success', 'user': profile})
 
 
 @csrf_exempt
 def logout(request):
+    u_id = request.session.get('unicare_user_id') or request.session.get('hospital_admin_user_id') or request.session.get('admin_id')
+    if u_id:
+        log_audit(u_id, "User signed out", "Authentication", get_client_ip(request))
     request.session.flush()
     return JsonResponse({'status': 'success'})
 
@@ -863,6 +904,8 @@ def register_patient(request):
                 [user_id, patient_uid, dob, gender, address]
             )
 
+        log_audit(user['user_id'], f"Registered new patient ({name}, Health ID: {patient_uid})", "Patient Registration", get_client_ip(request))
+
         return JsonResponse({'status': 'success', 'patient': {
             'patient_id': tbl_patient_id,
             'patient_uid': patient_uid,
@@ -890,7 +933,7 @@ def register_patient(request):
 
 
 def patient_lookup(request):
-    user, error = require_roles(request, 'doctor', 'receptionist', 'hospital-admin')
+    user, error = require_roles(request, 'doctor', 'receptionist', 'hospital-admin', 'nurse', 'super-admin')
     if error:
         return error
     health_id = (request.GET.get('health_id') or request.GET.get('patient_uid') or '').strip()
@@ -930,8 +973,8 @@ def patient_lookup(request):
         'date_of_birth': str(row[5]) if row[5] else '', 'gender': row[6] or '',
         'blood_group': row[7] or '', 'address': row[8] or '', 'emergency_contact': row[9] or '',
     }
-    # Allergy information is strictly visible ONLY to doctors and patients, NOT receptionists or admins
-    if user['role'] in ('doctor', 'patient'):
+    # Allergy information is strictly visible to clinical staff (doctors, nurses) and patients
+    if user['role'] in ('doctor', 'patient', 'nurse'):
         patient_data['allergies'] = row[10] or ''
 
     return JsonResponse({'status': 'success', 'patient': patient_data})
@@ -1204,14 +1247,15 @@ def patient_history(request):
 
         cursor.execute(
             "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name,"
-            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at, v.doctor_id"
+            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at, v.doctor_id, COALESCE(v.record_share_flag, 1)"
             " FROM tbl_patient_visit v"
             " JOIN tbl_doctor d ON d.doctor_id = v.doctor_id"
             " JOIN tbl_user du ON du.user_id = d.user_id"
             " JOIN tbl_hospital h ON h.hospital_id = v.hospital_id"
             " WHERE v.patient_id = %s"
+            " AND (COALESCE(v.record_share_flag, 1) = 1 OR v.hospital_id = %s)"
             " ORDER BY v.visited_at DESC",
-            [patient_id]
+            [patient_id, user['hospital_id']]
         )
         v_rows = cursor.fetchall()
         visits = [
@@ -1230,6 +1274,7 @@ def patient_history(request):
                 'blood_pressure': r[8] or '',
                 'vitals_recorded_at': str(r[9]) if r[9] else '',
                 'doctor_id': r[10],
+                'is_shared': bool(r[11]),
             }
             for r in v_rows
         ]
@@ -1385,6 +1430,7 @@ def appointments(request):
                 )
             if cursor.rowcount == 0:
                 return JsonResponse({'status': 'error', 'message': 'Appointment not found or unauthorized.'}, status=404)
+        log_audit(user['user_id'], f"Updated appointment APT{int(appointment_id):03d} status to {new_status}", "Appointments", get_client_ip(request))
         return JsonResponse({'status': 'success', 'message': f'Appointment marked as {new_status}.'})
 
     if request.method != 'POST':
@@ -1454,6 +1500,7 @@ def appointments(request):
         )
         appt_id = cursor.lastrowid
 
+    log_audit(user['user_id'], f"Booked appointment APT{appt_id:03d} (Patient: {patient_id}, Doctor: {doctor_id}, Date: {appt_date} {appt_time})", "Appointments", get_client_ip(request))
     return JsonResponse({'status': 'success', 'message': 'Appointment booked successfully.', 'appointment_id': appt_id})
 
 
@@ -1584,6 +1631,8 @@ def record_vitals(request):
                  height or None, weight or None, blood_pressure or None, user['user_id']]
             )
             visit_id = cursor.lastrowid
+
+    log_audit(user['user_id'], f"Recorded patient vitals (Appointment: APT{int(appointment_id):03d}, BP: {blood_pressure or 'N/A'}, W: {weight or 'N/A'} kg, H: {height or 'N/A'} cm)", "Nurse Station", get_client_ip(request))
 
     return JsonResponse({
         'status': 'success',
@@ -1743,6 +1792,7 @@ def visits(request):
             else:
                 cursor.execute("DELETE FROM tbl_patient_visit WHERE visit_id=%s", [visit_id])
 
+        log_audit(user['user_id'], f"Deleted clinical consultation visit record (Visit: VIS{visit_id:03d})", "Clinical Consultations", get_client_ip(request))
         return JsonResponse({'status': 'success', 'message': 'Clinical consultation record deleted successfully.'})
 
     if request.method != 'POST':
@@ -1761,6 +1811,12 @@ def visits(request):
 
     if not patient_param:
         return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
+
+    is_shared = 1
+    if 'is_shared' in data:
+        is_shared = 1 if data.get('is_shared') else 0
+    elif 'record_share_flag' in data:
+        is_shared = 1 if data.get('record_share_flag') else 0
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -1808,20 +1864,22 @@ def visits(request):
         )
         existing_v = cursor.fetchone()
         if existing_v:
+            visit_id = existing_v[0]
             cursor.execute(
                 "UPDATE tbl_patient_visit"
-                " SET diagnosis=%s, medical_notes=%s, doctor_id=%s, hospital_id=%s"
+                " SET diagnosis=%s, medical_notes=%s, doctor_id=%s, hospital_id=%s, record_share_flag=%s"
                 " WHERE visit_id=%s",
                 [(data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(),
-                 user['doctor_id'], user['hospital_id'], existing_v[0]]
+                 user['doctor_id'], user['hospital_id'], is_shared, visit_id]
             )
         else:
             cursor.execute(
-                "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes)"
-                " VALUES (%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes, record_share_flag)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 [patient_id, user['doctor_id'], user['hospital_id'], appointment_id,
-                 (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip()]
+                 (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(), is_shared]
             )
+            visit_id = cursor.lastrowid
 
         # Mark appointment as completed
         cursor.execute(
@@ -1845,7 +1903,16 @@ def visits(request):
             except Exception:
                 pass
 
-    return JsonResponse({'status': 'success', 'message': 'Patient visit saved successfully.'})
+        log_audit(user['user_id'], f"Recorded clinical consultation visit (Visit: VIS{visit_id:03d}, Patient: {patient_id}, Shared: {bool(is_shared)})", "Clinical Consultations", get_client_ip(request))
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Patient visit saved successfully.',
+        'visit_id': visit_id,
+        'appointment_id': appointment_id,
+        'patient_id': patient_id,
+        'is_shared': bool(is_shared),
+    })
 
 
 @csrf_exempt
@@ -2002,6 +2069,7 @@ def prescriptions(request):
             cursor.execute("DELETE FROM tbl_prescription_item WHERE prescription_id = %s", [presc_id])
             cursor.execute("DELETE FROM tbl_prescription WHERE prescription_id = %s", [presc_id])
 
+        log_audit(user['user_id'], f"Deleted prescription PRE{presc_id:03d}", "Pharmacy & Prescriptions", get_client_ip(request))
         return JsonResponse({'status': 'success', 'message': 'Prescription deleted successfully.'})
 
     if request.method == 'PATCH':
@@ -2028,6 +2096,7 @@ def prescriptions(request):
 
             cursor.execute("UPDATE tbl_prescription SET prescription_share_flag = %s WHERE prescription_id = %s", [is_shared_flag, presc_id])
 
+        log_audit(user['user_id'], f"Updated prescription PRE{presc_id:03d} sharing to {'Shared' if is_shared_flag else 'Internal'}", "Pharmacy & Prescriptions", get_client_ip(request))
         return JsonResponse({'status': 'success', 'message': f"Prescription sharing updated ({'Shared with Patient' if is_shared_flag else 'Internal Only'}).", 'is_shared': bool(is_shared_flag)})
 
     if request.method != 'POST':
@@ -2080,6 +2149,8 @@ def prescriptions(request):
                     [presc_id, m_name, (m.get('dosage') or '').strip(), (m.get('frequency') or '').strip(), (m.get('duration') or '').strip(), (m.get('instruction') or '').strip()]
                 )
 
+        log_audit(user['user_id'], f"Issued digital prescription PRE{presc_id:03d} (Patient: {patient_id}, Shared: {bool(is_shared)})", "Pharmacy & Prescriptions", get_client_ip(request))
+
     return JsonResponse({
         'status': 'success',
         'message': 'Digital prescription generated successfully.',
@@ -2094,8 +2165,8 @@ def prescriptions(request):
 
 @csrf_exempt
 def lab_reports(request):
-    """Complete diagnostic and laboratory report management workflow."""
-    user, error = require_roles(request, 'doctor', 'patient')
+    """Complete diagnostic and laboratory report management workflow for all clinical roles."""
+    user, error = require_roles(request, 'doctor', 'patient', 'nurse', 'hospital-admin', 'super-admin')
     if error:
         return error
     ensure_workflow_schema()
@@ -2103,32 +2174,53 @@ def lab_reports(request):
     if request.method == 'GET':
         patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
         params = []
-        where = []
+        where = ["l.report_is_active = 1"]
+
         if user['role'] == 'patient':
             where.append("l.patient_id = %s")
             params.append(user['patient_id'])
-        elif user['role'] == 'doctor':
+            # Patient only views reports explicitly shared across the network or patient portal
+            where.append("l.report_share_flag = 1")
+        elif user['role'] in ('doctor', 'nurse'):
             if patient_param:
                 with connection.cursor() as cursor:
                     cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
                     pr = cursor.fetchone()
                     if pr:
                         target_pid = pr[0]
-                        cursor.execute("SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1", [target_pid, user['doctor_id'], user['hospital_id']])
-                        if not cursor.fetchone():
-                            return JsonResponse({'status': 'error', 'message': 'Not authorized to view lab reports for this patient.'}, status=403)
                         where.append("l.patient_id = %s")
                         params.append(target_pid)
+                        # Interoperability: Shared reports visible across hospitals; local reports stay within this hospital
+                        where.append("(l.report_share_flag = 1 OR l.hospital_id = %s)")
+                        params.append(user['hospital_id'])
                     else:
                         return JsonResponse({'status': 'success', 'reports': []})
             else:
                 where.append("l.hospital_id = %s")
                 params.append(user['hospital_id'])
+        elif user['role'] == 'hospital-admin':
+            if patient_param:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+                    pr = cursor.fetchone()
+                    if pr:
+                        where.append("l.patient_id = %s")
+                        params.append(pr[0])
+            where.append("l.hospital_id = %s")
+            params.append(user['hospital_id'])
+        elif user['role'] == 'super-admin':
+            if patient_param:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT patient_id FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+                    pr = cursor.fetchone()
+                    if pr:
+                        where.append("l.patient_id = %s")
+                        params.append(pr[0])
 
         where_clause = " WHERE " + " AND ".join(where) if where else ""
         sql = f"""
             SELECT l.lab_report_id, l.patient_id, l.hospital_id, l.report_type, l.report_title, l.report_file,
-                   l.report_uploaded_at, pt.patient_name, pt.patient_uid, h.hospital_name
+                   l.report_uploaded_at, pt.patient_name, pt.patient_uid, h.hospital_name, COALESCE(l.report_share_flag, 1)
             FROM tbl_lab_report l
             LEFT JOIN tbl_patient pt ON pt.patient_id = l.patient_id
             LEFT JOIN tbl_hospital h ON h.hospital_id = l.hospital_id
@@ -2148,14 +2240,68 @@ def lab_reports(request):
                     'patient_uid': r[8] or f"PTA{r[1]:03d}",
                     'health_id': r[8] or f"PTA{r[1]:03d}",
                     'hospital_name': r[9] or 'UniCare Diagnostic Lab',
+                    'hospital_id': r[2],
                     'report_type': r[3] or 'Diagnostic Test',
                     'report_title': r[4] or 'Laboratory Report',
                     'report_file': r[5] or '',
                     'uploaded_at': r[6].strftime('%Y-%m-%d %H:%M') if hasattr(r[6], 'strftime') else str(r[6] or ''),
+                    'is_shared': bool(r[10]),
+                    'report_share_flag': r[10],
                 }
                 for r in rows
             ]
         return JsonResponse({'status': 'success', 'reports': reports_list})
+
+    if request.method == 'PATCH':
+        if user['role'] not in ('doctor', 'nurse', 'hospital-admin', 'super-admin'):
+            return JsonResponse({'status': 'error', 'message': 'Only clinical staff can update report sharing.'}, status=403)
+        data = payload(request)
+        report_param = data.get('report_id')
+        if not report_param:
+            return JsonResponse({'status': 'error', 'message': 'report_id is required.'}, status=400)
+        try:
+            report_id = int(report_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid report_id format.'}, status=400)
+
+        is_shared_flag = 1 if data.get('is_shared', True) else 0
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT hospital_id, report_title FROM tbl_lab_report WHERE lab_report_id = %s", [report_id])
+            l_row = cursor.fetchone()
+            if not l_row:
+                return JsonResponse({'status': 'error', 'message': 'Lab report not found.'}, status=404)
+            if user['role'] not in ('super-admin') and user.get('hospital_id') and l_row[0] != user['hospital_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only manage reports from your hospital.'}, status=403)
+
+            cursor.execute("UPDATE tbl_lab_report SET report_share_flag = %s WHERE lab_report_id = %s", [is_shared_flag, report_id])
+
+        log_audit(user['user_id'], f"Updated lab report LAB{report_id:03d} sharing to {'Shared' if is_shared_flag else 'Local'}", "Laboratory", get_client_ip(request))
+        return JsonResponse({'status': 'success', 'message': f"Report sharing updated ({'Shared Across Network' if is_shared_flag else 'Local to Facility'}).", 'is_shared': bool(is_shared_flag)})
+
+    if request.method == 'DELETE':
+        if user['role'] not in ('doctor', 'nurse', 'hospital-admin', 'super-admin'):
+            return JsonResponse({'status': 'error', 'message': 'Only clinical staff can delete reports.'}, status=403)
+        report_param = request.GET.get('report_id') or payload(request).get('report_id')
+        if not report_param:
+            return JsonResponse({'status': 'error', 'message': 'report_id is required.'}, status=400)
+        try:
+            report_id = int(report_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid report_id format.'}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT hospital_id FROM tbl_lab_report WHERE lab_report_id = %s", [report_id])
+            l_row = cursor.fetchone()
+            if not l_row:
+                return JsonResponse({'status': 'error', 'message': 'Lab report not found.'}, status=404)
+            if user['role'] not in ('super-admin') and user.get('hospital_id') and l_row[0] != user['hospital_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only delete reports from your hospital.'}, status=403)
+
+            cursor.execute("UPDATE tbl_lab_report SET report_is_active = 0 WHERE lab_report_id = %s", [report_id])
+
+        log_audit(user['user_id'], f"Deactivated lab report LAB{report_id:03d}", "Laboratory", get_client_ip(request))
+        return JsonResponse({'status': 'success', 'message': 'Lab report removed successfully.'})
 
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
@@ -2166,6 +2312,7 @@ def lab_reports(request):
     report_title = (data.get('report_title') or data.get('title') or '').strip()
     report_file = (data.get('report_file') or data.get('file') or data.get('results') or '').strip()
     hospital_id = data.get('hospital_id') or user.get('hospital_id')
+    is_shared = 1 if data.get('is_shared', True) else 0
 
     if not report_title:
         return JsonResponse({'status': 'error', 'message': 'Report title is required.'}, status=400)
@@ -2179,12 +2326,15 @@ def lab_reports(request):
             return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
         patient_id = p_row[0]
 
+        doc_id = user.get('doctor_id') or None
         cursor.execute(
-            "INSERT INTO tbl_lab_report (patient_id, hospital_id, report_type, report_title, report_file, report_share_flag, report_is_active)"
-            " VALUES (%s, %s, %s, %s, %s, 1, 1)",
-            [patient_id, hospital_id, report_type, report_title, report_file]
+            "INSERT INTO tbl_lab_report (patient_id, doctor_id, hospital_id, report_type, report_title, report_file, report_share_flag, report_is_active)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
+            [patient_id, doc_id, hospital_id, report_type, report_title, report_file, is_shared]
         )
         report_id = cursor.lastrowid
+
+        log_audit(user['user_id'], f"Uploaded lab report LAB{report_id:03d} ({report_title}, Patient: {patient_id}, Shared: {bool(is_shared)})", "Laboratory", get_client_ip(request))
 
     return JsonResponse({
         'status': 'success',
@@ -2195,5 +2345,65 @@ def lab_reports(request):
             'lab_report_uid': f"LAB{report_id:03d}",
             'report_type': report_type,
             'report_title': report_title,
+            'is_shared': bool(is_shared),
         }
     })
+
+
+@csrf_exempt
+def audit_logs(request):
+    """Immutable audit trail log view for Super Admin and Hospital Admin."""
+    user, error = session_user(request)
+    if error:
+        if not request.session.get('admin_id'):
+            return error
+        user = {'user_id': request.session.get('admin_id'), 'role': 'super-admin', 'hospital_id': None}
+
+    if user['role'] not in ('super-admin', 'hospital-admin'):
+        return JsonResponse({'status': 'error', 'message': 'Access denied.'}, status=403)
+
+    search = (request.GET.get('search') or request.GET.get('q') or '').strip().lower()
+    module_filter = (request.GET.get('module') or '').strip()
+
+    where = []
+    params = []
+    if module_filter and module_filter != 'all':
+        where.append("a.audit_module = %s")
+        params.append(module_filter)
+    if search:
+        where.append("(LOWER(a.audit_action) LIKE %s OR LOWER(COALESCE(u.user_name, '')) LIKE %s OR LOWER(COALESCE(u.user_email, '')) LIKE %s OR LOWER(COALESCE(r.role_name, '')) LIKE %s)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    where_clause = " WHERE " + " AND ".join(where) if where else ""
+    sql = f"""
+        SELECT a.audit_id, a.user_id, a.audit_action, a.audit_module, a.audit_ip_address, a.audit_datetime,
+               COALESCE(u.user_name, 'System Administrator') AS user_name,
+               COALESCE(u.user_email, '') AS user_email,
+               COALESCE(r.role_name, 'Administrator') AS role_name
+        FROM tbl_audit_log a
+        LEFT JOIN tbl_user u ON a.user_id = u.user_id
+        LEFT JOIN tbl_role r ON u.role_id = r.role_id
+        {where_clause}
+        ORDER BY a.audit_datetime DESC, a.audit_id DESC
+        LIMIT 200
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        logs = [
+            {
+                'audit_id': r[0],
+                'id': f"AUD{r[0]:04d}",
+                'user_id': r[1],
+                'action': r[2],
+                'module': r[3],
+                'ip_address': r[4] or '127.0.0.1',
+                'timestamp': r[5].strftime('%Y-%m-%d %H:%M:%S') if hasattr(r[5], 'strftime') else str(r[5]),
+                'user_name': r[6],
+                'user_email': r[7],
+                'role_name': r[8],
+            }
+            for r in rows
+        ]
+
+    return JsonResponse({'status': 'success', 'logs': logs, 'count': len(logs)})

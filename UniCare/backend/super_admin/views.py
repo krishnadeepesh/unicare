@@ -184,6 +184,12 @@ def super_admin_login(request):
     request.session['admin_name'] = admin_name
     request.session.modified = True
 
+    try:
+        from .workflows import log_audit, get_client_ip
+        log_audit(admin_id, f"Super Admin ({admin_name}) logged in to Control Center", "Authentication", get_client_ip(request))
+    except Exception:
+        pass
+
     return JsonResponse({
         'status': 'success',
         'message': 'Login successful',
@@ -198,6 +204,13 @@ def super_admin_logout(request):
     """
     Destroys session and logs out super admin.
     """
+    admin_id = request.session.get('admin_id')
+    if admin_id:
+        try:
+            from .workflows import log_audit, get_client_ip
+            log_audit(admin_id, "Super Admin logged out", "Authentication", get_client_ip(request))
+        except Exception:
+            pass
     request.session.flush()
     return JsonResponse({'status': 'success', 'message': 'Session destroyed successfully.'})
 
