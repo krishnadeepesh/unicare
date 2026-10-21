@@ -69,7 +69,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
     report_type: 'Blood Test',
     report_title: '',
     report_file: '',
-    is_shared: true,
+    is_shared: false,
   });
 
   // Outpatient & Inpatient Records State
@@ -280,7 +280,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
         report_type: 'Blood Test',
         report_title: '',
         report_file: '',
-        is_shared: true,
+        is_shared: false,
       });
     } else {
       const defaultPatient = visits[0];
@@ -291,7 +291,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
         report_type: 'Blood Test',
         report_title: '',
         report_file: '',
-        is_shared: true,
+        is_shared: false,
       });
     }
     setShowLabReportModal(true);
@@ -315,7 +315,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
           report_type: labReportForm.report_type,
           report_title: labReportForm.report_title,
           report_file: labReportForm.report_file,
-          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : true,
+          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : false,
         })
       });
       const data = await res.json();
@@ -329,7 +329,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
           report_type: 'Blood Test',
           report_title: '',
           report_file: '',
-          is_shared: true,
+          is_shared: false,
         });
         loadLabReports();
       } else {
@@ -568,131 +568,159 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
   const bmiPreview = calculateBMI(vitalsForm.height.replace(/[^0-9.]/g, ''), vitalsForm.weight.replace(/[^0-9.]/g, ''));
 
   return (
-    <div className="min-vh-100 bg-slate-50 d-flex flex-column" style={{ backgroundColor: '#f8fafc' }}>
-      {/* Modern Top Clinical Header */}
-      <header className="sticky-top shadow-sm border-bottom bg-white py-2.5 px-3 px-md-4">
-        <div className="d-flex align-items-center justify-content-between gap-3">
-          {/* Left Brand & Station Info */}
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className="rounded-3 p-2.5 d-flex align-items-center justify-content-center shadow-sm text-white flex-shrink-0"
-              style={{ backgroundColor: '#0d9488', width: '42px', height: '42px' }}
-            >
-              <i className="bi bi-heart-pulse-fill fs-5"></i>
-            </div>
-            <div>
-              <div className="d-flex align-items-center gap-2">
-                <span className="fw-bold text-dark fs-6 mb-0">UniCare Clinical Station</span>
-                <span className="badge rounded-pill px-2.5 py-0.5 extra-small fw-semibold text-teal" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
-                  Nurse Workstation
-                </span>
-              </div>
-              <small className="text-muted d-block extra-small">
-                <i className="bi bi-hospital me-1 text-teal" style={{ color: '#0d9488' }}></i>
-                <strong>{hospitalName}</strong> &bull; Pre-Consultation Vitals Desk
-              </small>
-            </div>
+    <div className="d-flex min-vh-100 bg-light" style={{ fontFamily: 'var(--font-body)' }}>
+      {/* FIXED LEFT SIDEBAR (Standard UniCare clinical sidebar like Doctor & Staff) */}
+      <aside className="unicare-sidebar">
+        {/* Brand Header */}
+        <div 
+          className="sidebar-brand-box" 
+          onClick={() => onNavigateHome && onNavigateHome()} 
+          title="Return to UniCare Homepage"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="sidebar-brand-icon">
+            <i className="bi bi-heart-pulse"></i>
           </div>
-
-          {/* Right Action Controls & Profile Menu */}
-          <div className="d-flex align-items-center gap-2">
-            <button
-              onClick={() => onNavigateHome && onNavigateHome()}
-              className="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1.5 fw-medium d-none d-sm-inline-flex align-items-center gap-1.5"
-              title="Return to Public Homepage"
-            >
-              <i className="bi bi-house-door"></i> Home
-            </button>
-
-            {/* Profile Dropdown */}
-            <div className="position-relative" ref={profileMenuRef}>
-              <button
-                type="button"
-                className="btn btn-sm rounded-pill p-1.5 pe-3 d-flex align-items-center gap-2 border bg-light shadow-sm"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-              >
-                <div
-                  className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center"
-                  style={{ width: '30px', height: '30px', backgroundColor: '#0d9488', fontSize: '13px' }}
-                >
-                  {nurseName ? nurseName.charAt(0).toUpperCase() : 'N'}
-                </div>
-                <div className="text-start d-none d-md-block" style={{ lineHeight: 1.2 }}>
-                  <div className="fw-bold text-dark extra-small text-truncate" style={{ maxWidth: '140px' }}>{nurseName}</div>
-                  <div className="text-muted extra-small" style={{ fontSize: '11px' }}>Clinical Nurse</div>
-                </div>
-                <i className="bi bi-chevron-down text-muted ms-1" style={{ fontSize: '11px' }}></i>
-              </button>
-
-              {showProfileMenu && (
-                <div className="position-absolute end-0 mt-2 bg-white rounded-4 shadow-lg border p-2 z-3" style={{ minWidth: '240px' }}>
-                  <div className="p-2 border-bottom mb-1">
-                    <div className="fw-bold text-dark">{nurseName}</div>
-                    <small className="text-muted d-block text-truncate">{profile?.email || user?.email || 'nurse@unicare.com'}</small>
-                    <span className="badge bg-light text-teal border mt-1.5 extra-small" style={{ color: '#0d9488' }}>
-                      {hospitalName}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="dropdown-item rounded-3 py-2 px-3 small d-flex align-items-center gap-2 text-dark"
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      setShowSecurityModal(true);
-                    }}
-                  >
-                    <i className="bi bi-shield-lock text-teal" style={{ color: '#0d9488' }}></i>
-                    Change Password & Security
-                  </button>
-
-                  <button
-                    type="button"
-                    className="dropdown-item rounded-3 py-2 px-3 small d-flex align-items-center gap-2 text-secondary d-sm-none"
-                    onClick={() => onNavigateHome && onNavigateHome()}
-                  >
-                    <i className="bi bi-house"></i>
-                    Return to Home
-                  </button>
-
-                  <div className="dropdown-divider my-1"></div>
-
-                  <button
-                    type="button"
-                    className="dropdown-item rounded-3 py-2 px-3 small d-flex align-items-center gap-2 text-danger fw-semibold"
-                    onClick={onLogout}
-                  >
-                    <i className="bi bi-box-arrow-right"></i>
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
+          <div>
+            <h6 className="fw-bold mb-0 text-slate-800" style={{ fontSize: '1.1rem', letterSpacing: '0.3px' }}>UniCare</h6>
+            <small className="text-teal fw-bold extra-small" style={{ fontSize: '0.74rem', letterSpacing: '0.6px' }}>CLINICAL STATION</small>
           </div>
         </div>
-      </header>
 
-      {/* Mandatory Password Change Alert Banner */}
-      {!warningDismissed && (profile?.must_change_password || user?.must_change_password) && (
-        <div className="bg-warning text-dark py-2.5 px-4 d-flex align-items-center justify-content-between shadow-sm">
-          <div className="d-flex align-items-center gap-2 small">
-            <i className="bi bi-shield-exclamation fs-5 flex-shrink-0"></i>
-            <div>
-              <strong>Security Action Required:</strong> Your nurse account is currently using temporary credentials. Please update your password and security recovery question.
-            </div>
-          </div>
+        {/* Nurse & Hospital Context Card */}
+        <div className="sidebar-context-card position-relative" ref={profileMenuRef}>
           <button
             type="button"
-            className="btn btn-sm btn-dark rounded-pill px-3 py-1 fw-bold extra-small text-nowrap ms-3"
-            onClick={() => setShowSecurityModal(true)}
+            className="btn btn-link p-0 text-start text-decoration-none w-100 border-0"
+            aria-label="nurse menu"
+            onClick={() => setShowProfileMenu(prev => !prev)}
+            title="Account & Security Settings"
           >
-            Update Now
+            <div className="d-flex align-items-center justify-content-between">
+              <div className="overflow-hidden me-2">
+                <div className="fw-bold text-dark text-truncate" style={{ fontSize: '0.95rem' }}>{nurseName}</div>
+                <small className="text-muted d-block text-truncate" style={{ fontSize: '0.8rem' }}>Clinical Ward Nurse</small>
+              </div>
+              <div className="d-flex align-items-center gap-1.5 flex-shrink-0">
+                <div className="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold shadow-xs" style={{ width: '32px', height: '32px', backgroundColor: '#0d9488', fontSize: '0.85rem' }}>
+                  {nurseName ? nurseName.charAt(0).toUpperCase() : 'N'}
+                </div>
+                <i className={`bi bi-chevron-${showProfileMenu ? 'up' : 'down'} text-muted extra-small`}></i>
+              </div>
+            </div>
           </button>
-        </div>
-      )}
 
-      {/* Main Clinical Body */}
-      <main className="container-fluid py-4 px-3 px-md-5 flex-grow-1" style={{ maxWidth: '1440px' }}>
+          <div className="badge bg-white text-teal border px-2.5 py-1.5 rounded-2 font-monospace w-100 text-truncate text-start mt-2" style={{ color: '#0d9488', fontSize: '0.75rem' }}>
+            🏥 {hospitalName}
+          </div>
+
+          {showProfileMenu && (
+            <div className="bg-white rounded-3 shadow border p-2 mt-2 position-absolute start-0 end-0 z-3" style={{ top: '100%' }}>
+              <div className="p-2 border-bottom mb-1 bg-light rounded-2">
+                <div className="fw-bold text-dark small text-truncate">{nurseName}</div>
+                <small className="text-muted extra-small d-block text-truncate">{profile?.email || user?.email || 'nurse@unicare.com'}</small>
+              </div>
+              <button
+                type="button"
+                className="dropdown-item rounded-2 py-1.5 px-2.5 small d-flex align-items-center gap-2 text-dark"
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  setShowSecurityModal(true);
+                }}
+              >
+                <i className="bi bi-shield-lock text-teal" style={{ color: '#0d9488' }}></i>
+                Change Password & Security Settings
+              </button>
+              {onNavigateHome && (
+                <button
+                  type="button"
+                  className="dropdown-item rounded-2 py-1.5 px-2.5 small d-flex align-items-center gap-2 text-secondary"
+                  onClick={() => onNavigateHome()}
+                >
+                  <i className="bi bi-house"></i>
+                  Return to Homepage
+                </button>
+              )}
+              <div className="dropdown-divider my-1"></div>
+              <button
+                type="button"
+                className="dropdown-item rounded-2 py-1.5 px-2.5 small d-flex align-items-center gap-2 text-danger fw-semibold"
+                onClick={onLogout}
+              >
+                <i className="bi bi-box-arrow-right"></i>
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Main Navigation List */}
+        <nav className="d-flex flex-column mb-auto">
+          <div className="sidebar-section-title">
+            Clinical Care & Ward
+          </div>
+
+          {[
+            { id: 'queue', icon: 'bi-clipboard2-pulse', label: 'Pre-Consult Intake Queue', count: pendingCount, onClick: () => setActiveTab('queue') },
+            { id: 'op_records', icon: 'bi-journal-medical', label: 'Outpatient Records (OP)', count: opRecordsList.length, onClick: () => { setActiveTab('op_records'); loadOpRecords(); } },
+            { id: 'ip_records', icon: 'bi-hospital', label: 'Inpatient Records (IP)', count: ipRecordsList.length, onClick: () => { setActiveTab('ip_records'); loadIpRecords(); } },
+            { id: 'history', icon: 'bi-clock-history', label: 'Patient Clinical History', onClick: () => setActiveTab('history') },
+            { id: 'reports', icon: 'bi-file-earmark-medical', label: 'Diagnostic & Lab Reports', count: labReportsList.length, onClick: () => { setActiveTab('reports'); loadLabReports(); } },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={item.onClick}
+              className={`sidebar-nav-link ${activeTab === item.id ? 'active' : ''}`}
+            >
+              <div className="sidebar-nav-icon-box">
+                <i className={`bi ${item.icon}`}></i>
+              </div>
+              <span className="flex-grow-1 text-truncate">{item.label}</span>
+              {item.count > 0 && (
+                <span className="sidebar-count-badge">
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* Sidebar Footer Sign Out */}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="sidebar-logout-btn"
+        >
+          <i className="bi bi-box-arrow-right"></i>
+          <span>Sign Out</span>
+        </button>
+      </aside>
+
+      {/* MAIN CONTENT AREA (Single Left Sidebar layout) */}
+      <main className="flex-grow-1 overflow-auto bg-light p-3 p-md-4 min-vh-100">
+        <div className="container-fluid p-0 flex-grow-1" style={{ maxWidth: '1440px' }}>
+          {/* Temporary Password & Security Recovery Warning Banner */}
+          {!warningDismissed && (profile?.must_change_password || user?.must_change_password || (!profile?.has_recovery_question && profile !== null)) && (
+            <div className="alert alert-warning border-warning shadow-sm mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 rounded-3 gap-3">
+              <div className="d-flex align-items-center gap-3">
+                <i className="bi bi-shield-exclamation fs-2 text-warning"></i>
+                <div>
+                  <strong className="text-dark">Action Required: Temporary Password Detected</strong>
+                  <div className="small text-secondary">
+                    Your account password was temporarily set by your administrator. Please update your password and set a security recovery question to secure your account.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-teal text-white btn-sm fw-bold px-3 text-nowrap rounded-pill shadow-sm"
+                style={{ backgroundColor: '#0d9488' }}
+                onClick={() => setShowSecurityModal(true)}
+              >
+                <i className="bi bi-key me-1"></i> Change Password & Recovery
+              </button>
+            </div>
+          )}
         {/* Toast Alert */}
         {message && (
           <div className={`alert alert-${message.type} alert-dismissible fade show rounded-4 shadow-sm mb-4 border-0 d-flex align-items-center`} role="alert">
@@ -702,166 +730,145 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
           </div>
         )}
 
-        {/* Clinical Metric Overview Cards */}
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-sm-6 col-lg-4">
+        {/* Clinical Metric Overview Cards (Clean & Professional Sizing) */}
+        <div className="row g-3 mb-3.5">
+          <div className="col-6 col-lg-3">
             <div
-              className={`card border-0 rounded-4 shadow-sm p-3.5 h-100 bg-white transition-all cursor-pointer ${filterStatus === 'all' ? 'ring-2 border-teal' : ''}`}
-              style={filterStatus === 'all' ? { border: '2px solid #0d9488' } : { border: '1px solid #e2e8f0' }}
+              className={`card rounded-3 p-3 h-100 bg-white transition-all cursor-pointer ${filterStatus === 'all' ? 'shadow-sm' : 'border-light-subtle shadow-xs'}`}
+              style={{
+                border: '1.5px solid ' + (filterStatus === 'all' ? '#0d9488' : '#e2e8f0'),
+                boxShadow: filterStatus === 'all' ? '0 0 0 1px #0d9488, 0 2px 4px rgba(13,148,136,0.1)' : undefined,
+                transition: 'all 0.2s ease-in-out'
+              }}
               onClick={() => setFilterStatus('all')}
+              title="Click to view all queued visits"
             >
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <span className="text-muted extra-small fw-bold text-uppercase tracking-wider">Today's Visits Queue</span>
-                  <h2 className="display-6 fw-bold mb-0 mt-1 text-dark">{totalVisits}</h2>
-                  <small className="text-muted extra-small">Total queued consultations</small>
-                </div>
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <span className="text-muted extra-small fw-bold text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
+                  Today's Visits Queue
+                </span>
                 <div
-                  className="rounded-circle p-3 d-flex align-items-center justify-content-center flex-shrink-0"
-                  style={{ width: '54px', height: '54px', backgroundColor: '#e0f2fe', color: '#0284c7' }}
+                  className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ width: '38px', height: '38px', backgroundColor: '#e0f2fe', color: '#0284c7' }}
                 >
-                  <i className="bi bi-people-fill fs-4"></i>
+                  <i className="bi bi-people-fill fs-5"></i>
                 </div>
               </div>
+              <div className="d-flex align-items-baseline gap-2">
+                <h3 className="fw-bold mb-0 text-dark fs-3">{totalVisits}</h3>
+                <span className="badge bg-light text-muted border rounded-pill extra-small">Queue</span>
+              </div>
+              <small className="text-muted extra-small d-block mt-1">Total queued consultations</small>
             </div>
           </div>
 
-          <div className="col-12 col-sm-6 col-lg-4">
+          <div className="col-6 col-lg-3">
             <div
-              className={`card border-0 rounded-4 shadow-sm p-3.5 h-100 bg-white transition-all cursor-pointer`}
-              style={filterStatus === 'pending' ? { border: '2px solid #f59e0b' } : { border: '1px solid #e2e8f0' }}
+              className={`card rounded-3 p-3 h-100 bg-white transition-all cursor-pointer ${filterStatus === 'pending' ? 'shadow-sm' : 'border-light-subtle shadow-xs'}`}
+              style={{
+                border: '1.5px solid ' + (filterStatus === 'pending' ? '#f59e0b' : '#e2e8f0'),
+                boxShadow: filterStatus === 'pending' ? '0 0 0 1px #f59e0b, 0 2px 4px rgba(245,158,11,0.1)' : undefined,
+                transition: 'all 0.2s ease-in-out'
+              }}
               onClick={() => setFilterStatus('pending')}
+              title="Click to view visits needing vitals screening"
             >
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <span className="text-muted extra-small fw-bold text-uppercase tracking-wider">Awaiting Pre-Consult Vitals</span>
-                  <div className="d-flex align-items-baseline gap-2 mt-1">
-                    <h2 className="display-6 fw-bold mb-0 text-warning">{pendingCount}</h2>
-                    {pendingCount > 0 && <span className="badge bg-warning-subtle text-warning extra-small rounded-pill">Needs Intake</span>}
-                  </div>
-                  <small className="text-muted extra-small">Patients waiting for nurse screening</small>
-                </div>
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <span className="text-muted extra-small fw-bold text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
+                  Awaiting Vitals
+                </span>
                 <div
-                  className="rounded-circle p-3 d-flex align-items-center justify-content-center flex-shrink-0"
-                  style={{ width: '54px', height: '54px', backgroundColor: '#fef3c7', color: '#d97706' }}
+                  className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ width: '38px', height: '38px', backgroundColor: '#fef3c7', color: '#d97706' }}
                 >
-                  <i className="bi bi-hourglass-split fs-4"></i>
+                  <i className="bi bi-hourglass-split fs-5"></i>
                 </div>
               </div>
+              <div className="d-flex align-items-baseline gap-2">
+                <h3 className="fw-bold mb-0 text-warning fs-3">{pendingCount}</h3>
+                {pendingCount > 0 && (
+                  <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill extra-small">
+                    Needs Intake
+                  </span>
+                )}
+              </div>
+              <small className="text-muted extra-small d-block mt-1">Patients waiting for screening</small>
             </div>
           </div>
 
-          <div className="col-12 col-sm-12 col-lg-4">
+          <div className="col-6 col-lg-3">
             <div
-              className={`card border-0 rounded-4 shadow-sm p-3.5 h-100 bg-white transition-all cursor-pointer`}
-              style={filterStatus === 'recorded' ? { border: '2px solid #0d9488' } : { border: '1px solid #e2e8f0' }}
+              className={`card rounded-3 p-3 h-100 bg-white transition-all cursor-pointer ${filterStatus === 'recorded' ? 'shadow-sm' : 'border-light-subtle shadow-xs'}`}
+              style={{
+                border: '1.5px solid ' + (filterStatus === 'recorded' ? '#0d9488' : '#e2e8f0'),
+                boxShadow: filterStatus === 'recorded' ? '0 0 0 1px #0d9488, 0 2px 4px rgba(13,148,136,0.1)' : undefined,
+                transition: 'all 0.2s ease-in-out'
+              }}
               onClick={() => setFilterStatus('recorded')}
+              title="Click to view visits with recorded vitals"
             >
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <span className="text-muted extra-small fw-bold text-uppercase tracking-wider">Vitals Recorded & Verified</span>
-                  <h2 className="display-6 fw-bold mb-0 mt-1" style={{ color: '#0d9488' }}>{recordedCount}</h2>
-                  <small className="text-muted extra-small">Ready for doctor consultation</small>
-                </div>
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <span className="text-muted extra-small fw-bold text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
+                  Vitals Recorded
+                </span>
                 <div
-                  className="rounded-circle p-3 d-flex align-items-center justify-content-center flex-shrink-0"
-                  style={{ width: '54px', height: '54px', backgroundColor: '#e6f4f1', color: '#0d9488' }}
+                  className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ width: '38px', height: '38px', backgroundColor: '#e6f4f1', color: '#0d9488' }}
                 >
-                  <i className="bi bi-check2-circle fs-4"></i>
+                  <i className="bi bi-check2-circle fs-5"></i>
                 </div>
               </div>
+              <div className="d-flex align-items-baseline gap-2">
+                <h3 className="fw-bold mb-0 fs-3" style={{ color: '#0d9488' }}>{recordedCount}</h3>
+                <span className="badge bg-teal-subtle text-teal border border-teal-subtle rounded-pill extra-small" style={{ backgroundColor: '#e6f4f1', color: '#0d9488' }}>
+                  Ready
+                </span>
+              </div>
+              <small className="text-muted extra-small d-block mt-1">Verified for doctor review</small>
+            </div>
+          </div>
+
+          <div className="col-6 col-lg-3">
+            <div
+              className={`card rounded-3 p-3 h-100 bg-white transition-all cursor-pointer ${activeTab === 'ip_records' ? 'shadow-sm' : 'border-light-subtle shadow-xs'}`}
+              style={{
+                border: '1.5px solid ' + (activeTab === 'ip_records' ? '#3b82f6' : '#e2e8f0'),
+                boxShadow: activeTab === 'ip_records' ? '0 0 0 1px #3b82f6, 0 2px 4px rgba(59,130,246,0.1)' : undefined,
+                transition: 'all 0.2s ease-in-out'
+              }}
+              onClick={() => {
+                setActiveTab('ip_records');
+                loadIpRecords();
+              }}
+              title="Click to view inpatient ward records"
+            >
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <span className="text-muted extra-small fw-bold text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
+                  Ward Inpatients
+                </span>
+                <div
+                  className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ width: '38px', height: '38px', backgroundColor: '#eff6ff', color: '#3b82f6' }}
+                >
+                  <i className="bi bi-hospital fs-5"></i>
+                </div>
+              </div>
+              <div className="d-flex align-items-baseline gap-2">
+                <h3 className="fw-bold mb-0 text-primary fs-3">{ipRecordsList.filter(a => a.admission_status === 'Admitted').length}</h3>
+                <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill extra-small">
+                  Admitted
+                </span>
+              </div>
+              <small className="text-muted extra-small d-block mt-1">Active ward bed stays</small>
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="d-flex align-items-center gap-2 mb-4 border-bottom pb-3 flex-wrap">
-          <button
-            type="button"
-            className={`btn rounded-pill px-3.5 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
-              activeTab === 'queue' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
-            }`}
-            style={activeTab === 'queue' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-            onClick={() => setActiveTab('queue')}
-          >
-            <i className="bi bi-clipboard2-pulse"></i>
-            <span>Pre-Consult Intake Queue</span>
-            <span className={`badge rounded-pill ${activeTab === 'queue' ? 'bg-white text-dark' : 'bg-warning text-dark'}`}>
-              {pendingCount}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`btn rounded-pill px-3.5 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
-              activeTab === 'op_records' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
-            }`}
-            style={activeTab === 'op_records' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-            onClick={() => {
-              setActiveTab('op_records');
-              loadOpRecords();
-            }}
-          >
-            <i className="bi bi-calendar2-check"></i>
-            <span>Outpatient Records (OP)</span>
-            <span className={`badge rounded-pill ${activeTab === 'op_records' ? 'bg-white text-dark' : 'bg-secondary text-white'}`}>
-              {opRecordsList.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`btn rounded-pill px-3.5 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
-              activeTab === 'ip_records' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
-            }`}
-            style={activeTab === 'ip_records' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-            onClick={() => {
-              setActiveTab('ip_records');
-              loadIpRecords();
-            }}
-          >
-            <i className="bi bi-hospital"></i>
-            <span>Inpatient Records (IP)</span>
-            <span className={`badge rounded-pill ${activeTab === 'ip_records' ? 'bg-white text-dark' : 'bg-primary text-white'}`}>
-              {ipRecordsList.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`btn rounded-pill px-3.5 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
-              activeTab === 'history' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
-            }`}
-            style={activeTab === 'history' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-            onClick={() => setActiveTab('history')}
-          >
-            <i className="bi bi-clock-history"></i>
-            <span>Patient History</span>
-          </button>
-
-          <button
-            type="button"
-            className={`btn rounded-pill px-3.5 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${
-              activeTab === 'reports' ? 'btn-teal text-white shadow-sm' : 'btn-light text-secondary border'
-            }`}
-            style={activeTab === 'reports' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-            onClick={() => {
-              setActiveTab('reports');
-              loadLabReports();
-            }}
-          >
-            <i className="bi bi-file-earmark-medical"></i>
-            <span>Diagnostic & Lab Reports</span>
-            <span className={`badge rounded-pill ${activeTab === 'reports' ? 'bg-white text-dark' : 'bg-teal text-white'}`} style={activeTab !== 'reports' ? { backgroundColor: '#0d9488' } : {}}>
-              {labReportsList.length}
-            </span>
-          </button>
-        </div>
 
         {/* Clinical Queue Section */}
         {activeTab === 'queue' && (
-        <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-          <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div className="card rounded-3 shadow-xs bg-white overflow-hidden border border-light-subtle">
+          <div className="card-header bg-white border-bottom p-3 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
               <div className="d-flex align-items-center gap-2">
                 <i className="bi bi-clipboard2-pulse fs-5" style={{ color: '#0d9488' }}></i>
@@ -1069,7 +1076,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
               filteredVisits.map((visit) => {
                 const hasVitals = Boolean(visit.has_vitals || (visit.height && visit.height.trim()) || (visit.weight && visit.weight.trim()) || (visit.blood_pressure && visit.blood_pressure.trim()));
                 return (
-                  <div key={visit.appointment_id || visit.id} className="card border rounded-3 p-3 shadow-sm bg-white">
+                  <div key={visit.appointment_id || visit.id} className="card rounded-3 p-3 shadow-xs bg-white border border-light-subtle">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <div>
                         <h6 className="fw-bold mb-0 text-dark">{visit.patient_name || visit.patient}</h6>
@@ -1145,8 +1152,8 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
 
         {/* Diagnostic & Lab Reports Section */}
         {activeTab === 'reports' && (
-          <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-            <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div className="card rounded-3 shadow-xs bg-white overflow-hidden border border-light-subtle">
+            <div className="card-header bg-white border-bottom p-3 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-3">
               <div>
                 <div className="d-flex align-items-center gap-2">
                   <i className="bi bi-file-earmark-medical fs-5" style={{ color: '#0d9488' }}></i>
@@ -1311,8 +1318,8 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
 
         {/* Outpatient Records (OP) Section */}
         {activeTab === 'op_records' && (
-          <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-            <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div className="card rounded-3 shadow-xs bg-white overflow-hidden border border-light-subtle">
+            <div className="card-header bg-white border-bottom p-3 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-3">
               <div>
                 <div className="d-flex align-items-center gap-2">
                   <i className="bi bi-calendar2-check fs-5" style={{ color: '#0d9488' }}></i>
@@ -1461,8 +1468,8 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
 
         {/* Inpatient Records (IP) Section */}
         {activeTab === 'ip_records' && (
-          <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-            <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div className="card rounded-3 shadow-xs bg-white overflow-hidden border border-light-subtle">
+            <div className="card-header bg-white border-bottom p-3 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-3">
               <div>
                 <div className="d-flex align-items-center gap-2">
                   <i className="bi bi-hospital fs-5" style={{ color: '#0d9488' }}></i>
@@ -1649,8 +1656,8 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
 
         {/* Patient History Section (Chronological OP & IP Timeline) */}
         {activeTab === 'history' && (
-          <div className="card border-0 rounded-4 shadow-sm bg-white overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
-            <div className="card-header bg-white border-bottom p-3.5 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div className="card rounded-3 shadow-xs bg-white overflow-hidden border border-light-subtle">
+            <div className="card-header bg-white border-bottom p-3 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-3">
               <div>
                 <div className="d-flex align-items-center gap-2">
                   <i className="bi bi-clock-history fs-5" style={{ color: '#0d9488' }}></i>
@@ -1684,11 +1691,11 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
               </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-3 px-3.5">
               {historySelectedPatient ? (
                 <div>
                   {/* Patient Demographics Banner */}
-                  <div className="card border-0 rounded-3 p-3.5 bg-light mb-4 border">
+                  <div className="card rounded-3 p-3 bg-light-subtle mb-3 border border-light-subtle">
                     <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                       <div>
                         <div className="d-flex align-items-center gap-2">
@@ -1766,8 +1773,8 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                         .map((rec, idx) => {
                           const isIP = rec.record_type === 'IP' || rec.visit_type === 'IP' || rec.admission_id || rec.ward_bed;
                           return (
-                            <div key={idx} className="card border-0 rounded-4 shadow-sm mb-3.5 bg-white border" style={{ borderLeft: isIP ? '4px solid #3b82f6' : '4px solid #0d9488' }}>
-                              <div className="card-body p-3.5">
+                            <div key={idx} className="card rounded-3 shadow-xs mb-2.5 bg-white border border-light-subtle" style={{ borderLeft: isIP ? '4px solid #3b82f6' : '4px solid #0d9488' }}>
+                              <div className="card-body p-3">
                                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                                   <div className="d-flex align-items-center gap-2">
                                     <span className={`badge ${isIP ? 'bg-primary-subtle text-primary' : 'bg-teal-subtle text-teal'} px-2.5 py-1 rounded-pill fw-bold`} style={!isIP ? { backgroundColor: '#e6f4f1', color: '#0d9488' } : {}}>
@@ -1866,6 +1873,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       {/* RECORD / ADMISSION INSPECTION MODAL */}
@@ -1952,7 +1960,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                       ) : (
                         <div className="d-flex flex-column gap-2">
                           {inspectionData.visits.map((v, i) => (
-                            <div key={i} className="card border rounded-3 p-3 bg-white">
+                            <div key={i} className="card border-light-subtle rounded-3 p-2.5 bg-white shadow-xs">
                               <div className="d-flex justify-content-between align-items-center mb-1">
                                 <span className="fw-bold text-dark small">{v.diagnosis}</span>
                                 <span className="extra-small text-muted">{v.visited_at}</span>
@@ -1983,7 +1991,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                       ) : (
                         <div className="d-flex flex-column gap-2">
                           {inspectionData.prescriptions.map((pr, i) => (
-                            <div key={i} className="card border rounded-3 p-3 bg-white">
+                            <div key={i} className="card border-light-subtle rounded-3 p-2.5 bg-white shadow-xs">
                               <div className="d-flex justify-content-between align-items-center mb-1.5">
                                 <span className="fw-bold text-dark font-monospace small">{pr.prescription_uid || `PRE${pr.prescription_id}`}</span>
                                 <span className="extra-small text-muted">{pr.date} &bull; {pr.doctor_name}</span>
@@ -2013,7 +2021,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                       ) : (
                         <div className="d-flex flex-column gap-2">
                           {inspectionData.lab_reports.map((lr, i) => (
-                            <div key={i} className="card border rounded-3 p-3 bg-white d-flex justify-content-between align-items-center flex-row">
+                            <div key={i} className="card border-light-subtle rounded-3 p-2.5 bg-white shadow-xs d-flex justify-content-between align-items-center flex-row">
                               <div>
                                 <span className="fw-bold text-dark small">{lr.report_title}</span>
                                 <div className="extra-small text-muted">{lr.report_type} &bull; {lr.uploaded_at}</div>
@@ -2044,7 +2052,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                       </div>
                     </div>
 
-                    <div className="card border rounded-3 p-3 mb-3 bg-white">
+                    <div className="card border-light-subtle rounded-3 p-3 mb-3 bg-white shadow-xs">
                       <h6 className="fw-bold text-dark small mb-1"><i className="bi bi-stethoscope text-teal me-1.5" style={{ color: '#0d9488' }}></i>Diagnosis & Clinical Finding</h6>
                       <div className="fw-semibold text-teal mb-2" style={{ color: '#0d9488' }}>{inspectionData?.diagnosis}</div>
                       {inspectionData?.medical_notes && (
@@ -2056,7 +2064,7 @@ export default function NurseDashboardPage({ user, onLogout, onNavigateHome }) {
                     </div>
 
                     {inspectionData?.vitals && (inspectionData.vitals.blood_pressure || inspectionData.vitals.weight || inspectionData.vitals.height) && (
-                      <div className="card border rounded-3 p-3 mb-3 bg-white">
+                      <div className="card border-light-subtle rounded-3 p-3 mb-3 bg-white shadow-xs">
                         <h6 className="fw-bold text-dark small mb-2"><i className="bi bi-heart-pulse-fill text-danger me-1.5"></i>Nurse Intake Vitals</h6>
                         <div className="row g-2 text-center">
                           <div className="col-4">

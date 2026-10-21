@@ -1495,7 +1495,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={nurseForm.name} 
                       onChange={(e) => setNurseForm({ ...nurseForm, name: e.target.value })} 
                       onBlur={() => markNurseTouched('name')}
-                      placeholder="e.g. Nurse Sarah Jenkins"
                       required 
                     />
                     {nurseTouched.name && nurseErrors.name && (
@@ -1510,7 +1509,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={nurseForm.email} 
                       onChange={(e) => setNurseForm({ ...nurseForm, email: e.target.value })} 
                       onBlur={() => markNurseTouched('email')}
-                      placeholder="nurse@hospital.com"
                       required 
                     />
                     {nurseTouched.email && nurseErrors.email && (
@@ -1525,7 +1523,6 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                       value={nurseForm.phone} 
                       onChange={(e) => setNurseForm({ ...nurseForm, phone: e.target.value })} 
                       onBlur={() => markNurseTouched('phone')}
-                      placeholder="10-digit phone number"
                     />
                     {nurseTouched.phone && nurseErrors.phone && (
                       <div className="invalid-feedback small">{nurseErrors.phone}</div>

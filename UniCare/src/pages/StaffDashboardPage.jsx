@@ -34,11 +34,12 @@ export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   const [bookingDoctors, setBookingDoctors] = useState([]);
   const [selectedDeptId, setSelectedDeptId] = useState('');
   const [selectedDocId, setSelectedDocId] = useState('');
-  const [bookingDate, setBookingDate] = useState('');
+  const [bookingDate, setBookingDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [bookingTime, setBookingTime] = useState('09:00');
   const [bookingReason, setBookingReason] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [isFetchingSlots, setIsFetchingSlots] = useState(false);
   const [modalPatientSearch, setModalPatientSearch] = useState('');
   const [modalPatientSuggestions, setModalPatientSuggestions] = useState([]);
   const [isSearchingModalPatient, setIsSearchingModalPatient] = useState(false);
@@ -399,7 +400,11 @@ const RECOVERY_QUESTIONS = [
         if (depts.length) {
           setSelectedDeptId(depts[0].department_id);
           const deptDocs = docs.filter(d => String(d.department_id) === String(depts[0].department_id));
-          setSelectedDocId(deptDocs.length ? deptDocs[0].doctor_id : (docs[0]?.doctor_id || ''));
+          const initialDocId = deptDocs.length ? deptDocs[0].doctor_id : (docs[0]?.doctor_id || '');
+          setSelectedDocId(initialDocId);
+          if (initialDocId) {
+            fetchBookedSlots(initialDocId, bookingDate || new Date().toISOString().split('T')[0]);
+          }
         }
       }
     } catch (err) {
@@ -414,6 +419,7 @@ const RECOVERY_QUESTIONS = [
       setBookedSlots([]);
       return;
     }
+    setIsFetchingSlots(true);
     try {
       const res = await fetch(`${API}/appointments/options/?hospital_id=${activeHid}&doctor_id=${encodeURIComponent(docId)}&date=${encodeURIComponent(date)}`, { credentials: 'include' });
       if (res.ok) {
@@ -428,9 +434,10 @@ const RECOVERY_QUESTIONS = [
           return current;
         });
       }
-
     } catch (err) {
       console.error('Error fetching booked slots:', err);
+    } finally {
+      setIsFetchingSlots(false);
     }
   };
 
@@ -2149,11 +2156,17 @@ const RECOVERY_QUESTIONS = [
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label fw-semibold small text-muted">
-                        Step 4: Available Time Slot *
-                        {bookedSlots.length > 0 && (
-                          <span className="badge bg-danger-subtle text-danger ms-2 extra-small">
-                            {bookedSlots.length} Booked
+                      <label className="form-label fw-semibold small text-muted d-flex align-items-center justify-content-between">
+                        <span>Step 4: Available Time Slot *</span>
+                        {isFetchingSlots ? (
+                          <span className="spinner-border spinner-border-sm text-teal" role="status" style={{ width: '12px', height: '12px' }}></span>
+                        ) : bookedSlots.length > 0 ? (
+                          <span className="badge bg-danger-subtle text-danger border border-danger-subtle extra-small">
+                            <i className="bi bi-lock-fill me-1"></i>{bookedSlots.length} Booked
+                          </span>
+                        ) : (
+                          <span className="badge bg-success-subtle text-success border border-success-subtle extra-small">
+                            <i className="bi bi-check-circle-fill me-1"></i>All 12 Open
                           </span>
                         )}
                       </label>
@@ -2166,31 +2179,57 @@ const RECOVERY_QUESTIONS = [
                         {availableTimeSlots.map(t => {
                           const isBooked = bookedSlots.includes(t);
                           return (
-                            <option key={t} value={t} disabled={isBooked}>
-                              {t} {isBooked ? '— Not Available (Booked)' : '— Available'}
+                            <option key={t} value={t} disabled={isBooked} style={isBooked ? { color: '#dc2626', backgroundColor: '#fef2f2' } : {}}>
+                              {t} {isBooked ? '— [ALREADY BOOKED ✕ - NOT AVAILABLE]' : '— [AVAILABLE ✓]'}
                             </option>
                           );
                         })}
                       </select>
                       {bookedSlots.includes(bookingTime) && (
-                        <small className="text-danger d-block mt-1">
+                        <small className="text-danger d-block mt-1 fw-semibold">
                           <i className="bi bi-x-circle-fill me-1"></i>
-                          Selected time slot is already booked for this doctor. Please choose an open slot.
+                          Selected time slot ({bookingTime}) is already booked for this doctor. Please pick an open slot below.
                         </small>
                       )}
                     </div>
                   </div>
 
-                  {/* Visual Live Slot Availability Grid */}
+                  {/* Visual Live Slot Availability Grid & Explicit Booked Indicators */}
                   {selectedDocId && bookingDate && (
-                    <div className="mb-3 p-2.5 bg-light rounded-3 border">
+                    <div className="mb-3 p-3 bg-white rounded-3 border shadow-sm">
                       <div className="d-flex justify-content-between align-items-center mb-2">
-                        <small className="fw-bold text-muted extra-small text-uppercase">Live Doctor Slot Grid</small>
-                        <small className="extra-small text-muted">
-                          <span className="text-success fw-bold">&bull; Free</span> &nbsp;|&nbsp; <span className="text-danger fw-bold">&bull; Booked</span>
-                        </small>
+                        <div className="d-flex align-items-center gap-2">
+                          <i className="bi bi-clock-history text-teal" style={{ color: '#0d9488' }}></i>
+                          <small className="fw-bold text-dark extra-small text-uppercase tracking-wider">Doctor Slot Availability on {bookingDate}</small>
+                          {isFetchingSlots && <span className="spinner-border spinner-border-sm text-teal" role="status"></span>}
+                        </div>
+                        <div className="d-flex align-items-center gap-2 extra-small">
+                          <span className="badge bg-success-subtle text-success border border-success-subtle">
+                            <i className="bi bi-check-circle-fill me-1"></i> Free ({availableTimeSlots.length - bookedSlots.length})
+                          </span>
+                          <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                            <i className="bi bi-lock-fill me-1"></i> Booked ({bookedSlots.length})
+                          </span>
+                        </div>
                       </div>
-                      <div className="d-flex flex-wrap gap-1.5">
+
+                      {bookedSlots.length > 0 ? (
+                        <div className="p-2 mb-2.5 rounded-2 bg-danger-subtle border border-danger-subtle extra-small text-danger d-flex align-items-center gap-2">
+                          <i className="bi bi-exclamation-octagon-fill fs-6 flex-shrink-0"></i>
+                          <div>
+                            <strong>Already Booked Slots:</strong> {bookedSlots.join(', ')} — these slots are locked and unavailable for booking.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2 mb-2.5 rounded-2 bg-success-subtle border border-success-subtle extra-small text-success d-flex align-items-center gap-2">
+                          <i className="bi bi-check-circle-fill fs-6 flex-shrink-0"></i>
+                          <div>
+                            <strong>All Slots Open:</strong> No consultations have been booked yet for this doctor on {bookingDate}.
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="d-flex flex-wrap gap-2 pt-1">
                         {availableTimeSlots.map((t) => {
                           const isBooked = bookedSlots.includes(t);
                           const isSelected = bookingTime === t;
@@ -2200,16 +2239,29 @@ const RECOVERY_QUESTIONS = [
                               type="button"
                               disabled={isBooked}
                               onClick={() => setBookingTime(t)}
-                              className={`btn btn-sm py-1 px-2 extra-small rounded-2 ${
+                              className={`btn btn-sm py-1.5 px-2.5 extra-small rounded-2 d-inline-flex align-items-center gap-1.5 transition-all ${
                                 isBooked
-                                  ? 'btn-light text-muted border text-decoration-line-through opacity-75'
+                                  ? 'btn-light text-danger border-danger border border-opacity-50 text-decoration-line-through fw-semibold shadow-none'
                                   : isSelected
-                                  ? 'btn-primary text-white shadow-sm fw-bold'
-                                  : 'btn-outline-secondary bg-white'
+                                  ? 'btn-teal text-white shadow-sm fw-bold'
+                                  : 'btn-outline-secondary bg-white text-dark'
                               }`}
-                              title={isBooked ? `${t} is already booked` : `Select ${t}`}
+                              style={
+                                isBooked
+                                  ? { backgroundColor: '#fee2e2', cursor: 'not-allowed', opacity: 0.85 }
+                                  : isSelected
+                                  ? { backgroundColor: '#0d9488', borderColor: '#0d9488' }
+                                  : {}
+                              }
+                              title={isBooked ? `${t} is ALREADY BOOKED for this doctor` : `Click to choose ${t}`}
                             >
-                              {t} {isBooked && '✕'}
+                              <i className={`bi ${isBooked ? 'bi-lock-fill text-danger' : isSelected ? 'bi-check2-circle' : 'bi-clock'}`}></i>
+                              <span>{t}</span>
+                              {isBooked ? (
+                                <span className="badge bg-danger text-white rounded-pill px-1.5 py-0.5" style={{ fontSize: '9px' }}>Booked</span>
+                              ) : isSelected ? (
+                                <span className="badge bg-white text-teal rounded-pill px-1.5 py-0.5" style={{ fontSize: '9px', color: '#0d9488' }}>Selected</span>
+                              ) : null}
                             </button>
                           );
                         })}

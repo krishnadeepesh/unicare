@@ -117,7 +117,7 @@ def ensure_workflow_schema():
             'blood_pressure': 'VARCHAR(30) NULL',
             'vitals_recorded_by': 'INT NULL',
             'vitals_recorded_at': 'DATETIME NULL',
-            'record_share_flag': 'TINYINT(1) DEFAULT 1',
+            'record_share_flag': 'TINYINT(1) DEFAULT 0',
             'visit_type': "VARCHAR(20) NOT NULL DEFAULT 'OP'",
             'admission_id': 'INT NULL',
         })
@@ -228,7 +228,7 @@ def ensure_workflow_schema():
         cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_prescription (
             prescription_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NULL, doctor_id INT NULL,
             hospital_id INT NULL, appointment_id INT NULL, visit_id INT NULL, record_id INT NULL,
-            prescription_date DATE NULL, remarks TEXT NULL, prescription_share_flag TINYINT(1) DEFAULT 1,
+            prescription_date DATE NULL, remarks TEXT NULL, prescription_share_flag TINYINT(1) DEFAULT 0,
             prescription_is_active TINYINT(1) DEFAULT 1, prescription_created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_prescription_item (
@@ -240,7 +240,7 @@ def ensure_workflow_schema():
             lab_report_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NULL, doctor_id INT NULL,
             hospital_id INT NULL, appointment_id INT NULL, record_id INT NULL,
             report_type VARCHAR(100) NOT NULL, report_title VARCHAR(150) NOT NULL, report_file LONGTEXT NULL,
-            report_share_flag TINYINT(1) DEFAULT 1, report_is_active TINYINT(1) DEFAULT 1,
+            report_share_flag TINYINT(1) DEFAULT 0, report_is_active TINYINT(1) DEFAULT 1,
             report_uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
         # Ensure tbl_prescription and tbl_lab_report support columns exist
@@ -253,7 +253,7 @@ def ensure_workflow_schema():
             'record_id': 'INT NULL',
             'prescription_date': 'DATE NULL',
             'remarks': 'TEXT NULL',
-            'prescription_share_flag': 'TINYINT(1) DEFAULT 1',
+            'prescription_share_flag': 'TINYINT(1) DEFAULT 0',
             'prescription_is_active': 'TINYINT(1) DEFAULT 1',
             'prescription_created_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
         })
@@ -278,7 +278,7 @@ def ensure_workflow_schema():
             'report_type': 'VARCHAR(100) NOT NULL',
             'report_title': 'VARCHAR(150) NOT NULL',
             'report_file': 'LONGTEXT NULL',
-            'report_share_flag': 'TINYINT(1) DEFAULT 1',
+            'report_share_flag': 'TINYINT(1) DEFAULT 0',
             'report_is_active': 'TINYINT(1) DEFAULT 1',
             'report_uploaded_at': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
         })
@@ -1472,20 +1472,42 @@ def booking_options(request):
         date_param = request.GET.get('date') or request.GET.get('appointment_date')
         booked_slots = []
         if doc_param and date_param:
+            doc_id_val = str(doc_param).upper().replace('DOC', '').lstrip('0') or '0'
+            try:
+                doc_id_int = int(doc_id_val)
+            except ValueError:
+                doc_id_int = doc_param
+
             cursor.execute(
                 "SELECT appointment_time FROM tbl_appointment"
-                " WHERE doctor_id=%s AND appointment_date=%s"
-                " AND appointment_status IN ('Pending','Confirmed')",
-                [doc_param, date_param]
+                " WHERE (doctor_id=%s OR doctor_id=%s) AND appointment_date=%s"
+                " AND appointment_status NOT IN ('Cancelled', 'Rejected')",
+                [doc_param, doc_id_int, date_param]
             )
             raw_slots = cursor.fetchall()
             for r in raw_slots:
                 if r and r[0] is not None:
-                    t_str = str(r[0]).strip()
-                    if len(t_str) >= 5:
-                        booked_slots.append(t_str[:5])
-                    elif t_str:
-                        booked_slots.append(t_str)
+                    val = r[0]
+                    formatted = None
+                    if hasattr(val, 'strftime'):
+                        formatted = val.strftime('%H:%M')
+                    elif hasattr(val, 'total_seconds'):
+                        total_sec = int(val.total_seconds())
+                        h = (total_sec // 3600) % 24
+                        m = (total_sec % 3600) // 60
+                        formatted = f"{h:02d}:{m:02d}"
+                    else:
+                        s = str(val).strip()
+                        if ':' in s:
+                            parts = s.split(':')
+                            try:
+                                formatted = f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+                            except Exception:
+                                formatted = s[:5]
+                        elif s:
+                            formatted = s
+                    if formatted and formatted not in booked_slots:
+                        booked_slots.append(formatted)
 
     return JsonResponse({'status': 'success', 'departments': departments, 'doctors': doctors, 'booked_slots': booked_slots})
 
@@ -1997,7 +2019,7 @@ def visits(request):
     if not patient_param:
         return JsonResponse({'status': 'error', 'message': 'Patient is required.'}, status=400)
 
-    is_shared = 1
+    is_shared = 0
     if 'is_shared' in data:
         is_shared = 1 if data.get('is_shared') else 0
     elif 'record_share_flag' in data:
@@ -2372,7 +2394,7 @@ def prescriptions(request):
     raw_visit_id = data.get('visit_id')
     raw_adm_id = data.get('admission_id')
     remarks = (data.get('remarks') or '').strip()
-    is_shared = 1 if data.get('is_shared', True) else 0
+    is_shared = 1 if data.get('is_shared', False) else 0
     medicines = data.get('medicines') or []
 
     if not patient_param:
@@ -2592,7 +2614,7 @@ def lab_reports(request):
     report_title = (data.get('report_title') or data.get('title') or '').strip()
     report_file = (data.get('report_file') or data.get('file') or data.get('results') or '').strip()
     hospital_id = data.get('hospital_id') or user.get('hospital_id')
-    is_shared = 1 if data.get('is_shared', True) else 0
+    is_shared = 1 if data.get('is_shared', False) else 0
     raw_admission_id = data.get('admission_id')
     raw_visit_id = data.get('visit_id')
     adm_id = int(raw_admission_id) if raw_admission_id and str(raw_admission_id).isdigit() else None

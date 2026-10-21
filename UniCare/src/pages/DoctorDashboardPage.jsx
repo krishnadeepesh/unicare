@@ -182,7 +182,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   const [prescriptionSubmitting, setPrescriptionSubmitting] = useState(false);
   const [prescriptionForm, setPrescriptionForm] = useState({
     remarks: '',
-    is_shared: true,
+    is_shared: false,
     visit_id: null,
     appointment_id: null,
     medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
@@ -193,7 +193,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     report_type: 'Blood Test',
     report_title: '',
     report_file: '',
-    is_shared: true,
+    is_shared: false,
   });
 
   // Doctor Visit Entry Form
@@ -202,7 +202,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
     medical_notes: '',
     appointment_id: '',
     allergies: '',
-    is_shared: true,
+    is_shared: false,
     visit_type: 'OP',
     admission_id: '',
     ward_bed: '',
@@ -456,7 +456,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       medical_notes: '',
       appointment_id: appointmentId,
       allergies: selectedPatient?.allergies || '',
-      is_shared: true,
+      is_shared: false,
       visit_type: activeAdm ? 'IP' : 'OP',
       admission_id: activeAdm?.admission_id || '',
       ward_bed: activeAdm?.ward_bed || '',
@@ -520,7 +520,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
           medical_notes: '',
           appointment_id: '',
           allergies: '',
-          is_shared: true,
+          is_shared: false,
           visit_type: 'OP',
           admission_id: '',
           ward_bed: '',
@@ -641,7 +641,7 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         setMessage({ text: `Prescription ${data.prescription?.prescription_uid || 'PRE001'} issued successfully!`, type: 'success' });
         setPrescriptionForm({
           remarks: '',
-          is_shared: true,
+          is_shared: false,
           visit_id: null,
           appointment_id: null,
           medicines: [{ medicine_name: '', dosage: '500mg', frequency: 'Twice daily', duration: '5 days', instruction: 'After food' }]
@@ -794,14 +794,14 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
           report_type: labReportForm.report_type,
           report_title: labReportForm.report_title,
           report_file: labReportForm.report_file,
-          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : true,
+          is_shared: labReportForm.is_shared !== undefined ? labReportForm.is_shared : false,
           hospital_id: hospitalId
         })
       });
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: `Diagnostic Report ${data.report?.lab_report_uid || 'LAB001'} logged successfully!`, type: 'success' });
-        setLabReportForm({ report_type: 'Blood Test', report_title: '', report_file: '', is_shared: true });
+        setLabReportForm({ report_type: 'Blood Test', report_title: '', report_file: '', is_shared: false });
         setShowLabReportModal(false);
         handleSelectPatient(selectedPatient);
       } else {

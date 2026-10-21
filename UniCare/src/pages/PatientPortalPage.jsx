@@ -52,10 +52,11 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
     hospital_id: '',
     department_id: '',
     doctor_id: '',
-    appointment_date: '',
+    appointment_date: todayStr,
     appointment_time: '09:00'
   });
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [isFetchingSlots, setIsFetchingSlots] = useState(false);
   const [message, setMessage] = useState(null);
 
   const availableTimeSlots = [
@@ -139,6 +140,7 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
       setBookedSlots([]);
       return;
     }
+    setIsFetchingSlots(true);
     fetch(`${API}/appointments/options/?hospital_id=${form.hospital_id}&doctor_id=${encodeURIComponent(form.doctor_id)}&date=${encodeURIComponent(form.appointment_date)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -152,7 +154,8 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
           return prev;
         });
       })
-      .catch((err) => console.error("Error loading booked slots:", err));
+      .catch((err) => console.error("Error loading booked slots:", err))
+      .finally(() => setIsFetchingSlots(false));
   }, [form.hospital_id, form.doctor_id, form.appointment_date]);
 
   const book = async (e) => {
@@ -708,11 +711,17 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                         />
                       </div>
                       <div className="col-6">
-                        <label className="form-label fw-semibold small text-secondary">
-                          Time Slot *
-                          {bookedSlots.length > 0 && (
-                            <span className="badge bg-danger-subtle text-danger ms-1 extra-small">
-                              {bookedSlots.length} Booked
+                        <label className="form-label fw-semibold small text-secondary d-flex align-items-center justify-content-between">
+                          <span>Time Slot *</span>
+                          {isFetchingSlots ? (
+                            <span className="spinner-border spinner-border-sm text-teal" role="status" style={{ width: '12px', height: '12px' }}></span>
+                          ) : bookedSlots.length > 0 ? (
+                            <span className="badge bg-danger-subtle text-danger border border-danger-subtle extra-small">
+                              <i className="bi bi-lock-fill me-1"></i>{bookedSlots.length} Booked
+                            </span>
+                          ) : (
+                            <span className="badge bg-success-subtle text-success border border-success-subtle extra-small">
+                              <i className="bi bi-check-circle-fill me-1"></i>All 12 Open
                             </span>
                           )}
                         </label>
@@ -725,8 +734,8 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                           {availableTimeSlots.map((t) => {
                             const isBooked = bookedSlots.includes(t);
                             return (
-                              <option key={t} value={t} disabled={isBooked}>
-                                {t} {isBooked ? '— Not Available (Booked)' : '— Available'}
+                              <option key={t} value={t} disabled={isBooked} style={isBooked ? { color: '#dc2626', backgroundColor: '#fef2f2' } : {}}>
+                                {t} {isBooked ? '— [ALREADY BOOKED ✕ - NOT AVAILABLE]' : '— [AVAILABLE ✓]'}
                               </option>
                             );
                           })}
@@ -734,16 +743,42 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                       </div>
                     </div>
 
-                    {/* Visual Interactive Time Slot Grid */}
+                    {/* Visual Interactive Time Slot Grid & Explicit Booked Indicators */}
                     {form.doctor_id && form.appointment_date && (
-                      <div className="mb-3 p-2.5 bg-light rounded-3 border">
+                      <div className="mb-3 p-3 bg-white rounded-3 border shadow-sm">
                         <div className="d-flex justify-content-between align-items-center mb-2">
-                          <small className="fw-bold text-muted extra-small text-uppercase">Live Slot Availability</small>
-                          <small className="extra-small text-muted">
-                            <span className="text-success fw-bold">&bull; Free</span> &nbsp;|&nbsp; <span className="text-danger fw-bold">&bull; Booked</span>
-                          </small>
+                          <div className="d-flex align-items-center gap-2">
+                            <i className="bi bi-clock-history text-teal" style={{ color: '#0d9488' }}></i>
+                            <small className="fw-bold text-dark extra-small text-uppercase tracking-wider">Live Slot Availability on {form.appointment_date}</small>
+                            {isFetchingSlots && <span className="spinner-border spinner-border-sm text-teal" role="status"></span>}
+                          </div>
+                          <div className="d-flex align-items-center gap-2 extra-small">
+                            <span className="badge bg-success-subtle text-success border border-success-subtle">
+                              <i className="bi bi-check-circle-fill me-1"></i> Free ({availableTimeSlots.length - bookedSlots.length})
+                            </span>
+                            <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                              <i className="bi bi-lock-fill me-1"></i> Booked ({bookedSlots.length})
+                            </span>
+                          </div>
                         </div>
-                        <div className="d-flex flex-wrap gap-1.5">
+
+                        {bookedSlots.length > 0 ? (
+                          <div className="p-2 mb-2.5 rounded-2 bg-danger-subtle border border-danger-subtle extra-small text-danger d-flex align-items-center gap-2">
+                            <i className="bi bi-exclamation-octagon-fill fs-6 flex-shrink-0"></i>
+                            <div>
+                              <strong>Already Booked Slots:</strong> {bookedSlots.join(', ')} — these slots are locked and unavailable.
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2 mb-2.5 rounded-2 bg-success-subtle border border-success-subtle extra-small text-success d-flex align-items-center gap-2">
+                            <i className="bi bi-check-circle-fill fs-6 flex-shrink-0"></i>
+                            <div>
+                              <strong>All Slots Open:</strong> All consultation slots are currently open for this doctor on {form.appointment_date}.
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="d-flex flex-wrap gap-2 pt-1">
                           {availableTimeSlots.map((t) => {
                             const isBooked = bookedSlots.includes(t);
                             const isSelected = form.appointment_time === t;
@@ -753,17 +788,29 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                                 type="button"
                                 disabled={isBooked}
                                 onClick={() => setForm({ ...form, appointment_time: t })}
-                                className={`btn btn-sm py-1 px-2 extra-small rounded-2 ${
+                                className={`btn btn-sm py-1.5 px-2.5 extra-small rounded-2 d-inline-flex align-items-center gap-1.5 transition-all ${
                                   isBooked
-                                    ? 'btn-light text-muted border text-decoration-line-through opacity-75'
+                                    ? 'btn-light text-danger border-danger border border-opacity-50 text-decoration-line-through fw-semibold shadow-none'
                                     : isSelected
                                     ? 'btn-teal text-white shadow-sm fw-bold'
-                                    : 'btn-outline-secondary bg-white'
+                                    : 'btn-outline-secondary bg-white text-dark'
                                 }`}
-                                style={isSelected && !isBooked ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
-                                title={isBooked ? `${t} is already booked` : `Select ${t}`}
+                                style={
+                                  isBooked
+                                    ? { backgroundColor: '#fee2e2', cursor: 'not-allowed', opacity: 0.85 }
+                                    : isSelected
+                                    ? { backgroundColor: '#0d9488', borderColor: '#0d9488' }
+                                    : {}
+                                }
+                                title={isBooked ? `${t} is ALREADY BOOKED for this doctor` : `Click to select ${t}`}
                               >
-                                {t} {isBooked && '✕'}
+                                <i className={`bi ${isBooked ? 'bi-lock-fill text-danger' : isSelected ? 'bi-check2-circle' : 'bi-clock'}`}></i>
+                                <span>{t}</span>
+                                {isBooked ? (
+                                  <span className="badge bg-danger text-white rounded-pill px-1.5 py-0.5" style={{ fontSize: '9px' }}>Booked</span>
+                                ) : isSelected ? (
+                                  <span className="badge bg-white text-teal rounded-pill px-1.5 py-0.5" style={{ fontSize: '9px', color: '#0d9488' }}>Selected</span>
+                                ) : null}
                               </button>
                             );
                           })}
@@ -772,9 +819,11 @@ export default function PatientPortalPage({ user, onLogout, onNavigateHome }) {
                     )}
 
                     {bookedSlots.includes(form.appointment_time) && (
-                      <div className="alert alert-danger py-1.5 px-3 small mb-3 rounded-3">
-                        <i className="bi bi-x-circle-fill me-1"></i>
-                        <strong>Not Available:</strong> The selected time slot is already booked for this doctor. Please pick an available open slot above.
+                      <div className="alert alert-danger py-2 px-3 small mb-3 rounded-3 d-flex align-items-center gap-2">
+                        <i className="bi bi-x-circle-fill fs-6 flex-shrink-0"></i>
+                        <div>
+                          <strong>Slot Not Available:</strong> {form.appointment_time} is already booked for this doctor. Please pick an open slot above.
+                        </div>
                       </div>
                     )}
 
