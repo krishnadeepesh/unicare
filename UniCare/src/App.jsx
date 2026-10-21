@@ -14,6 +14,7 @@ import StaffDashboardPage from './pages/StaffDashboardPage';
 import DoctorDashboardPage from './pages/DoctorDashboardPage';
 import NurseDashboardPage from './pages/NurseDashboardPage';
 import PatientPortalPage from './pages/PatientPortalPage';
+import { API_BASE_URL } from './apiConfig';
 
 function App() {
   const getInitialView = () => {
@@ -242,7 +243,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/api/super-admin/auth/logout/', {
+      await fetch(`${API_BASE_URL}/auth/logout/`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -278,7 +279,7 @@ function App() {
 
   const handleSuperAdminLogout = async () => {
     try {
-      await fetch('http://localhost:8000/api/super-admin/logout/', {
+      await fetch(`${API_BASE_URL}/logout/`, {
         method: 'POST',
         credentials: 'include'
       });

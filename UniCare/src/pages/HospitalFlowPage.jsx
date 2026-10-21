@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../apiConfig';
 
 export default function HospitalFlowPage({ setView, onLogin }) {
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
@@ -129,7 +130,7 @@ export default function HospitalFlowPage({ setView, onLogin }) {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-register-public/', {
+      const response = await fetch(`${API_BASE_URL}/hospital-register-public/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -165,7 +166,7 @@ export default function HospitalFlowPage({ setView, onLogin }) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
+      const response = await fetch(`${API_BASE_URL}/hospital-admin-login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -201,7 +202,7 @@ export default function HospitalFlowPage({ setView, onLogin }) {
     if (!viewingStatus) return;
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-status-public/', {
+      const response = await fetch(`${API_BASE_URL}/hospital-status-public/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: viewingStatus.adminEmail || viewingStatus.email }),

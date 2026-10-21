@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import DigitalHealthCard from '../components/DigitalHealthCard';
-
-const API = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL as API } from '../apiConfig';
 
 const RECOVERY_QUESTIONS = [
   "What is the name of your best friend?",

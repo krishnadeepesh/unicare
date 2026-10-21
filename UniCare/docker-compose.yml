@@ -1,0 +1,62 @@
+services:
+  # MySQL Database Service
+  db:
+    image: mysql:8.0
+    container_name: unicare_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: db_unicare
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Initialize schema and seed data on first database spin-up
+      - ./database/unicare_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/unicare_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Django Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: unicare_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: "unicare-production-secret-key-change-in-env"
+      ALLOWED_HOSTS: "*"
+      DB_NAME: "db_unicare"
+      DB_USER: "root"
+      DB_PASSWORD: "rootpassword"
+      DB_HOST: "db"
+      DB_PORT: "3306"
+      CORS_ALLOW_ALL: "True"
+    volumes:
+      - media_volume:/app/backend/media
+    ports:
+      - "8000:8000"
+
+  # React Frontend + Nginx Service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: unicare_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:
+  media_volume:

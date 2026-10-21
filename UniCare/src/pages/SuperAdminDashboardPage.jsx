@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL, MEDIA_BASE_URL } from '../apiConfig';
 
 function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -744,7 +743,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                           <td>
                             {r.license_document ? (
                               <a
-                                href={`http://localhost:8000/media/${r.license_document}`}
+                                href={`${MEDIA_BASE_URL}/${r.license_document}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold"
@@ -1375,7 +1374,7 @@ function SuperAdminDashboardPage({ adminUser, onLogout, onNavigateHome }) {
                     <span className="text-muted">License Document:</span>
                     {detailHospital.license_document ? (
                       <a 
-                        href={`http://localhost:8000/media/${detailHospital.license_document}`} 
+                        href={`${MEDIA_BASE_URL}/${detailHospital.license_document}`} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="btn btn-sm btn-outline-danger fw-semibold"

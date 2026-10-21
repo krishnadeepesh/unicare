@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL } from '../apiConfig';
 
 function SuperAdminLoginPage({ onLoginSuccess, onBackToSite }) {
   const [email, setEmail] = useState('');

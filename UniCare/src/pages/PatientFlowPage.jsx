@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL } from '../apiConfig';
 
 export default function PatientFlowPage({ setView, onLogin }) {
   const [loginIdentifier, setLoginIdentifier] = useState(''); // Patient Health ID

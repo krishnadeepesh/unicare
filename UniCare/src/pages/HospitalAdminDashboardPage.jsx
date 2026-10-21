@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL, MEDIA_BASE_URL } from '../apiConfig';
 
 function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout, onNavigateHome }) {
   const initialHospitalName = hospitalInfo?.name || hospitalInfo?.hospital_name || 'Hospital Admin';
@@ -924,7 +923,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                         <small className="text-muted mt-1 d-block">
                           <i className="bi bi-file-earmark-pdf text-danger me-1"></i> Current document uploaded:{' '}
                           <a 
-                            href={`http://localhost:8000/media/${existingLicenseDoc}`} 
+                            href={`${MEDIA_BASE_URL}/${existingLicenseDoc}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-primary text-decoration-underline"
@@ -1058,7 +1057,7 @@ function HospitalAdminDashboardPage({ hospitalInfo, onBackToRoleSelect, onLogout
                     <span className="text-muted small d-block mb-1">Hospital License Document</span>
                     {hospitalData?.license_document ? (
                       <a 
-                        href={`http://localhost:8000/media/${hospitalData.license_document}`} 
+                        href={`${MEDIA_BASE_URL}/${hospitalData.license_document}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="btn btn-sm btn-outline-danger fw-semibold mt-1"

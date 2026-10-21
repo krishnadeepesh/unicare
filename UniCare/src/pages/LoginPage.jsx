@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../apiConfig';
 
 export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdminLogin, onRoleLogin }) {
   const [identifier, setIdentifier] = useState('');
@@ -52,7 +53,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
     setResetMessage('');
     setResetLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/recovery/lookup/', {
+      const response = await fetch(`${API_BASE_URL}/recovery/lookup/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -88,7 +89,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
     }
     setResetLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/recovery/verify/', {
+      const response = await fetch(`${API_BASE_URL}/recovery/verify/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -119,7 +120,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
 
     try {
       // One identifier field; the backend resolves the account role from email/phone.
-      const roleResponse = await fetch('http://localhost:8000/api/super-admin/auth/login/', {
+      const roleResponse = await fetch(`${API_BASE_URL}/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -154,7 +155,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
       }
 
       // Fallback check for legacy hospital admin login
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-admin-login/', {
+      const response = await fetch(`${API_BASE_URL}/hospital-admin-login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

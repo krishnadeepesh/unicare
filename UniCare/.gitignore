@@ -1,5 +1,5 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -24,7 +24,13 @@ dist-ssr/
 *.sln
 *.sw?
 
-# Backend media files
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Backend static files and media files
+backend/staticfiles/
 **/backend/media/*
 !**/backend/media/**/.gitkeep
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../apiConfig';
 
 const RECOVERY_QUESTIONS = [
   'What is the name of your best friend?',
@@ -116,7 +117,7 @@ export default function RegisterPage({ setView }) {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/super-admin/hospital-register-public/', {
+      const response = await fetch(`${API_BASE_URL}/hospital-register-public/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { calculateAge } from '../utils/dateUtils';
-
-const API = 'http://localhost:8000/api/super-admin';
+import { API_BASE_URL as API } from '../apiConfig';
 
 export default function StaffDashboardPage({ user, onLogout, onNavigateHome }) {
   const isDoctor = user?.role === 'doctor' || user?.role === 'Doctor';
