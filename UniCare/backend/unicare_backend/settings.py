@@ -84,11 +84,20 @@ WSGI_APPLICATION = 'unicare_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+db_ssl = os.environ.get('DB_SSL', 'False').lower() in ('true', '1', 'yes')
+db_options = {
+    'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+}
+if db_ssl:
+    db_options['ssl'] = {'check_hostname': False}
+
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith(('mysql://', 'mysql2://')):
     # Support cloud DATABASE_URL (e.g. Railway, Aiven, PlanetScale)
     clean_url = db_url.replace('mysql2://', 'mysql://')
     parsed = urllib.parse.urlparse(clean_url)
+    if 'ssl' in clean_url.lower() or 'aivencloud.com' in clean_url.lower():
+        db_options['ssl'] = {'check_hostname': False}
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -97,23 +106,24 @@ if db_url and db_url.startswith(('mysql://', 'mysql2://')):
             'PASSWORD': urllib.parse.unquote(parsed.password or ''),
             'HOST': parsed.hostname or 'localhost',
             'PORT': str(parsed.port or 3306),
-            'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
+            'OPTIONS': db_options,
         }
     }
 else:
+    # Aiven cloud hosts usually end with aivencloud.com
+    db_host = os.environ.get('DB_HOST', 'localhost')
+    if 'aivencloud.com' in db_host.lower():
+        db_options['ssl'] = {'check_hostname': False}
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': os.environ.get('DB_NAME', 'db_unicare'),
             'USER': os.environ.get('DB_USER', 'root'),
             'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'HOST': db_host,
             'PORT': os.environ.get('DB_PORT', '3306'),
-            'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
+            'OPTIONS': db_options,
         }
     }
 
