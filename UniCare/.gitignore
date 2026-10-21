@@ -7,29 +7,39 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node.js dependencies and build files
+node_modules/
+dist/
+dist-ssr/
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Backend media files
 **/backend/media/*
 !**/backend/media/**/.gitkeep
+
 # Python cache files
 __pycache__/
 *.py[cod]
 
+# Selenium test files
+selenium_tests/test_*.py
+
+# Selenium test reports
+selenium_tests/reports/
+
 # Selenium test screenshots
 selenium_tests/screenshots/
 
-# Temporary files
+# Temporary files and folders
 scratch/
