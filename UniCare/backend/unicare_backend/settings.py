@@ -106,6 +106,7 @@ if db_url and db_url.startswith(('mysql://', 'mysql2://')):
             'PASSWORD': urllib.parse.unquote(parsed.password or ''),
             'HOST': parsed.hostname or 'localhost',
             'PORT': str(parsed.port or 3306),
+            'CONN_MAX_AGE': 600,
             'OPTIONS': db_options,
         }
     }
@@ -123,6 +124,7 @@ else:
             'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),
             'HOST': db_host,
             'PORT': os.environ.get('DB_PORT', '3306'),
+            'CONN_MAX_AGE': 600,
             'OPTIONS': db_options,
         }
     }
