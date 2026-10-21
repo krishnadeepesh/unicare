@@ -118,6 +118,41 @@ def ensure_workflow_schema():
             'vitals_recorded_by': 'INT NULL',
             'vitals_recorded_at': 'DATETIME NULL',
             'record_share_flag': 'TINYINT(1) DEFAULT 1',
+            'visit_type': "VARCHAR(20) NOT NULL DEFAULT 'OP'",
+            'admission_id': 'INT NULL',
+        })
+        try:
+            cursor.execute("ALTER TABLE tbl_patient_visit MODIFY COLUMN appointment_id INT NULL DEFAULT NULL")
+        except Exception:
+            pass
+        cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_admission (
+            admission_id INT AUTO_INCREMENT PRIMARY KEY,
+            admission_uid VARCHAR(30) NULL,
+            patient_id INT NOT NULL,
+            hospital_id INT NOT NULL,
+            admitting_doctor_id INT NOT NULL,
+            admission_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            admission_status VARCHAR(30) NOT NULL DEFAULT 'Admitted',
+            discharge_date DATETIME NULL,
+            ward_bed VARCHAR(50) NULL,
+            admission_reason TEXT NULL,
+            discharge_summary TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        _ensure_columns(cursor, 'tbl_admission', {
+            'admission_uid': 'VARCHAR(30) NULL',
+            'ward_bed': 'VARCHAR(50) NULL',
+            'admission_reason': 'TEXT NULL',
+            'discharge_summary': 'TEXT NULL',
+            'discharge_date': 'DATETIME NULL',
+            'admission_status': "VARCHAR(30) NOT NULL DEFAULT 'Admitted'",
+        })
+        _ensure_columns(cursor, 'tbl_prescription', {
+            'admission_id': 'INT NULL',
+        })
+        _ensure_columns(cursor, 'tbl_lab_report', {
+            'admission_id': 'INT NULL',
+            'visit_id': 'INT NULL',
         })
         _ensure_columns(cursor, 'tbl_user', {
             'user_recovery_question': 'VARCHAR(255) NULL',
@@ -1202,8 +1237,8 @@ def receptionist_patient_suggestions(request):
 
 @csrf_exempt
 def patient_history(request):
-    """Authorized patient history endpoint for Doctor."""
-    user, error = require_roles(request, 'doctor')
+    """Authorized comprehensive patient history endpoint for Doctor, Nurse, and Clinical Staff."""
+    user, error = require_roles(request, 'doctor', 'nurse', 'hospital-admin', 'super-admin')
     if error:
         return error
     patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
@@ -1223,12 +1258,35 @@ def patient_history(request):
 
         patient_id = p_row[0]
 
-        cursor.execute(
-            "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1",
-            [patient_id, user['doctor_id'], user['hospital_id']]
-        )
-        if not cursor.fetchone():
-            return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient history.'}, status=403)
+        # Authorization check: verify clinical relationship with patient or hospital
+        if user['role'] == 'doctor':
+            cursor.execute(
+                "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1",
+                [patient_id, user['doctor_id'], user['hospital_id']]
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "SELECT 1 FROM tbl_admission WHERE patient_id=%s AND (admitting_doctor_id=%s OR hospital_id=%s) LIMIT 1",
+                    [patient_id, user['doctor_id'], user['hospital_id']]
+                )
+                if not cursor.fetchone():
+                    return JsonResponse({'status': 'error', 'message': 'You are not authorized to view this patient history.'}, status=403)
+        elif user['role'] == 'nurse':
+            # Nurse must belong to same hospital where patient has appointment, admission, or visit
+            cursor.execute(
+                "SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND hospital_id=%s "
+                "UNION SELECT 1 FROM tbl_admission WHERE patient_id=%s AND hospital_id=%s "
+                "UNION SELECT 1 FROM tbl_patient_visit WHERE patient_id=%s AND hospital_id=%s LIMIT 1",
+                [patient_id, user['hospital_id'], patient_id, user['hospital_id'], patient_id, user['hospital_id']]
+            )
+            if not cursor.fetchone():
+                # Also allow if record is shared across network
+                cursor.execute(
+                    "SELECT 1 FROM tbl_patient_visit WHERE patient_id=%s AND record_share_flag=1 LIMIT 1",
+                    [patient_id]
+                )
+                if not cursor.fetchone():
+                    return JsonResponse({'status': 'error', 'message': 'Patient has no clinical history at your hospital facility.'}, status=403)
 
         patient = {
             'patient_id': p_row[0],
@@ -1245,17 +1303,22 @@ def patient_history(request):
             'allergies': p_row[10] or '',
         }
 
+        # 1. Fetch visits (both OP and IP consultations)
         cursor.execute(
             "SELECT v.visit_id, v.diagnosis, v.medical_notes, v.visited_at, du.user_name, h.hospital_name,"
-            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at, v.doctor_id, COALESCE(v.record_share_flag, 1)"
+            " v.height, v.weight, v.blood_pressure, v.vitals_recorded_at, v.doctor_id, COALESCE(v.record_share_flag, 1),"
+            " COALESCE(v.visit_type, 'OP') AS visit_type, v.admission_id,"
+            " COALESCE(adm.admission_uid, CONCAT('ADM', LPAD(adm.admission_id, 3, '0'))) AS admission_uid,"
+            " adm.admission_status, adm.ward_bed"
             " FROM tbl_patient_visit v"
             " JOIN tbl_doctor d ON d.doctor_id = v.doctor_id"
             " JOIN tbl_user du ON du.user_id = d.user_id"
             " JOIN tbl_hospital h ON h.hospital_id = v.hospital_id"
+            " LEFT JOIN tbl_admission adm ON adm.admission_id = v.admission_id"
             " WHERE v.patient_id = %s"
             " AND (COALESCE(v.record_share_flag, 1) = 1 OR v.hospital_id = %s)"
             " ORDER BY v.visited_at DESC",
-            [patient_id, user['hospital_id']]
+            [patient_id, user.get('hospital_id')]
         )
         v_rows = cursor.fetchall()
         visits = [
@@ -1266,19 +1329,118 @@ def patient_history(request):
                 'visit_uid': f"VIS{r[0]:03d}",
                 'diagnosis': r[1] or '',
                 'medical_notes': r[2] or '',
-                'visited_at': str(r[3]),
+                'visited_at': r[3].strftime('%Y-%m-%d %H:%M') if hasattr(r[3], 'strftime') else str(r[3]),
+                'date': r[3].strftime('%Y-%m-%d %H:%M') if hasattr(r[3], 'strftime') else str(r[3]),
+                'raw_date': r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3]),
                 'doctor_name': r[4],
                 'hospital_name': r[5],
                 'height': r[6] or '',
                 'weight': r[7] or '',
                 'blood_pressure': r[8] or '',
                 'vitals_recorded_at': str(r[9]) if r[9] else '',
+                'has_vitals': bool(r[6] or r[7] or r[8]),
                 'doctor_id': r[10],
                 'is_shared': bool(r[11]),
+                'visit_type': r[12] or 'OP',
+                'admission_id': r[13],
+                'admission_uid': r[14] if r[13] else None,
+                'admission_status': r[15] if r[13] else None,
+                'ward_bed': r[16] if r[13] else None,
             }
             for r in v_rows
         ]
-    return JsonResponse({'status': 'success', 'patient': patient, 'history': visits, 'visits': visits})
+
+        # 2. Fetch patient admissions (Inpatient Records)
+        cursor.execute(
+            "SELECT a.admission_id, COALESCE(a.admission_uid, CONCAT('ADM', LPAD(a.admission_id, 3, '0'))) AS admission_uid,"
+            " a.admission_date, a.admission_status, a.discharge_date, a.ward_bed, a.admission_reason, a.discharge_summary,"
+            " du.user_name AS doctor_name, h.hospital_name,"
+            " (SELECT COUNT(*) FROM tbl_patient_visit pv WHERE pv.admission_id = a.admission_id) AS visit_count"
+            " FROM tbl_admission a"
+            " LEFT JOIN tbl_doctor d ON d.doctor_id = a.admitting_doctor_id"
+            " LEFT JOIN tbl_user du ON du.user_id = d.user_id"
+            " LEFT JOIN tbl_hospital h ON h.hospital_id = a.hospital_id"
+            " WHERE a.patient_id = %s"
+            " AND (a.hospital_id = %s OR EXISTS (SELECT 1 FROM tbl_patient_visit pv2 WHERE pv2.admission_id = a.admission_id AND pv2.record_share_flag = 1))"
+            " ORDER BY a.admission_date DESC",
+            [patient_id, user.get('hospital_id')]
+        )
+        a_rows = cursor.fetchall()
+        admissions = [
+            {
+                'admission_id': ar[0],
+                'id': ar[1],
+                'admission_uid': ar[1],
+                'admission_date': ar[2].strftime('%Y-%m-%d %H:%M') if hasattr(ar[2], 'strftime') else str(ar[2]),
+                'date': ar[2].strftime('%Y-%m-%d %H:%M') if hasattr(ar[2], 'strftime') else str(ar[2]),
+                'raw_date': ar[2].isoformat() if hasattr(ar[2], 'isoformat') else str(ar[2]),
+                'admission_status': ar[3] or 'Admitted',
+                'is_active': (ar[3] or '').lower() == 'admitted',
+                'discharge_date': ar[4].strftime('%Y-%m-%d %H:%M') if (ar[4] and hasattr(ar[4], 'strftime')) else (str(ar[4]) if ar[4] else ''),
+                'ward_bed': ar[5] or 'General Ward',
+                'admission_reason': ar[6] or '',
+                'discharge_summary': ar[7] or '',
+                'doctor_name': ar[8] or 'Attending Doctor',
+                'hospital_name': ar[9] or 'Hospital Facility',
+                'visit_count': ar[10] or 0,
+            }
+            for ar in a_rows
+        ]
+
+        # 3. Assemble unified Chronological Timeline (newest first)
+        timeline = []
+        for v in visits:
+            timeline.append({
+                'record_type': v['visit_type'],
+                'record_type_label': 'Inpatient Consultation' if v['visit_type'] == 'IP' else 'Outpatient Visit',
+                'id': v['id'],
+                'date': v['date'],
+                'raw_date': v['raw_date'],
+                'doctor_name': v['doctor_name'],
+                'hospital_name': v['hospital_name'],
+                'diagnosis': v['diagnosis'],
+                'medical_notes': v['medical_notes'],
+                'height': v['height'],
+                'weight': v['weight'],
+                'blood_pressure': v['blood_pressure'],
+                'has_vitals': v['has_vitals'],
+                'visit_id': v['visit_id'],
+                'admission_id': v['admission_id'],
+                'admission_uid': v['admission_uid'],
+                'admission_status': v['admission_status'],
+                'ward_bed': v['ward_bed'],
+                'is_shared': v['is_shared'],
+            })
+        for adm in admissions:
+            timeline.append({
+                'record_type': 'ADMISSION',
+                'record_type_label': f"Inpatient Admission ({adm['admission_status']})",
+                'id': adm['id'],
+                'date': adm['date'],
+                'raw_date': adm['raw_date'],
+                'doctor_name': adm['doctor_name'],
+                'hospital_name': adm['hospital_name'],
+                'admission_id': adm['admission_id'],
+                'admission_uid': adm['admission_uid'],
+                'admission_status': adm['admission_status'],
+                'is_active': adm['is_active'],
+                'ward_bed': adm['ward_bed'],
+                'admission_reason': adm['admission_reason'],
+                'discharge_date': adm['discharge_date'],
+                'discharge_summary': adm['discharge_summary'],
+                'visit_count': adm['visit_count'],
+            })
+        timeline.sort(key=lambda x: x.get('raw_date', ''), reverse=True)
+
+    return JsonResponse({
+        'status': 'success',
+        'patient': patient,
+        'history': visits,
+        'visits': visits,
+        'admissions': admissions,
+        'timeline': timeline,
+        'chronological_records': timeline
+    })
 
 
 def booking_options(request):
@@ -1586,12 +1748,14 @@ def record_vitals(request):
     ensure_workflow_schema()
     data = payload(request)
     appointment_id = data.get('appointment_id')
+    raw_admission_id = data.get('admission_id')
+    admission_id = int(raw_admission_id) if raw_admission_id and str(raw_admission_id).isdigit() else None
     height = (data.get('height') or '').strip()
     weight = (data.get('weight') or '').strip()
     blood_pressure = (data.get('blood_pressure') or '').strip()
 
-    if not appointment_id:
-        return JsonResponse({'status': 'error', 'message': 'Appointment ID is required to record vitals.'}, status=400)
+    if not appointment_id and not admission_id:
+        return JsonResponse({'status': 'error', 'message': 'Appointment ID or Admission ID is required to record vitals.'}, status=400)
     if not (height or weight or blood_pressure):
         return JsonResponse({'status': 'error', 'message': 'At least one vital (Height, Weight, or Blood Pressure) must be provided.'}, status=400)
 
@@ -1600,43 +1764,64 @@ def record_vitals(request):
         return JsonResponse({'status': 'error', 'message': 'Blood pressure must be in SYS/DIA format (e.g. 120/80 mmHg).'}, status=400)
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT patient_id, doctor_id, hospital_id FROM tbl_appointment WHERE appointment_id=%s",
-            [appointment_id]
-        )
-        appt_row = cursor.fetchone()
-        if not appt_row:
-            return JsonResponse({'status': 'error', 'message': 'Appointment not found.'}, status=404)
-        patient_id, doctor_id, appt_hospital_id = appt_row
-
-        cursor.execute(
-            "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
-            [appointment_id]
-        )
-        v_row = cursor.fetchone()
-        if v_row:
-            visit_id = v_row[0]
+        if appointment_id:
             cursor.execute(
-                "UPDATE tbl_patient_visit"
-                " SET height=%s, weight=%s, blood_pressure=%s, vitals_recorded_by=%s, vitals_recorded_at=NOW()"
-                " WHERE visit_id=%s",
-                [height or None, weight or None, blood_pressure or None, user['user_id'], visit_id]
+                "SELECT patient_id, doctor_id, hospital_id FROM tbl_appointment WHERE appointment_id=%s",
+                [appointment_id]
             )
+            appt_row = cursor.fetchone()
+            if not appt_row:
+                return JsonResponse({'status': 'error', 'message': 'Appointment not found.'}, status=404)
+            patient_id, doctor_id, appt_hospital_id = appt_row
+
+            cursor.execute(
+                "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
+                [appointment_id]
+            )
+            v_row = cursor.fetchone()
+            if v_row:
+                visit_id = v_row[0]
+                cursor.execute(
+                    "UPDATE tbl_patient_visit"
+                    " SET height=%s, weight=%s, blood_pressure=%s, vitals_recorded_by=%s, vitals_recorded_at=NOW()"
+                    " WHERE visit_id=%s",
+                    [height or None, weight or None, blood_pressure or None, user['user_id'], visit_id]
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO tbl_patient_visit"
+                    " (patient_id, doctor_id, hospital_id, appointment_id, height, weight, blood_pressure, vitals_recorded_by, vitals_recorded_at, visit_type, admission_id)"
+                    " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), 'OP', %s)",
+                    [patient_id, doctor_id, appt_hospital_id, appointment_id,
+                     height or None, weight or None, blood_pressure or None, user['user_id'], admission_id]
+                )
+                visit_id = cursor.lastrowid
+            log_context = f"Appointment: APT{int(appointment_id):03d}"
         else:
             cursor.execute(
+                "SELECT patient_id, hospital_id, admitting_doctor_id FROM tbl_admission WHERE admission_id=%s",
+                [admission_id]
+            )
+            adm_row = cursor.fetchone()
+            if not adm_row:
+                return JsonResponse({'status': 'error', 'message': 'Inpatient admission record not found.'}, status=404)
+            patient_id, appt_hospital_id, doctor_id = adm_row
+
+            cursor.execute(
                 "INSERT INTO tbl_patient_visit"
-                " (patient_id, doctor_id, hospital_id, appointment_id, height, weight, blood_pressure, vitals_recorded_by, vitals_recorded_at)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
-                [patient_id, doctor_id, appt_hospital_id, appointment_id,
+                " (patient_id, doctor_id, hospital_id, admission_id, visit_type, height, weight, blood_pressure, vitals_recorded_by, vitals_recorded_at)"
+                " VALUES (%s, %s, %s, %s, 'IP', %s, %s, %s, %s, NOW())",
+                [patient_id, doctor_id, appt_hospital_id, admission_id,
                  height or None, weight or None, blood_pressure or None, user['user_id']]
             )
             visit_id = cursor.lastrowid
+            log_context = f"Admission: ADM{int(admission_id):03d}"
 
-    log_audit(user['user_id'], f"Recorded patient vitals (Appointment: APT{int(appointment_id):03d}, BP: {blood_pressure or 'N/A'}, W: {weight or 'N/A'} kg, H: {height or 'N/A'} cm)", "Nurse Station", get_client_ip(request))
+    log_audit(user['user_id'], f"Recorded patient vitals ({log_context}, BP: {blood_pressure or 'N/A'}, W: {weight or 'N/A'} kg, H: {height or 'N/A'} cm)", "Nurse Station", get_client_ip(request))
 
     return JsonResponse({
         'status': 'success',
-        'message': 'Pre-consultation vitals saved successfully.',
+        'message': 'Vitals saved successfully.',
         'visit_id': visit_id,
         'vitals': {
             'height': height,
@@ -1828,6 +2013,11 @@ def visits(request):
             return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
         patient_id = p_row[0]
 
+        # Determine visit type (OP vs IP) and link admission if applicable
+        visit_type = (data.get('visit_type') or 'OP').strip().upper()
+        if visit_type not in ('OP', 'IP'):
+            visit_type = 'OP'
+
         # If an explicit appointment_id was provided, verify it belongs to this doctor & hospital
         if appointment_id:
             cursor.execute(
@@ -1837,56 +2027,117 @@ def visits(request):
             if not cursor.fetchone():
                 appointment_id = None
 
-        # If no valid appointment_id was found/passed, look for any existing appointment for this patient with this doctor at this hospital
-        if not appointment_id:
-            cursor.execute(
-                "SELECT appointment_id FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s"
-                " ORDER BY (appointment_status IN ('Pending','Confirmed')) DESC, appointment_id DESC LIMIT 1",
-                [patient_id, user['doctor_id'], user['hospital_id']]
-            )
-            app_row = cursor.fetchone()
-            if app_row:
-                appointment_id = app_row[0]
+        if visit_type == 'OP':
+            # If no valid appointment_id was found/passed, look for any existing appointment for this patient with this doctor at this hospital
+            if not appointment_id:
+                cursor.execute(
+                    "SELECT appointment_id FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s"
+                    " ORDER BY (appointment_status IN ('Pending','Confirmed')) DESC, appointment_id DESC LIMIT 1",
+                    [patient_id, user['doctor_id'], user['hospital_id']]
+                )
+                app_row = cursor.fetchone()
+                if app_row:
+                    appointment_id = app_row[0]
 
-        # If still no appointment exists (e.g. direct walk-in consultation), auto-create an appointment record
-        if not appointment_id:
-            cursor.execute(
-                "INSERT INTO tbl_appointment (patient_id, hospital_id, doctor_id, appointment_date, appointment_time, reason, created_by_user_id, appointment_status)"
-                " VALUES (%s, %s, %s, CURRENT_DATE(), DATE_FORMAT(NOW(), '%%H:%%i'), %s, %s, 'Completed')",
-                [patient_id, user['hospital_id'], user['doctor_id'], (data.get('diagnosis') or 'Walk-in Visit').strip(), user['user_id']]
-            )
-            appointment_id = cursor.lastrowid
+            # If still no appointment exists (e.g. direct walk-in consultation), auto-create an appointment record
+            if not appointment_id:
+                cursor.execute(
+                    "INSERT INTO tbl_appointment (patient_id, hospital_id, doctor_id, appointment_date, appointment_time, reason, created_by_user_id, appointment_status)"
+                    " VALUES (%s, %s, %s, CURRENT_DATE(), DATE_FORMAT(NOW(), '%%H:%%i'), %s, %s, 'Completed')",
+                    [patient_id, user['hospital_id'], user['doctor_id'], (data.get('diagnosis') or 'Walk-in Visit').strip(), user['user_id']]
+                )
+                appointment_id = cursor.lastrowid
+        else:
+            if not raw_appointment_id:
+                appointment_id = None
 
-        # Check if tbl_patient_visit already exists for this appointment_id (e.g. nurse recorded vitals)
-        cursor.execute(
-            "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
-            [appointment_id]
-        )
-        existing_v = cursor.fetchone()
+        admission_id = None
+        if visit_type == 'IP':
+            raw_admission_id = data.get('admission_id')
+            if raw_admission_id and str(raw_admission_id).isdigit():
+                admission_id = int(raw_admission_id)
+            else:
+                cursor.execute(
+                    "SELECT admission_id FROM tbl_admission WHERE patient_id=%s AND hospital_id=%s AND admission_status='Admitted' ORDER BY admission_id DESC LIMIT 1",
+                    [patient_id, user['hospital_id']]
+                )
+                adm_row = cursor.fetchone()
+                if adm_row:
+                    admission_id = adm_row[0]
+                else:
+                    ward_bed = (data.get('ward_bed') or 'General Ward').strip()
+                    admission_reason = (data.get('admission_reason') or data.get('diagnosis') or 'Inpatient Admission').strip()
+                    cursor.execute(
+                        "INSERT INTO tbl_admission (patient_id, hospital_id, admitting_doctor_id, admission_date, admission_status, ward_bed, admission_reason)"
+                        " VALUES (%s, %s, %s, CURRENT_DATE(), 'Admitted', %s, %s)",
+                        [patient_id, user['hospital_id'], user['doctor_id'], ward_bed, admission_reason]
+                    )
+                    admission_id = cursor.lastrowid
+                    cursor.execute(
+                        "UPDATE tbl_admission SET admission_uid=%s WHERE admission_id=%s",
+                        [f"ADM{admission_id:03d}", admission_id]
+                    )
+                    log_audit(user['user_id'], f"Created inpatient admission ADM{admission_id:03d} (Ward/Bed: {ward_bed})", "Inpatient Management", get_client_ip(request))
+
+            if data.get('discharge_patient') in (True, 'true', 1, '1'):
+                discharge_summary = (data.get('discharge_summary') or data.get('medical_notes') or 'Patient condition stable. Discharged.').strip()
+                cursor.execute(
+                    "UPDATE tbl_admission SET admission_status='Discharged', discharge_date=CURRENT_DATE(), discharge_summary=%s WHERE admission_id=%s",
+                    [discharge_summary, admission_id]
+                )
+                log_audit(user['user_id'], f"Discharged inpatient admission ADM{admission_id:03d}", "Inpatient Management", get_client_ip(request))
+
+        # Check if updating an existing visit or linking to a pre-consult intake record
+        raw_visit_id = data.get('visit_id')
+        existing_v = None
+        if raw_visit_id and str(raw_visit_id).isdigit():
+            cursor.execute("SELECT visit_id FROM tbl_patient_visit WHERE visit_id=%s", [int(raw_visit_id)])
+            existing_v = cursor.fetchone()
+        elif appointment_id:
+            cursor.execute(
+                "SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s ORDER BY visit_id DESC LIMIT 1",
+                [appointment_id]
+            )
+            existing_v = cursor.fetchone()
+        elif visit_type == 'IP' and admission_id:
+            # Inpatient stays support multiple visits/rounds. Only update if a pre-consult visit exists without diagnosis
+            cursor.execute(
+                "SELECT visit_id FROM tbl_patient_visit WHERE admission_id=%s AND (diagnosis IS NULL OR diagnosis='') ORDER BY visit_id DESC LIMIT 1",
+                [admission_id]
+            )
+            existing_v = cursor.fetchone()
+
+        # If not updating an existing visit but an appointment_id is present, ensure it's not already used
+        if not existing_v and appointment_id:
+            cursor.execute("SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s", [appointment_id])
+            if cursor.fetchone():
+                appointment_id = None
+
         if existing_v:
             visit_id = existing_v[0]
             cursor.execute(
                 "UPDATE tbl_patient_visit"
-                " SET diagnosis=%s, medical_notes=%s, doctor_id=%s, hospital_id=%s, record_share_flag=%s"
+                " SET diagnosis=%s, medical_notes=%s, doctor_id=%s, hospital_id=%s, record_share_flag=%s, visit_type=%s, admission_id=%s"
                 " WHERE visit_id=%s",
                 [(data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(),
-                 user['doctor_id'], user['hospital_id'], is_shared, visit_id]
+                 user['doctor_id'], user['hospital_id'], is_shared, visit_type, admission_id, visit_id]
             )
         else:
             cursor.execute(
-                "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes, record_share_flag)"
-                " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO tbl_patient_visit (patient_id, doctor_id, hospital_id, appointment_id, diagnosis, medical_notes, record_share_flag, visit_type, admission_id)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 [patient_id, user['doctor_id'], user['hospital_id'], appointment_id,
-                 (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(), is_shared]
+                 (data.get('diagnosis') or '').strip(), (data.get('medical_notes') or '').strip(), is_shared, visit_type, admission_id]
             )
             visit_id = cursor.lastrowid
 
-        # Mark appointment as completed
-        cursor.execute(
-            "UPDATE tbl_appointment SET appointment_status='Completed'"
-            " WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
-            [appointment_id, user['doctor_id'], user['hospital_id']]
-        )
+        # Mark appointment as completed if linked
+        if appointment_id:
+            cursor.execute(
+                "UPDATE tbl_appointment SET appointment_status='Completed'"
+                " WHERE appointment_id=%s AND doctor_id=%s AND hospital_id=%s",
+                [appointment_id, user['doctor_id'], user['hospital_id']]
+            )
 
         # Update patient allergies across all doctors if provided/modified in consultation
         if 'allergies' in data:
@@ -1903,7 +2154,7 @@ def visits(request):
             except Exception:
                 pass
 
-        log_audit(user['user_id'], f"Recorded clinical consultation visit (Visit: VIS{visit_id:03d}, Patient: {patient_id}, Shared: {bool(is_shared)})", "Clinical Consultations", get_client_ip(request))
+        log_audit(user['user_id'], f"Recorded clinical consultation visit ({visit_type}: VIS{visit_id:03d}, Patient: {patient_id}, Shared: {bool(is_shared)})", "Clinical Consultations", get_client_ip(request))
 
     return JsonResponse({
         'status': 'success',
@@ -1912,6 +2163,9 @@ def visits(request):
         'appointment_id': appointment_id,
         'patient_id': patient_id,
         'is_shared': bool(is_shared),
+        'visit_type': visit_type,
+        'admission_id': admission_id,
+        'admission_uid': f"ADM{admission_id:03d}" if admission_id else None,
     })
 
 
@@ -1989,11 +2243,16 @@ def prescriptions(request):
                 # When no patient is specified, do not leak all patients' prescriptions; return empty list
                 return JsonResponse({'status': 'success', 'prescriptions': []})
 
+        adm_param = request.GET.get('admission_id')
+        if adm_param and str(adm_param).isdigit():
+            where.append("p.admission_id = %s")
+            params.append(int(adm_param))
+
         where_clause = " WHERE " + " AND ".join(where) if where else ""
         sql = f"""
             SELECT p.prescription_id, p.patient_id, p.doctor_id, p.hospital_id, p.appointment_id, p.visit_id,
                    p.prescription_date, p.remarks, pt.patient_name, pt.patient_uid, du.user_name, h.hospital_name,
-                   p.prescription_created_at, COALESCE(p.prescription_share_flag, 1)
+                   p.prescription_created_at, COALESCE(p.prescription_share_flag, 1), p.admission_id
             FROM tbl_prescription p
             LEFT JOIN tbl_patient pt ON pt.patient_id = p.patient_id
             LEFT JOIN tbl_doctor d ON d.doctor_id = p.doctor_id
@@ -2039,6 +2298,8 @@ def prescriptions(request):
                     'appointment_uid': f"APT{r[4]:03d}" if r[4] else 'N/A',
                     'visit_id': r[5],
                     'visit_uid': f"VIS{r[5]:03d}" if r[5] else 'N/A',
+                    'admission_id': r[14],
+                    'admission_uid': f"ADM{r[14]:03d}" if r[14] else None,
                     'date': str(r[6] or (r[12].strftime('%Y-%m-%d') if r[12] else '')),
                     'remarks': r[7] or '',
                     'is_shared': bool(r[13]),
@@ -2109,6 +2370,7 @@ def prescriptions(request):
     patient_param = data.get('patient_id') or data.get('health_id')
     raw_appointment_id = data.get('appointment_id')
     raw_visit_id = data.get('visit_id')
+    raw_adm_id = data.get('admission_id')
     remarks = (data.get('remarks') or '').strip()
     is_shared = 1 if data.get('is_shared', True) else 0
     medicines = data.get('medicines') or []
@@ -2125,18 +2387,26 @@ def prescriptions(request):
             return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
         patient_id = p_row[0]
 
-        # Verify doctor is authorized for this patient
+        # Verify doctor is authorized for this patient (via appointment, admission, or hospital)
         cursor.execute("SELECT 1 FROM tbl_appointment WHERE patient_id=%s AND doctor_id=%s AND hospital_id=%s LIMIT 1", [patient_id, user['doctor_id'], user['hospital_id']])
         if not cursor.fetchone():
-            return JsonResponse({'status': 'error', 'message': 'You are not authorized to issue prescriptions for this patient.'}, status=403)
+            cursor.execute("SELECT 1 FROM tbl_admission WHERE patient_id=%s AND (admitting_doctor_id=%s OR hospital_id=%s) LIMIT 1", [patient_id, user['doctor_id'], user['hospital_id']])
+            if not cursor.fetchone():
+                return JsonResponse({'status': 'error', 'message': 'You are not authorized to issue prescriptions for this patient.'}, status=403)
 
         app_id = int(raw_appointment_id) if raw_appointment_id and str(raw_appointment_id).isdigit() else None
         vis_id = int(raw_visit_id) if raw_visit_id and str(raw_visit_id).isdigit() else None
+        adm_id = int(raw_adm_id) if raw_adm_id and str(raw_adm_id).isdigit() else None
+        if not adm_id and vis_id:
+            cursor.execute("SELECT admission_id FROM tbl_patient_visit WHERE visit_id = %s", [vis_id])
+            v_adm = cursor.fetchone()
+            if v_adm and v_adm[0]:
+                adm_id = v_adm[0]
 
         cursor.execute(
-            "INSERT INTO tbl_prescription (patient_id, doctor_id, hospital_id, appointment_id, visit_id, prescription_date, remarks, prescription_share_flag, prescription_is_active)"
-            " VALUES (%s, %s, %s, %s, %s, CURRENT_DATE(), %s, %s, 1)",
-            [patient_id, user['doctor_id'], user['hospital_id'], app_id, vis_id, remarks, is_shared]
+            "INSERT INTO tbl_prescription (patient_id, doctor_id, hospital_id, appointment_id, visit_id, admission_id, prescription_date, remarks, prescription_share_flag, prescription_is_active)"
+            " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE(), %s, %s, 1)",
+            [patient_id, user['doctor_id'], user['hospital_id'], app_id, vis_id, adm_id, remarks, is_shared]
         )
         presc_id = cursor.lastrowid
 
@@ -2217,10 +2487,16 @@ def lab_reports(request):
                         where.append("l.patient_id = %s")
                         params.append(pr[0])
 
+        adm_param = request.GET.get('admission_id')
+        if adm_param and str(adm_param).isdigit():
+            where.append("l.admission_id = %s")
+            params.append(int(adm_param))
+
         where_clause = " WHERE " + " AND ".join(where) if where else ""
         sql = f"""
             SELECT l.lab_report_id, l.patient_id, l.hospital_id, l.report_type, l.report_title, l.report_file,
-                   l.report_uploaded_at, pt.patient_name, pt.patient_uid, h.hospital_name, COALESCE(l.report_share_flag, 1)
+                   l.report_uploaded_at, pt.patient_name, pt.patient_uid, h.hospital_name, COALESCE(l.report_share_flag, 1),
+                   l.admission_id, l.visit_id
             FROM tbl_lab_report l
             LEFT JOIN tbl_patient pt ON pt.patient_id = l.patient_id
             LEFT JOIN tbl_hospital h ON h.hospital_id = l.hospital_id
@@ -2247,6 +2523,10 @@ def lab_reports(request):
                     'uploaded_at': r[6].strftime('%Y-%m-%d %H:%M') if hasattr(r[6], 'strftime') else str(r[6] or ''),
                     'is_shared': bool(r[10]),
                     'report_share_flag': r[10],
+                    'admission_id': r[11],
+                    'admission_uid': f"ADM{r[11]:03d}" if r[11] else None,
+                    'visit_id': r[12],
+                    'visit_uid': f"VIS{r[12]:03d}" if r[12] else None,
                 }
                 for r in rows
             ]
@@ -2313,6 +2593,10 @@ def lab_reports(request):
     report_file = (data.get('report_file') or data.get('file') or data.get('results') or '').strip()
     hospital_id = data.get('hospital_id') or user.get('hospital_id')
     is_shared = 1 if data.get('is_shared', True) else 0
+    raw_admission_id = data.get('admission_id')
+    raw_visit_id = data.get('visit_id')
+    adm_id = int(raw_admission_id) if raw_admission_id and str(raw_admission_id).isdigit() else None
+    vis_id = int(raw_visit_id) if raw_visit_id and str(raw_visit_id).isdigit() else None
 
     if not report_title:
         return JsonResponse({'status': 'error', 'message': 'Report title is required.'}, status=400)
@@ -2326,11 +2610,17 @@ def lab_reports(request):
             return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
         patient_id = p_row[0]
 
+        if not adm_id and vis_id:
+            cursor.execute("SELECT admission_id FROM tbl_patient_visit WHERE visit_id = %s", [vis_id])
+            v_adm = cursor.fetchone()
+            if v_adm and v_adm[0]:
+                adm_id = v_adm[0]
+
         doc_id = user.get('doctor_id') or None
         cursor.execute(
-            "INSERT INTO tbl_lab_report (patient_id, doctor_id, hospital_id, report_type, report_title, report_file, report_share_flag, report_is_active)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
-            [patient_id, doc_id, hospital_id, report_type, report_title, report_file, is_shared]
+            "INSERT INTO tbl_lab_report (patient_id, doctor_id, hospital_id, visit_id, admission_id, report_type, report_title, report_file, report_share_flag, report_is_active)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)",
+            [patient_id, doc_id, hospital_id, vis_id, adm_id, report_type, report_title, report_file, is_shared]
         )
         report_id = cursor.lastrowid
 
@@ -2345,6 +2635,9 @@ def lab_reports(request):
             'lab_report_uid': f"LAB{report_id:03d}",
             'report_type': report_type,
             'report_title': report_title,
+            'admission_id': adm_id,
+            'admission_uid': f"ADM{adm_id:03d}" if adm_id else None,
+            'visit_id': vis_id,
             'is_shared': bool(is_shared),
         }
     })
@@ -2407,3 +2700,601 @@ def audit_logs(request):
         ]
 
     return JsonResponse({'status': 'success', 'logs': logs, 'count': len(logs)})
+
+
+@csrf_exempt
+def admissions(request):
+    """Inpatient Admissions Management endpoint for Doctor, Nurse, Hospital Admin, Super Admin."""
+    user, error = require_roles(request, 'doctor', 'nurse', 'hospital-admin', 'super-admin')
+    if error:
+        return error
+    ensure_workflow_schema()
+
+    if request.method == 'GET':
+        status_filter = (request.GET.get('status') or 'all').strip()
+        date_filter = (request.GET.get('date') or '').strip()
+        search = (request.GET.get('search') or request.GET.get('q') or '').strip().lower()
+        patient_param = request.GET.get('patient_id') or request.GET.get('health_id')
+        doctor_param = request.GET.get('doctor_id')
+
+        where = []
+        params = []
+
+        if user['role'] != 'super-admin' and user.get('hospital_id'):
+            where.append("a.hospital_id = %s")
+            params.append(user['hospital_id'])
+
+        if status_filter and status_filter != 'all':
+            where.append("a.admission_status = %s")
+            params.append(status_filter)
+
+        if date_filter:
+            where.append("a.admission_date = %s")
+            params.append(date_filter)
+
+        if doctor_param and str(doctor_param).isdigit():
+            where.append("a.admitting_doctor_id = %s")
+            params.append(int(doctor_param))
+
+        if patient_param:
+            where.append("(p.patient_id = %s OR p.patient_uid = %s)")
+            params.extend([patient_param, patient_param])
+
+        if search:
+            where.append("(LOWER(p.patient_name) LIKE %s OR LOWER(COALESCE(p.patient_uid, '')) LIKE %s OR LOWER(COALESCE(a.admission_uid, '')) LIKE %s OR LOWER(COALESCE(a.ward_bed, '')) LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+
+        where_clause = " WHERE " + " AND ".join(where) if where else ""
+        sql = f"""
+            SELECT a.admission_id, COALESCE(a.admission_uid, CONCAT('ADM', LPAD(a.admission_id, 3, '0'))) AS admission_uid,
+                   a.patient_id, p.patient_name, p.patient_uid, p.patient_gender, p.patient_blood_group, p.patient_phone,
+                   a.hospital_id, h.hospital_name,
+                   a.admitting_doctor_id, COALESCE(du.user_name, 'Attending Physician') AS doctor_name,
+                   a.admission_date, a.admission_status, a.discharge_date, a.ward_bed, a.admission_reason, a.discharge_summary,
+                   a.created_at,
+                   (SELECT COUNT(*) FROM tbl_patient_visit pv WHERE pv.admission_id = a.admission_id) AS visits_count,
+                   (SELECT COUNT(*) FROM tbl_prescription pr WHERE pr.admission_id = a.admission_id) AS prescriptions_count,
+                   (SELECT COUNT(*) FROM tbl_lab_report lr WHERE lr.admission_id = a.admission_id) AS lab_reports_count
+            FROM tbl_admission a
+            JOIN tbl_patient p ON p.patient_id = a.patient_id
+            JOIN tbl_hospital h ON h.hospital_id = a.hospital_id
+            LEFT JOIN tbl_doctor d ON d.doctor_id = a.admitting_doctor_id
+            LEFT JOIN tbl_user du ON du.user_id = d.user_id
+            {where_clause}
+            ORDER BY a.admission_date DESC, a.admission_id DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            admissions_list = [
+                {
+                    'admission_id': r[0],
+                    'id': r[1],
+                    'admission_uid': r[1],
+                    'patient_id': r[2],
+                    'patient_name': r[3],
+                    'patient_uid': r[4] or f"PTA{r[2]:03d}",
+                    'health_id': r[4] or f"PTA{r[2]:03d}",
+                    'patient_gender': r[5] or '',
+                    'gender': r[5] or '',
+                    'patient_blood_group': r[6] or '',
+                    'blood_group': r[6] or '',
+                    'patient_phone': r[7] or '',
+                    'phone': r[7] or '',
+                    'hospital_id': r[8],
+                    'hospital_name': r[9],
+                    'doctor_id': r[10],
+                    'admitting_doctor_id': r[10],
+                    'doctor_name': r[11],
+                    'admission_date': str(r[12]) if r[12] else '',
+                    'raw_date': r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12] or ''),
+                    'admission_status': r[13] or 'Admitted',
+                    'status': r[13] or 'Admitted',
+                    'discharge_date': str(r[14]) if r[14] else '',
+                    'ward_bed': r[15] or 'General Ward',
+                    'admission_reason': r[16] or '',
+                    'discharge_summary': r[17] or '',
+                    'created_at': r[18].strftime('%Y-%m-%d %H:%M') if hasattr(r[18], 'strftime') else str(r[18] or ''),
+                    'visits_count': r[19],
+                    'prescriptions_count': r[20],
+                    'lab_reports_count': r[21],
+                }
+                for r in rows
+            ]
+        return JsonResponse({'status': 'success', 'admissions': admissions_list, 'count': len(admissions_list)})
+
+    if request.method == 'POST':
+        if user['role'] not in ('doctor', 'nurse', 'hospital-admin'):
+            return JsonResponse({'status': 'error', 'message': 'Only clinical staff can create inpatient admissions.'}, status=403)
+        data = payload(request)
+        patient_param = data.get('patient_id') or data.get('health_id')
+        ward_bed = (data.get('ward_bed') or 'General Ward').strip()
+        admission_reason = (data.get('admission_reason') or 'Inpatient Care').strip()
+        doctor_id = data.get('doctor_id') or user.get('doctor_id')
+        admission_date = data.get('admission_date') or None
+
+        if not patient_param:
+            return JsonResponse({'status': 'error', 'message': 'Patient ID or Health ID is required.'}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT patient_id, patient_name FROM tbl_patient WHERE patient_id=%s OR patient_uid=%s LIMIT 1", [patient_param, patient_param])
+            p_row = cursor.fetchone()
+            if not p_row:
+                return JsonResponse({'status': 'error', 'message': 'Patient record not found.'}, status=404)
+            patient_id, patient_name = p_row
+
+            # Check if patient already has an active admission at this hospital
+            cursor.execute("SELECT admission_id, admission_uid FROM tbl_admission WHERE patient_id=%s AND hospital_id=%s AND admission_status='Admitted' LIMIT 1", [patient_id, user['hospital_id']])
+            existing_adm = cursor.fetchone()
+            if existing_adm:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f"Patient already has an active admission ({existing_adm[1] or ('ADM' + str(existing_adm[0]))}) at this hospital.",
+                    'admission_id': existing_adm[0]
+                }, status=400)
+
+            date_sql = "%s" if admission_date else "CURRENT_DATE()"
+            insert_params = [patient_id, user['hospital_id'], doctor_id]
+            if admission_date:
+                insert_params.append(admission_date)
+            insert_params.extend([ward_bed, admission_reason])
+
+            cursor.execute(
+                f"INSERT INTO tbl_admission (patient_id, hospital_id, admitting_doctor_id, admission_date, admission_status, ward_bed, admission_reason)"
+                f" VALUES (%s, %s, %s, {date_sql}, 'Admitted', %s, %s)",
+                insert_params
+            )
+            admission_id = cursor.lastrowid
+            adm_uid = f"ADM{admission_id:03d}"
+            cursor.execute("UPDATE tbl_admission SET admission_uid=%s WHERE admission_id=%s", [adm_uid, admission_id])
+
+            log_audit(user['user_id'], f"Admitted patient {patient_name} (ID: {patient_id}) to {ward_bed} ({adm_uid})", "Inpatient Management", get_client_ip(request))
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Inpatient admission created successfully ({adm_uid}).',
+            'admission': {
+                'admission_id': admission_id,
+                'admission_uid': adm_uid,
+                'patient_id': patient_id,
+                'ward_bed': ward_bed,
+                'admission_status': 'Admitted'
+            }
+        })
+
+    if request.method == 'PATCH':
+        if user['role'] not in ('doctor', 'nurse', 'hospital-admin'):
+            return JsonResponse({'status': 'error', 'message': 'Only clinical staff can update admissions.'}, status=403)
+        data = payload(request)
+        adm_param = data.get('admission_id')
+        if not adm_param:
+            return JsonResponse({'status': 'error', 'message': 'admission_id is required.'}, status=400)
+        try:
+            admission_id = int(adm_param)
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid admission_id format.'}, status=400)
+
+        action = data.get('action') or ('discharge' if data.get('discharge_summary') or data.get('admission_status') == 'Discharged' else 'update')
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT hospital_id, admission_status, admission_uid, patient_id FROM tbl_admission WHERE admission_id=%s", [admission_id])
+            adm = cursor.fetchone()
+            if not adm:
+                return JsonResponse({'status': 'error', 'message': 'Admission not found.'}, status=404)
+            if user['role'] != 'super-admin' and user.get('hospital_id') and adm[0] != user['hospital_id']:
+                return JsonResponse({'status': 'error', 'message': 'You can only update admissions in your hospital facility.'}, status=403)
+
+            adm_uid = adm[2] or f"ADM{admission_id:03d}"
+
+            if action == 'discharge':
+                summary = (data.get('discharge_summary') or data.get('medical_notes') or 'Patient condition improved. Discharged.').strip()
+                cursor.execute(
+                    "UPDATE tbl_admission SET admission_status='Discharged', discharge_date=CURRENT_DATE(), discharge_summary=%s WHERE admission_id=%s",
+                    [summary, admission_id]
+                )
+                log_audit(user['user_id'], f"Discharged inpatient {adm_uid} (Patient: {adm[3]})", "Inpatient Management", get_client_ip(request))
+                return JsonResponse({'status': 'success', 'message': f'Patient admission {adm_uid} has been marked as Discharged.'})
+            else:
+                updates = []
+                u_params = []
+                if 'ward_bed' in data:
+                    updates.append("ward_bed = %s")
+                    u_params.append(data['ward_bed'])
+                if 'admission_reason' in data:
+                    updates.append("admission_reason = %s")
+                    u_params.append(data['admission_reason'])
+                if 'admission_status' in data:
+                    updates.append("admission_status = %s")
+                    u_params.append(data['admission_status'])
+                if updates:
+                    u_params.append(admission_id)
+                    cursor.execute(f"UPDATE tbl_admission SET {', '.join(updates)} WHERE admission_id=%s", u_params)
+                log_audit(user['user_id'], f"Updated inpatient admission details for {adm_uid}", "Inpatient Management", get_client_ip(request))
+                return JsonResponse({'status': 'success', 'message': f'Admission {adm_uid} updated successfully.'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
+
+
+@csrf_exempt
+def admission_detail(request):
+    """Retrieve full inpatient admission file with all linked visits, vitals, prescriptions, and lab reports."""
+    user, error = require_roles(request, 'doctor', 'nurse', 'hospital-admin', 'super-admin', 'patient')
+    if error:
+        return error
+    ensure_workflow_schema()
+
+    adm_param = request.GET.get('admission_id') or request.GET.get('id')
+    if not adm_param:
+        return JsonResponse({'status': 'error', 'message': 'admission_id is required.'}, status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT a.admission_id, COALESCE(a.admission_uid, CONCAT('ADM', LPAD(a.admission_id, 3, '0'))) AS admission_uid,"
+            " a.patient_id, p.patient_name, p.patient_uid, p.patient_gender, p.patient_blood_group, p.patient_phone,"
+            " p.patient_dob, p.allergies, p.patient_emergency_contact,"
+            " a.hospital_id, h.hospital_name,"
+            " a.admitting_doctor_id, COALESCE(du.user_name, 'Attending Physician') AS doctor_name,"
+            " a.admission_date, a.admission_status, a.discharge_date, a.ward_bed, a.admission_reason, a.discharge_summary,"
+            " a.created_at"
+            " FROM tbl_admission a"
+            " JOIN tbl_patient p ON p.patient_id = a.patient_id"
+            " JOIN tbl_hospital h ON h.hospital_id = a.hospital_id"
+            " LEFT JOIN tbl_doctor d ON d.doctor_id = a.admitting_doctor_id"
+            " LEFT JOIN tbl_user du ON du.user_id = d.user_id"
+            " WHERE a.admission_id=%s OR a.admission_uid=%s LIMIT 1",
+            [adm_param, adm_param]
+        )
+        adm_row = cursor.fetchone()
+        if not adm_row:
+            return JsonResponse({'status': 'error', 'message': 'Inpatient admission not found.'}, status=404)
+
+        if user['role'] == 'patient' and user.get('patient_id') != adm_row[2]:
+            return JsonResponse({'status': 'error', 'message': 'Access denied.'}, status=403)
+        if user['role'] != 'super-admin' and user['role'] != 'patient' and user.get('hospital_id') and adm_row[11] != user['hospital_id']:
+            return JsonResponse({'status': 'error', 'message': 'Access restricted to originating hospital facility.'}, status=403)
+
+        admission_id = adm_row[0]
+        patient_id = adm_row[2]
+
+        admission = {
+            'admission_id': admission_id,
+            'id': adm_row[1],
+            'admission_uid': adm_row[1],
+            'patient_id': patient_id,
+            'patient_name': adm_row[3],
+            'patient_uid': adm_row[4] or f"PTA{patient_id:03d}",
+            'health_id': adm_row[4] or f"PTA{patient_id:03d}",
+            'gender': adm_row[5] or '',
+            'blood_group': adm_row[6] or '',
+            'phone': adm_row[7] or '',
+            'date_of_birth': str(adm_row[8]) if adm_row[8] else '',
+            'allergies': adm_row[9] or 'None recorded',
+            'emergency_contact': adm_row[10] or '',
+            'hospital_id': adm_row[11],
+            'hospital_name': adm_row[12],
+            'admitting_doctor_id': adm_row[13],
+            'doctor_name': adm_row[14],
+            'admission_date': str(adm_row[15]) if adm_row[15] else '',
+            'admission_status': adm_row[16] or 'Admitted',
+            'status': adm_row[16] or 'Admitted',
+            'discharge_date': str(adm_row[17]) if adm_row[17] else '',
+            'ward_bed': adm_row[18] or 'General Ward',
+            'admission_reason': adm_row[19] or '',
+            'discharge_summary': adm_row[20] or '',
+            'created_at': adm_row[21].strftime('%Y-%m-%d %H:%M') if hasattr(adm_row[21], 'strftime') else str(adm_row[21] or ''),
+        }
+
+        # 1. Linked Visits & Consultations during this admission
+        cursor.execute(
+            "SELECT pv.visit_id, pv.diagnosis, pv.medical_notes, pv.visited_at,"
+            " COALESCE(du.user_name, 'Attending Doctor') AS doctor_name,"
+            " pv.height, pv.weight, pv.blood_pressure, pv.vitals_recorded_at, nu.user_name AS vitals_by_name"
+            " FROM tbl_patient_visit pv"
+            " LEFT JOIN tbl_doctor d ON d.doctor_id = pv.doctor_id"
+            " LEFT JOIN tbl_user du ON du.user_id = d.user_id"
+            " LEFT JOIN tbl_user nu ON nu.user_id = pv.vitals_recorded_by"
+            " WHERE pv.admission_id = %s"
+            " ORDER BY pv.visited_at DESC, pv.visit_id DESC",
+            [admission_id]
+        )
+        v_rows = cursor.fetchall()
+        visits_list = []
+        visit_ids = []
+        for v in v_rows:
+            visit_ids.append(v[0])
+            height_m = None
+            bmi = None
+            if v[5] and v[6]:
+                try:
+                    height_m = float(v[5]) / 100.0
+                    weight_kg = float(v[6])
+                    if height_m > 0:
+                        bmi = round(weight_kg / (height_m ** 2), 1)
+                except Exception:
+                    pass
+            visits_list.append({
+                'visit_id': v[0],
+                'id': f"VIS{v[0]:03d}",
+                'visit_uid': f"VIS{v[0]:03d}",
+                'diagnosis': v[1] or 'Inpatient Round / Daily Assessment',
+                'medical_notes': v[2] or '',
+                'visited_at': v[3].strftime('%Y-%m-%d %H:%M') if hasattr(v[3], 'strftime') else str(v[3] or ''),
+                'doctor_name': v[4],
+                'height': v[5] or '',
+                'weight': v[6] or '',
+                'blood_pressure': v[7] or '',
+                'bmi': bmi,
+                'vitals_recorded_at': v[8].strftime('%Y-%m-%d %H:%M') if hasattr(v[8], 'strftime') else str(v[8] or ''),
+                'vitals_by_name': v[9] or '',
+            })
+
+        # 2. Linked Prescriptions
+        in_clause = ','.join(['%s'] * len(visit_ids)) if visit_ids else '0'
+        presc_sql = f"""
+            SELECT p.prescription_id, p.prescription_date, p.remarks, du.user_name AS doctor_name, p.prescription_share_flag
+            FROM tbl_prescription p
+            LEFT JOIN tbl_doctor d ON d.doctor_id = p.doctor_id
+            LEFT JOIN tbl_user du ON du.user_id = d.user_id
+            WHERE p.prescription_is_active = 1 AND (p.admission_id = %s OR p.visit_id IN ({in_clause}))
+            ORDER BY p.prescription_date DESC, p.prescription_id DESC
+        """
+        presc_params = [admission_id] + (visit_ids if visit_ids else [])
+        cursor.execute(presc_sql, presc_params)
+        p_rows = cursor.fetchall()
+        prescriptions_list = []
+        for pr in p_rows:
+            presc_id = pr[0]
+            cursor.execute(
+                "SELECT medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction"
+                " FROM tbl_prescription_item WHERE prescription_id = %s",
+                [presc_id]
+            )
+            med_rows = cursor.fetchall()
+            prescriptions_list.append({
+                'prescription_id': presc_id,
+                'id': f"PRE{presc_id:03d}",
+                'prescription_uid': f"PRE{presc_id:03d}",
+                'date': str(pr[1]) if pr[1] else '',
+                'remarks': pr[2] or '',
+                'doctor_name': pr[3] or 'Attending Doctor',
+                'is_shared': bool(pr[4]),
+                'medicines': [
+                    {
+                        'medicine_name': m[0],
+                        'dosage': m[1] or '',
+                        'frequency': m[2] or '',
+                        'duration': m[3] or '',
+                        'instruction': m[4] or '',
+                    }
+                    for m in med_rows
+                ]
+            })
+
+        # 3. Linked Diagnostic Lab Reports
+        rep_sql = f"""
+            SELECT lr.lab_report_id, lr.report_type, lr.report_title, lr.report_file, lr.report_uploaded_at, lr.report_share_flag
+            FROM tbl_lab_report lr
+            WHERE lr.report_is_active = 1 AND (lr.admission_id = %s OR lr.visit_id IN ({in_clause}))
+            ORDER BY lr.report_uploaded_at DESC, lr.lab_report_id DESC
+        """
+        rep_params = [admission_id] + (visit_ids if visit_ids else [])
+        cursor.execute(rep_sql, rep_params)
+        l_rows = cursor.fetchall()
+        reports_list = [
+            {
+                'report_id': lr[0],
+                'id': f"LAB{lr[0]:03d}",
+                'lab_report_uid': f"LAB{lr[0]:03d}",
+                'report_type': lr[1] or 'Diagnostic Report',
+                'report_title': lr[2] or 'Laboratory Test',
+                'report_file': lr[3] or '',
+                'uploaded_at': lr[4].strftime('%Y-%m-%d %H:%M') if hasattr(lr[4], 'strftime') else str(lr[4] or ''),
+                'is_shared': bool(lr[5]),
+            }
+            for lr in l_rows
+        ]
+
+    return JsonResponse({
+        'status': 'success',
+        'admission': admission,
+        'visits': visits_list,
+        'prescriptions': prescriptions_list,
+        'lab_reports': reports_list,
+    })
+
+
+@csrf_exempt
+def clinical_records(request):
+    """Unified date-sorted Inpatient and Outpatient clinical records for Nurse and Doctor modules."""
+    user, error = require_roles(request, 'nurse', 'doctor', 'hospital-admin', 'super-admin')
+    if error:
+        return error
+    ensure_workflow_schema()
+
+    record_type = (request.GET.get('type') or 'all').strip().upper()  # 'ALL', 'OP', 'IP'
+    date_filter = (request.GET.get('date') or '').strip()
+    search = (request.GET.get('search') or request.GET.get('q') or '').strip().lower()
+    doctor_param = request.GET.get('doctor_id')
+    status_filter = (request.GET.get('status') or 'all').strip()
+
+    op_records = []
+    ip_records = []
+
+    with connection.cursor() as cursor:
+        # Fetch Outpatient Visits if requested
+        if record_type in ('ALL', 'OP'):
+            where_op = ["(pv.visit_type = 'OP' OR pv.visit_type IS NULL)"]
+            params_op = []
+            if user['role'] != 'super-admin' and user.get('hospital_id'):
+                where_op.append("pv.hospital_id = %s")
+                params_op.append(user['hospital_id'])
+            if date_filter:
+                where_op.append("DATE(pv.visited_at) = %s")
+                params_op.append(date_filter)
+            if doctor_param and str(doctor_param).isdigit():
+                where_op.append("pv.doctor_id = %s")
+                params_op.append(int(doctor_param))
+            if search:
+                where_op.append("(LOWER(p.patient_name) LIKE %s OR LOWER(COALESCE(p.patient_uid, '')) LIKE %s OR LOWER(COALESCE(pv.diagnosis, '')) LIKE %s)")
+                params_op.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+            where_op_clause = " WHERE " + " AND ".join(where_op)
+            sql_op = f"""
+                SELECT pv.visit_id, pv.patient_id, p.patient_name, p.patient_uid, p.patient_gender, p.patient_phone,
+                       pv.doctor_id, COALESCE(du.user_name, 'Practicing Doctor') AS doctor_name,
+                       COALESCE(dept.department_name, 'General Medicine') AS department_name,
+                       pv.hospital_id, h.hospital_name,
+                       pv.visited_at, pv.diagnosis, pv.medical_notes,
+                       pv.height, pv.weight, pv.blood_pressure, pv.vitals_recorded_at,
+                       COALESCE(nu.user_name, '') AS vitals_by_name,
+                       pv.appointment_id, COALESCE(pv.record_share_flag, 1),
+                       (SELECT COUNT(*) FROM tbl_prescription pr WHERE pr.visit_id = pv.visit_id) AS presc_count,
+                       (SELECT COUNT(*) FROM tbl_lab_report lr WHERE lr.visit_id = pv.visit_id) AS rep_count
+                FROM tbl_patient_visit pv
+                JOIN tbl_patient p ON p.patient_id = pv.patient_id
+                JOIN tbl_hospital h ON h.hospital_id = pv.hospital_id
+                LEFT JOIN tbl_doctor d ON d.doctor_id = pv.doctor_id
+                LEFT JOIN tbl_user du ON du.user_id = d.user_id
+                LEFT JOIN tbl_department dept ON dept.department_id = d.department_id
+                LEFT JOIN tbl_user nu ON nu.user_id = pv.vitals_recorded_by
+                {where_op_clause}
+                ORDER BY pv.visited_at DESC, pv.visit_id DESC
+                LIMIT 300
+            """
+            cursor.execute(sql_op, params_op)
+            for r in cursor.fetchall():
+                height_m = None
+                bmi = None
+                if r[14] and r[15]:
+                    try:
+                        height_m = float(r[14]) / 100.0
+                        weight_kg = float(r[15])
+                        if height_m > 0:
+                            bmi = round(weight_kg / (height_m ** 2), 1)
+                    except Exception:
+                        pass
+                op_records.append({
+                    'record_type': 'OP',
+                    'visit_id': r[0],
+                    'id': f"VIS{r[0]:03d}",
+                    'visit_uid': f"VIS{r[0]:03d}",
+                    'patient_id': r[1],
+                    'patient_name': r[2],
+                    'patient_uid': r[3] or f"PTA{r[1]:03d}",
+                    'health_id': r[3] or f"PTA{r[1]:03d}",
+                    'gender': r[4] or '',
+                    'phone': r[5] or '',
+                    'doctor_id': r[6],
+                    'doctor_name': r[7],
+                    'department_name': r[8],
+                    'hospital_id': r[9],
+                    'hospital_name': r[10],
+                    'visit_date': r[11].strftime('%Y-%m-%d %H:%M') if hasattr(r[11], 'strftime') else str(r[11] or ''),
+                    'raw_date': r[11].isoformat() if hasattr(r[11], 'isoformat') else str(r[11] or ''),
+                    'diagnosis': r[12] or 'General Outpatient Visit',
+                    'medical_notes': r[13] or '',
+                    'vitals': {
+                        'height': r[14] or '',
+                        'weight': r[15] or '',
+                        'blood_pressure': r[16] or '',
+                        'bmi': bmi,
+                        'recorded_at': r[17].strftime('%Y-%m-%d %H:%M') if hasattr(r[17], 'strftime') else str(r[17] or ''),
+                        'recorded_by': r[18],
+                    },
+                    'appointment_id': r[19],
+                    'appointment_uid': f"APT{r[19]:03d}" if r[19] else 'N/A',
+                    'is_shared': bool(r[20]),
+                    'prescriptions_count': r[21],
+                    'lab_reports_count': r[22],
+                })
+
+        # Fetch Inpatient Admissions if requested
+        if record_type in ('ALL', 'IP'):
+            where_ip = []
+            params_ip = []
+            if user['role'] != 'super-admin' and user.get('hospital_id'):
+                where_ip.append("a.hospital_id = %s")
+                params_ip.append(user['hospital_id'])
+            if date_filter:
+                where_ip.append("a.admission_date = %s")
+                params_ip.append(date_filter)
+            if status_filter and status_filter != 'all':
+                where_ip.append("a.admission_status = %s")
+                params_ip.append(status_filter)
+            if doctor_param and str(doctor_param).isdigit():
+                where_ip.append("a.admitting_doctor_id = %s")
+                params_ip.append(int(doctor_param))
+            if search:
+                where_ip.append("(LOWER(p.patient_name) LIKE %s OR LOWER(COALESCE(p.patient_uid, '')) LIKE %s OR LOWER(COALESCE(a.admission_uid, '')) LIKE %s OR LOWER(COALESCE(a.ward_bed, '')) LIKE %s)")
+                params_ip.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+
+            where_ip_clause = " WHERE " + " AND ".join(where_ip) if where_ip else ""
+            sql_ip = f"""
+                SELECT a.admission_id, COALESCE(a.admission_uid, CONCAT('ADM', LPAD(a.admission_id, 3, '0'))) AS admission_uid,
+                       a.patient_id, p.patient_name, p.patient_uid, p.patient_gender, p.patient_phone,
+                       a.hospital_id, h.hospital_name,
+                       a.admitting_doctor_id, COALESCE(du.user_name, 'Attending Physician') AS doctor_name,
+                       COALESCE(dept.department_name, 'Inpatient Care') AS department_name,
+                       a.admission_date, a.admission_status, a.discharge_date, a.ward_bed, a.admission_reason, a.discharge_summary,
+                       a.created_at,
+                       (SELECT COUNT(*) FROM tbl_patient_visit pv WHERE pv.admission_id = a.admission_id) AS visits_count,
+                       (SELECT COUNT(*) FROM tbl_prescription pr WHERE pr.admission_id = a.admission_id) AS prescriptions_count,
+                       (SELECT COUNT(*) FROM tbl_lab_report lr WHERE lr.admission_id = a.admission_id) AS lab_reports_count
+                FROM tbl_admission a
+                JOIN tbl_patient p ON p.patient_id = a.patient_id
+                JOIN tbl_hospital h ON h.hospital_id = a.hospital_id
+                LEFT JOIN tbl_doctor d ON d.doctor_id = a.admitting_doctor_id
+                LEFT JOIN tbl_user du ON du.user_id = d.user_id
+                LEFT JOIN tbl_department dept ON dept.department_id = d.department_id
+                {where_ip_clause}
+                ORDER BY a.admission_date DESC, a.admission_id DESC
+                LIMIT 300
+            """
+            cursor.execute(sql_ip, params_ip)
+            for r in cursor.fetchall():
+                ip_records.append({
+                    'record_type': 'IP',
+                    'admission_id': r[0],
+                    'id': r[1],
+                    'admission_uid': r[1],
+                    'patient_id': r[2],
+                    'patient_name': r[3],
+                    'patient_uid': r[4] or f"PTA{r[2]:03d}",
+                    'health_id': r[4] or f"PTA{r[2]:03d}",
+                    'gender': r[5] or '',
+                    'phone': r[6] or '',
+                    'hospital_id': r[7],
+                    'hospital_name': r[8],
+                    'doctor_id': r[9],
+                    'admitting_doctor_id': r[9],
+                    'doctor_name': r[10],
+                    'department_name': r[11],
+                    'admission_date': str(r[12]) if r[12] else '',
+                    'raw_date': r[12].isoformat() if hasattr(r[12], 'isoformat') else str(r[12] or ''),
+                    'admission_status': r[13] or 'Admitted',
+                    'status': r[13] or 'Admitted',
+                    'discharge_date': str(r[14]) if r[14] else '',
+                    'ward_bed': r[15] or 'General Ward',
+                    'admission_reason': r[16] or '',
+                    'discharge_summary': r[17] or '',
+                    'created_at': r[18].strftime('%Y-%m-%d %H:%M') if hasattr(r[18], 'strftime') else str(r[18] or ''),
+                    'visits_count': r[19],
+                    'prescriptions_count': r[20],
+                    'lab_reports_count': r[21],
+                })
+
+    # Assemble unified timeline sorted strictly by raw_date descending (newest first)
+    timeline = sorted(
+        op_records + ip_records,
+        key=lambda x: str(x.get('raw_date') or ''),
+        reverse=True
+    )
+
+    return JsonResponse({
+        'status': 'success',
+        'op_records': op_records,
+        'ip_records': ip_records,
+        'timeline': timeline,
+        'total_count': len(timeline),
+    })
+

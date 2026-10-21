@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 **/backend/media/*
 !**/backend/media/**/.gitkeep
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Selenium test screenshots
+selenium_tests/screenshots/
+
+# Temporary files
+scratch/

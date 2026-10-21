@@ -197,7 +197,19 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
   });
 
   // Doctor Visit Entry Form
-  const [visitForm, setVisitForm] = useState({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '', is_shared: true });
+  const [visitForm, setVisitForm] = useState({
+    diagnosis: '',
+    medical_notes: '',
+    appointment_id: '',
+    allergies: '',
+    is_shared: true,
+    visit_type: 'OP',
+    admission_id: '',
+    ward_bed: '',
+    admission_reason: '',
+    discharge_patient: false,
+    discharge_summary: '',
+  });
   const [visitSubmitting, setVisitSubmitting] = useState(false);
   const [currentVisitVitals, setCurrentVisitVitals] = useState(null);
   const [lastSavedVisit, setLastSavedVisit] = useState(null);
@@ -433,12 +445,24 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
       if (activeAppt) appointmentId = activeAppt.appointment_id;
     }
 
+    // Check if patient has an active inpatient admission
+    const activeAdm = patientHistory.find(h =>
+      (h.record_type === 'IP' || h.admission_id) &&
+      (h.admission_status === 'Admitted' || h.status === 'Admitted')
+    );
+
     setVisitForm({
       diagnosis: '',
       medical_notes: '',
       appointment_id: appointmentId,
       allergies: selectedPatient?.allergies || '',
       is_shared: true,
+      visit_type: activeAdm ? 'IP' : 'OP',
+      admission_id: activeAdm?.admission_id || '',
+      ward_bed: activeAdm?.ward_bed || '',
+      admission_reason: activeAdm?.admission_reason || '',
+      discharge_patient: false,
+      discharge_summary: '',
     });
     setShowVisitModal(true);
   };
@@ -466,9 +490,10 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         const updatedAllergies = visitForm.allergies;
         const savedVisitId = data.visit_id;
         const savedApptId = data.appointment_id || visitForm.appointment_id;
+        const savedAdmId = data.admission_id || visitForm.admission_id;
 
         setMessage({
-          text: `Patient consultation record VIS${String(savedVisitId).padStart(3, '0')} saved successfully!`,
+          text: `Patient ${data.visit_type || 'consultation'} record VIS${String(savedVisitId).padStart(3, '0')} saved successfully!`,
           type: 'success'
         });
 
@@ -476,18 +501,33 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
         setLastSavedVisit({
           visit_id: savedVisitId,
           appointment_id: savedApptId,
+          admission_id: savedAdmId,
+          visit_type: data.visit_type || visitForm.visit_type,
           patient_name: selectedPatient.name,
           health_id: selectedPatient.patient_uid || selectedPatient.health_id,
         });
 
-        // Automatically pre-link this visit_id into prescription form
+        // Automatically pre-link this visit_id & admission_id into prescription form
         setPrescriptionForm(prev => ({
           ...prev,
           visit_id: savedVisitId,
           appointment_id: savedApptId,
+          admission_id: savedAdmId,
         }));
 
-        setVisitForm({ diagnosis: '', medical_notes: '', appointment_id: '', allergies: '', is_shared: true });
+        setVisitForm({
+          diagnosis: '',
+          medical_notes: '',
+          appointment_id: '',
+          allergies: '',
+          is_shared: true,
+          visit_type: 'OP',
+          admission_id: '',
+          ward_bed: '',
+          admission_reason: '',
+          discharge_patient: false,
+          discharge_summary: '',
+        });
         setShowVisitModal(false);
         setSelectedPatient(prev => (prev ? { ...prev, allergies: updatedAllergies } : null));
         handleSelectPatient(selectedPatient);
@@ -1786,7 +1826,18 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                           return (
                             <tr key={idx}>
                               <td className="font-monospace fw-bold text-teal" style={{ color: '#0d9488' }}>
-                                {h.visit_uid || h.vis_uid || `VIS${String(h.visit_id || (idx + 1)).padStart(3, '0')}`}
+                                <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                                  <span>{h.visit_uid || h.vis_uid || (h.admission_uid ? h.admission_uid : `VIS${String(h.visit_id || (idx + 1)).padStart(3, '0')}`)}</span>
+                                  {h.visit_type === 'IP' || h.record_type === 'IP' || h.admission_id ? (
+                                    <span className="badge bg-primary-subtle text-primary border extra-small" title={h.ward_bed ? `Ward: ${h.ward_bed}` : 'Inpatient'}>
+                                      <i className="bi bi-hospital me-1"></i>IP{h.ward_bed ? ` (${h.ward_bed})` : ''}
+                                    </span>
+                                  ) : (
+                                    <span className="badge bg-secondary-subtle text-secondary border extra-small">
+                                      OP
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="fw-bold">{h.visited_at || h.date}</td>
                               <td><span className="badge bg-light text-dark border">{h.hospital_name || displayHospital}</span></td>
@@ -2445,6 +2496,99 @@ export default function DoctorDashboardPage({ user, onLogout, onNavigateHome }) 
                 </div>
 
                 <form onSubmit={handleSaveVisit}>
+                  {/* Visit Classification (OP vs IP) */}
+                  <div className="mb-3 p-3 bg-light rounded-3 border">
+                    <label className="form-label small fw-bold text-dark d-block mb-2">
+                      <i className="bi bi-hospital me-1.5 text-teal" style={{ color: '#0d9488' }}></i>
+                      Visit Classification *
+                    </label>
+                    <div className="btn-group w-100" role="group">
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${visitForm.visit_type === 'OP' ? 'btn-teal text-white fw-bold' : 'btn-outline-secondary'}`}
+                        style={visitForm.visit_type === 'OP' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
+                        onClick={() => setVisitForm(prev => ({ ...prev, visit_type: 'OP' }))}
+                      >
+                        <i className="bi bi-calendar-check me-1"></i> Outpatient Visit (OP)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${visitForm.visit_type === 'IP' ? 'btn-teal text-white fw-bold' : 'btn-outline-secondary'}`}
+                        style={visitForm.visit_type === 'IP' ? { backgroundColor: '#0d9488', borderColor: '#0d9488' } : {}}
+                        onClick={() => setVisitForm(prev => ({ ...prev, visit_type: 'IP' }))}
+                      >
+                        <i className="bi bi-heart-pulse me-1"></i> Inpatient Admission (IP)
+                      </button>
+                    </div>
+
+                    {visitForm.visit_type === 'IP' && (
+                      <div className="mt-3 pt-3 border-top">
+                        {visitForm.admission_id ? (
+                          <div className="alert alert-info py-2 px-3 small mb-2 d-flex align-items-center justify-content-between">
+                            <div>
+                              <i className="bi bi-link-45deg me-1 fw-bold"></i>
+                              Linking to Active Inpatient Admission: <strong>ADM{String(visitForm.admission_id).padStart(3, '0')}</strong>
+                              {visitForm.ward_bed && <span> (Ward/Bed: <em>{visitForm.ward_bed}</em>)</span>}
+                            </div>
+                            <span className="badge bg-success">Active Inpatient</span>
+                          </div>
+                        ) : (
+                          <div className="row g-2 mb-2">
+                            <div className="col-md-6">
+                              <label className="form-label extra-small fw-bold text-muted mb-1">Ward / Bed Allocation *</label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="e.g. General Ward - Bed 04 / ICU Bed 2"
+                                required={visitForm.visit_type === 'IP' && !visitForm.admission_id}
+                                value={visitForm.ward_bed}
+                                onChange={(e) => setVisitForm({ ...visitForm, ward_bed: e.target.value })}
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label extra-small fw-bold text-muted mb-1">Admission Reason</label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="e.g. Acute exacerbation, inpatient observation"
+                                value={visitForm.admission_reason}
+                                onChange={(e) => setVisitForm({ ...visitForm, admission_reason: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="form-check mt-2">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="dischargePatientCheck"
+                            checked={visitForm.discharge_patient}
+                            onChange={(e) => setVisitForm({ ...visitForm, discharge_patient: e.target.checked })}
+                          />
+                          <label className="form-check-label small fw-semibold text-danger cursor-pointer" htmlFor="dischargePatientCheck">
+                            <i className="bi bi-box-arrow-right me-1"></i>
+                            Discharge patient upon saving this consultation
+                          </label>
+                        </div>
+
+                        {visitForm.discharge_patient && (
+                          <div className="mt-2">
+                            <label className="form-label extra-small fw-bold text-muted mb-1">Discharge Summary & Instructions *</label>
+                            <textarea
+                              className="form-control form-control-sm"
+                              rows="2"
+                              required={visitForm.discharge_patient}
+                              placeholder="Condition at discharge, medication schedule, and follow-up instructions..."
+                              value={visitForm.discharge_summary}
+                              onChange={(e) => setVisitForm({ ...visitForm, discharge_summary: e.target.value })}
+                            ></textarea>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mb-3">
                     <label className="form-label small fw-semibold">Diagnosis / Clinical Finding *</label>
                     <input
