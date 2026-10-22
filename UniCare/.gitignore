@@ -1,4 +1,113 @@
-# Logs
+# ==============================================================================
+# Environment Variables & Secrets (NEVER push credentials or API keys)
+# ==============================================================================
+.env
+.env.*
+*.env
+!.env.example
+!**/.env.example
+
+# ==============================================================================
+# Node.js & Frontend Build Outputs
+# ==============================================================================
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+.npm/
+.eslintcache
+
+# ==============================================================================
+# Python Virtual Environments
+# ==============================================================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# Python Bytecode, Caching & Testing
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+develop-eggs/
+.installed.cfg
+*.egg
+
+# ==============================================================================
+# Databases (Local SQLite & DB Dumps)
+# ==============================================================================
+*.sqlite3
+*.sqlite3-journal
+*.db
+db.sqlite3
+
+# ==============================================================================
+# Backend Static Files & Media Uploads
+# ==============================================================================
+backend/staticfiles/
+staticfiles/
+backend/media/*
+!backend/media/**/.gitkeep
+media/*
+!media/**/.gitkeep
+
+# ==============================================================================
+# Selenium & Automated Test Artifacts
+# ==============================================================================
+selenium_tests/test_*.py
+selenium_tests/reports/
+selenium_tests/screenshots/
+test_speed.png
+chromedriver.log
+geckodriver.log
+
+# ==============================================================================
+# Generated Diagrams & Benchmark Visuals
+# ==============================================================================
+/use_case_diagram.*
+/use_case_diagram_*
+/unicare_*
+/use_case_unified.png
+
+# ==============================================================================
+# Operating System & IDE Files
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editor / IDE configs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-workspace
+
+# ==============================================================================
+# Logs & Temporary Files
+# ==============================================================================
 logs/
 *.log
 npm-debug.log*
@@ -6,46 +115,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-# Node.js dependencies and build files
-node_modules/
-dist/
-dist-ssr/
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Environment variables
-.env
-.env.*
-!.env.example
-
-# Backend static files and media files
-backend/staticfiles/
-**/backend/media/*
-!**/backend/media/**/.gitkeep
-
-# Python cache files
-__pycache__/
-*.py[cod]
-
-# Selenium test files
-selenium_tests/test_*.py
-
-# Selenium test reports
-selenium_tests/reports/
-
-# Selenium test screenshots
-selenium_tests/screenshots/
-
-# Temporary files and folders
 scratch/
+*.tmp
+*.temp
+*.bak
