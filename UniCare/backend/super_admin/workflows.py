@@ -72,6 +72,15 @@ def ensure_workflow_schema(force=False):
         return
     _WORKFLOW_SCHEMA_INITIALIZED = True
 
+    # Fast path: If schema is already present, return immediately without running remote DDL checks
+    if not force:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1 FROM tbl_patient_visit LIMIT 1")
+                return
+        except Exception:
+            pass
+
     with connection.cursor() as cursor:
         cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_patient_profile (
             patient_id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL UNIQUE,
@@ -294,9 +303,6 @@ def ensure_workflow_schema(force=False):
             cursor.execute("ALTER TABLE tbl_lab_report MODIFY COLUMN record_id INT NULL DEFAULT NULL")
         except Exception:
             pass
-
-        # Automatically synchronize passwords, security recovery questions, and clinical records
-        sync_database_records(cursor)
 
 
 def sync_database_records(cursor=None, force=False):
