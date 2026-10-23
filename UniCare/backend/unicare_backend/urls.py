@@ -1,10 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from django.views.static import serve
 
 def root_api_info(request):
+    if request.method == 'HEAD':
+        return HttpResponse(status=200)
+
     db_status = "Disconnected"
     db_error = None
     table_count = 0
@@ -12,9 +15,6 @@ def root_api_info(request):
         from django.db import connection
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-            cursor.execute("SHOW TABLES")
-            tables = cursor.fetchall()
-            table_count = len(tables)
         db_status = "Connected"
     except Exception as e:
         db_status = "Disconnected"
@@ -31,13 +31,13 @@ def root_api_info(request):
             'host': db_host,
             'name': db_cfg.get('NAME'),
             'user': db_cfg.get('USER'),
-            'table_count': table_count,
             'is_cloud_db': db_host not in ('localhost', '127.0.0.1', ''),
         },
         'endpoints': {
             'login': '/api/super-admin/auth/login/',
             'hospitals': '/api/super-admin/hospitals/',
-            'dashboard_stats': '/api/super-admin/dashboard-stats/'
+            'dashboard_stats': '/api/super-admin/dashboard-stats/',
+            'sync_cloud_data': '/api/super-admin/sync-cloud-data/'
         }
     }
     if db_error:

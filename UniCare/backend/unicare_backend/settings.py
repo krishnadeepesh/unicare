@@ -87,6 +87,7 @@ WSGI_APPLICATION = 'unicare_backend.wsgi.application'
 db_ssl = os.environ.get('DB_SSL', 'False').lower() in ('true', '1', 'yes')
 db_options = {
     'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+    'connect_timeout': 10,
 }
 
 db_url = os.environ.get('DATABASE_URL')
