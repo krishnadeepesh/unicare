@@ -515,11 +515,11 @@ def sync_database_records(cursor=None, force=False):
                 else:
                     cursor.execute("""
                         INSERT INTO tbl_patient_visit
-                        (appointment_id, visit_date, visit_is_active, patient_id, doctor_id, hospital_id,
+                        (appointment_id, patient_id, doctor_id, hospital_id,
                          diagnosis, medical_notes, visited_at, height, weight, blood_pressure,
                          vitals_recorded_by, vitals_recorded_at, record_share_flag, visit_type)
-                        VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
-                    """, [apt_id, enc['visit_date'], p_id, d_id, h_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date'], enc['height'], enc['weight'], enc['blood_pressure'], enc['vitals_recorded_by'], enc['vitals_recorded_at'], enc['visit_type']])
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                    """, [apt_id, p_id, d_id, h_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date'], enc['height'], enc['weight'], enc['blood_pressure'], enc['vitals_recorded_by'], enc['vitals_recorded_at'], enc['visit_type']])
                     vis_id = cursor.lastrowid
 
                 # Check if medical record already exists
@@ -575,9 +575,11 @@ def sync_database_records(cursor=None, force=False):
                         """, [rec_id, h_id, rep[0], rep[1], rep[2], rep[3], p_id, d_id, apt_id, vis_id])
     except Exception as e:
         print(f"Notice during sync_database_records: {e}")
+        return str(e)
     finally:
         if should_close:
             cursor.close()
+    return None
 
 
 @csrf_exempt
@@ -585,7 +587,7 @@ def sync_cloud_data(request):
     """Admin / cloud deployment synchronization endpoint."""
     ensure_workflow_schema(force=True)
     with connection.cursor() as cursor:
-        sync_database_records(cursor, force=True)
+        err = sync_database_records(cursor, force=True)
         cursor.execute("SELECT COUNT(*) FROM tbl_user WHERE role_id != 5")
         users_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM tbl_patient_visit")
@@ -598,8 +600,9 @@ def sync_cloud_data(request):
         presc_count = cursor.fetchone()[0]
 
     return JsonResponse({
-        'status': 'success',
-        'message': 'UniCare Cloud Database successfully synchronized with all clinical data and accounts.',
+        'status': 'success' if not err else 'warning',
+        'message': 'UniCare Cloud Database synchronization executed.',
+        'sync_error': err,
         'data': {
             'accounts_updated': users_count,
             'patient_visits': visits_count,
