@@ -5,17 +5,46 @@ from django.conf import settings
 from django.views.static import serve
 
 def root_api_info(request):
-    return JsonResponse({
+    db_status = "Disconnected"
+    db_error = None
+    table_count = 0
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.execute("SHOW TABLES")
+            tables = cursor.fetchall()
+            table_count = len(tables)
+        db_status = "Connected"
+    except Exception as e:
+        db_status = "Disconnected"
+        db_error = str(e)
+
+    db_cfg = settings.DATABASES['default']
+    db_host = db_cfg.get('HOST') or 'localhost'
+
+    response_data = {
         'service': 'UniCare Platform Backend API',
         'status': 'Online',
-        'database': 'Connected',
-        'super_admin_endpoints': {
-            'login': '/api/super-admin/login/',
-            'logout': '/api/super-admin/logout/',
-            'check_session': '/api/super-admin/check-session/',
+        'database': {
+            'status': db_status,
+            'host': db_host,
+            'name': db_cfg.get('NAME'),
+            'user': db_cfg.get('USER'),
+            'table_count': table_count,
+            'is_cloud_db': db_host not in ('localhost', '127.0.0.1', ''),
+        },
+        'endpoints': {
+            'login': '/api/super-admin/auth/login/',
+            'hospitals': '/api/super-admin/hospitals/',
             'dashboard_stats': '/api/super-admin/dashboard-stats/'
         }
-    })
+    }
+    if db_error:
+        response_data['database']['error'] = db_error
+
+    status_code = 200 if db_status == "Connected" else 503
+    return JsonResponse(response_data, status=status_code)
 
 urlpatterns = [
     path('', root_api_info, name='root_api_info'),

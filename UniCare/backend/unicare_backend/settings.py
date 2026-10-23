@@ -88,15 +88,13 @@ db_ssl = os.environ.get('DB_SSL', 'False').lower() in ('true', '1', 'yes')
 db_options = {
     'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
 }
-if db_ssl:
-    db_options['ssl'] = {'check_hostname': False}
 
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith(('mysql://', 'mysql2://')):
-    # Support cloud DATABASE_URL (e.g. Railway, Aiven, PlanetScale)
+    # Support cloud DATABASE_URL (e.g. Railway, Aiven, PlanetScale, TiDB)
     clean_url = db_url.replace('mysql2://', 'mysql://')
     parsed = urllib.parse.urlparse(clean_url)
-    if 'ssl' in clean_url.lower() or 'aivencloud.com' in clean_url.lower():
+    if db_ssl or any(k in clean_url.lower() for k in ('ssl', 'aivencloud.com', 'tidb', 'railway.app', 'clever-cloud')):
         db_options['ssl'] = {'check_hostname': False}
     DATABASES = {
         'default': {
@@ -111,9 +109,8 @@ if db_url and db_url.startswith(('mysql://', 'mysql2://')):
         }
     }
 else:
-    # Aiven cloud hosts usually end with aivencloud.com
     db_host = os.environ.get('DB_HOST', 'localhost')
-    if 'aivencloud.com' in db_host.lower():
+    if db_ssl or any(k in db_host.lower() for k in ('aivencloud.com', 'tidb', 'railway.app', 'clever-cloud')):
         db_options['ssl'] = {'check_hostname': False}
 
     DATABASES = {
@@ -134,33 +131,45 @@ CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL', 'True').lower() in ('t
 CORS_ALLOW_CREDENTIALS = True
 
 cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS')
+default_cors = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'https://unicare-weld.vercel.app',
+]
 if cors_origins_env:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()] + default_cors
 else:
-    CORS_ALLOWED_ORIGINS = [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:3000',
-    ]
+    CORS_ALLOWED_ORIGINS = default_cors
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
+    r"^https://.*\.vercel\.app$",
 ]
-SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Cross-Site Cookie & Session configuration for Vercel + Render
+is_production = not DEBUG
+SESSION_COOKIE_SAMESITE = 'None' if is_production else 'Lax'
+SESSION_COOKIE_SECURE = True if is_production else False
+CSRF_COOKIE_SAMESITE = 'None' if is_production else 'Lax'
+CSRF_COOKIE_SECURE = True if is_production else False
 SESSION_COOKIE_HTTPONLY = True
 
 # CSRF Trusted Origins (crucial when hosted behind HTTPS)
 csrf_trusted_env = os.environ.get('CSRF_TRUSTED_ORIGINS')
+default_csrf = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://unicare-weld.vercel.app',
+    'https://unicare-backend-y54f.onrender.com',
+]
 if csrf_trusted_env:
-    CSRF_TRUSTED_ORIGINS = [c.strip() for c in csrf_trusted_env.split(',') if c.strip()]
+    CSRF_TRUSTED_ORIGINS = [c.strip() for c in csrf_trusted_env.split(',') if c.strip()] + default_csrf
 else:
-    CSRF_TRUSTED_ORIGINS = [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:8000',
-        'http://127.0.0.1:8000',
-    ]
+    CSRF_TRUSTED_ORIGINS = default_csrf
 
 AUTH_PASSWORD_VALIDATORS = [
     {

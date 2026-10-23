@@ -367,49 +367,62 @@ def require_roles(request, *roles):
 def unified_login(request):
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid HTTP method.'}, status=405)
-    ensure_workflow_schema()
+    try:
+        ensure_workflow_schema()
+    except Exception as db_err:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Database connection error: {str(db_err)}. Please verify that your cloud database is running and configured.'
+        }, status=503)
+
     data = payload(request)
     identifier = (data.get('identifier') or data.get('email') or data.get('phone') or data.get('health_id') or '').strip()
     password = (data.get('password') or '').strip()
     if not identifier or not password:
         return JsonResponse({'status': 'error', 'message': 'Email, Health ID, or phone number and password are required.'}, status=400)
 
-    with connection.cursor() as cursor:
-        # Check if identifier matches a patient Health ID / patient_uid
-        cursor.execute("SELECT user_id FROM tbl_patient WHERE LOWER(patient_uid)=LOWER(%s) LIMIT 1", [identifier])
-        p_row = cursor.fetchone()
-        if not p_row:
-            try:
-                cursor.execute("SELECT user_id FROM tbl_patient_profile WHERE LOWER(health_id)=LOWER(%s) LIMIT 1", [identifier])
-                p_row = cursor.fetchone()
-            except Exception:
-                pass
+    try:
+        with connection.cursor() as cursor:
+            # Check if identifier matches a patient Health ID / patient_uid
+            cursor.execute("SELECT user_id FROM tbl_patient WHERE LOWER(patient_uid)=LOWER(%s) LIMIT 1", [identifier])
+            p_row = cursor.fetchone()
+            if not p_row:
+                try:
+                    cursor.execute("SELECT user_id FROM tbl_patient_profile WHERE LOWER(health_id)=LOWER(%s) LIMIT 1", [identifier])
+                    p_row = cursor.fetchone()
+                except Exception:
+                    pass
 
-        if p_row:
-            cursor.execute(
-                "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
-                " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
-                " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
-                " WHERE u.user_id=%s AND u.user_is_active=1 LIMIT 1",
-                [p_row[0]]
-            )
-            row = cursor.fetchone()
-        else:
-            cursor.execute(
-                "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
-                " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
-                " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
-                " WHERE (LOWER(u.user_email)=LOWER(%s) OR u.user_phone=%s) AND u.user_is_active=1 LIMIT 1",
-                [identifier, identifier]
-            )
-            row = cursor.fetchone()
-            if row:
-                norm_role = (row[7] or '').lower().replace(' ', '').replace('_', '')
-                if norm_role == 'patient' and (is_valid_phone(identifier) or identifier.isdigit()):
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': 'Patient accounts must log in using your unique Health ID (e.g. PTA001) and Password. Phone number login is disabled for shared family accounts.'
-                    }, status=400)
+            if p_row:
+                cursor.execute(
+                    "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
+                    " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
+                    " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
+                    " WHERE u.user_id=%s AND u.user_is_active=1 LIMIT 1",
+                    [p_row[0]]
+                )
+                row = cursor.fetchone()
+            else:
+                cursor.execute(
+                    "SELECT u.user_id, u.hospital_id, u.role_id, u.user_name, u.user_email, u.user_phone, u.user_password,"
+                    " r.role_name, COALESCE(u.must_change_password, 0), u.user_recovery_question, u.user_recovery_answer"
+                    " FROM tbl_user u JOIN tbl_role r ON r.role_id=u.role_id"
+                    " WHERE (LOWER(u.user_email)=LOWER(%s) OR u.user_phone=%s) AND u.user_is_active=1 LIMIT 1",
+                    [identifier, identifier]
+                )
+                row = cursor.fetchone()
+                if row:
+                    norm_role = (row[7] or '').lower().replace(' ', '').replace('_', '')
+                    if norm_role == 'patient' and (is_valid_phone(identifier) or identifier.isdigit()):
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': 'Patient accounts must log in using your unique Health ID (e.g. PTA001) and Password. Phone number login is disabled for shared family accounts.'
+                        }, status=400)
+    except Exception as db_err:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Database error: {str(db_err)}. Please verify your database connection.'
+        }, status=503)
 
     if not row or not verify_password_and_upgrade(row[0], password, row[6]):
         return JsonResponse({'status': 'error', 'message': 'Invalid login credentials.'}, status=401)

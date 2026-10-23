@@ -126,7 +126,17 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
         credentials: 'include',
         body: JSON.stringify({ identifier: identifier.trim(), password: password.trim() }),
       });
-      const roleData = await roleResponse.json();
+
+      let roleData = {};
+      try {
+        roleData = await roleResponse.json();
+      } catch (jsonErr) {
+        // If response is not JSON (e.g. Django 500 HTML page)
+        if (roleResponse.status >= 500) {
+          setErrorMsg(`Server Error (${roleResponse.status}): The backend is running but cannot connect to the database. Please verify cloud database credentials.`);
+          return;
+        }
+      }
 
       if (roleResponse.ok && roleData.status === 'success' && roleData.user) {
         const u = roleData.user;
@@ -154,6 +164,11 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
         }
       }
 
+      if (roleResponse.status >= 400 && roleData.message) {
+        setErrorMsg(roleData.message);
+        return;
+      }
+
       // Fallback check for legacy hospital admin login
       const response = await fetch(`${API_BASE_URL}/hospital-admin-login/`, {
         method: 'POST',
@@ -165,7 +180,11 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
           password: password.trim(),
         }),
       });
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {}
+
       if (response.ok && data.status === 'success' && data.hospital) {
         const hospitalUser = {
           ...data.hospital,
