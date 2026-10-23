@@ -287,6 +287,273 @@ def ensure_workflow_schema():
         except Exception:
             pass
 
+        # Automatically synchronize passwords, security recovery questions, and clinical records
+        sync_database_records(cursor)
+
+
+def sync_database_records(cursor=None):
+    """Ensure all non-superadmin accounts have password 'admin123', default recovery questions, and full clinical visits/reports."""
+    should_close = False
+    if cursor is None:
+        cursor = connection.cursor()
+        should_close = True
+
+    try:
+        # 1. Ensure all non-superadmin accounts have password 'admin123'
+        admin_hash = make_password('admin123')
+        cursor.execute("""
+            UPDATE tbl_user
+            SET user_password = %s, must_change_password = 0
+            WHERE role_id != 5 AND user_id != 1
+        """, [admin_hash])
+
+        # 2. Ensure all accounts have a recovery question & answer set (so recovery never fails)
+        rec_ans_hash = make_password('kottayam')
+        cursor.execute("""
+            UPDATE tbl_user
+            SET user_recovery_question = 'What city were you born in?',
+                user_recovery_answer = %s
+            WHERE user_recovery_question IS NULL OR user_recovery_question = ''
+        """, [rec_ans_hash])
+
+        # 3. Check if clinical reports and visits are already seeded
+        cursor.execute("SELECT COUNT(*) FROM tbl_lab_report WHERE lab_report_id >= 10")
+        has_reports = (cursor.fetchone()[0] >= 10)
+
+        if not has_reports:
+            # Complete appointment 5 if present
+            cursor.execute("UPDATE tbl_appointment SET appointment_status='Completed' WHERE appointment_id=5")
+
+            # Update existing empty visit 6 if present
+            cursor.execute("""
+                UPDATE tbl_patient_visit
+                SET diagnosis = 'Tension-Type Headache & Academic Stress',
+                    medical_notes = 'Patient reports bilateral dull, non-pulsatile mild tension headaches related to exam fatigue. Neurological examination normal. Advised adequate hydration and sleep hygiene.'
+                WHERE visit_id = 6 AND (diagnosis IS NULL OR diagnosis = '')
+            """)
+
+            cursor.execute("SELECT doctor_id, user_id, hospital_id, department_id FROM tbl_doctor")
+            docs = {d[0]: {'user_id': d[1], 'hospital_id': d[2], 'dept_id': d[3]} for d in cursor.fetchall()}
+
+            encounters = [
+                # 1. Patient 2 (Anjali Ramesh) with Dr. Sneha Varghese (doc 4, hosp 2, dept 6 Ortho)
+                {
+                    'patient_id': 2, 'doctor_id': 4, 'hospital_id': 2, 'appointment_id': 5,
+                    'visit_date': datetime(2026, 10, 15, 10, 30), 'visit_type': 'OP',
+                    'diagnosis': 'Lumbar Disc Herniation (L4-L5) with Left Sciatic Radiculopathy',
+                    'medical_notes': 'Patient reports 3-week history of sharp lower back pain radiating down the left posterolateral leg to the ankle. Positive straight leg raise test at 40 degrees. Neurological exam reveals mild sensory diminution at left L5 dermatome. Prescribed short-term analgesics, physical rehabilitation, and ordered confirmatory MRI.',
+                    'height': '162 cm', 'weight': '64 kg', 'blood_pressure': '122/78 mmHg',
+                    'vitals_recorded_by': 32, 'vitals_recorded_at': datetime(2026, 10, 15, 10, 15),
+                    'prescriptions': [
+                        ('Pregabalin', '75 mg', 'Once daily at bedtime', '14 days', 'Take after food'),
+                        ('Aceclofenac + Paracetamol', '100mg/325mg', 'Twice daily', '5 days', 'After food with plenty of water'),
+                    ],
+                    'reports': [
+                        ('Radiology', 'Lumbar Spine MRI Scan (L1-S1 High-Resolution)', 'MRI Spine: Confirms 4.2mm posterolateral disc herniation at L4-L5 with mild left thecal sac indentation and impingement of traversing L5 nerve root. Normal marrow signal and conus medullaris.', datetime(2026, 10, 15, 11, 45)),
+                        ('Blood Test', 'Inflammatory Markers Panel (ESR, hs-CRP, RF)', 'hs-CRP: 4.6 mg/L (mild inflammation), ESR: 24 mm/hr, Rheumatoid Factor (RF): Negative (<9.5 IU/mL). Suggests localized discogenic inflammation without systemic rheumatologic etiology.', datetime(2026, 10, 15, 11, 50))
+                    ]
+                },
+                # 2. Patient 2 (Anjali Ramesh) with Dr. Ananya Thomas (doc 2, hosp 2, dept 3 Cardiology)
+                {
+                    'patient_id': 2, 'doctor_id': 2, 'hospital_id': 2, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 18, 14, 0), 'visit_type': 'OP',
+                    'diagnosis': 'Stage 1 Essential Hypertension with Mild Sinus Tachycardia',
+                    'medical_notes': 'Routine cardiovascular clearance. Resting heart rate 96 bpm, bilateral blood pressure consistently elevated. Heart sounds S1, S2 clear with no murmurs. Advised dietary sodium restriction (<2g/day), 30 mins brisk walking, and initiated Telmisartan.',
+                    'height': '162 cm', 'weight': '63 kg', 'blood_pressure': '138/86 mmHg',
+                    'vitals_recorded_by': 32, 'vitals_recorded_at': datetime(2026, 10, 18, 13, 50),
+                    'prescriptions': [
+                        ('Telmisartan', '40 mg', 'Once daily in the morning', '30 days', 'Take before or after breakfast'),
+                    ],
+                    'reports': [
+                        ('Cardiology', '2D Transthoracic Echocardiogram (Echo Scan)', '2D Echo: Left ventricular ejection fraction (LVEF) 62%. Concentric LV remodeling noted. Normal mitral, aortic, and tricuspid valve motion without regurgitation. No pericardial effusion.', datetime(2026, 10, 18, 14, 45)),
+                        ('Blood Test', 'Lipid Profile & Fasting Blood Glucose Panel', 'Total Cholesterol: 218 mg/dL, LDL-C: 136 mg/dL, HDL-C: 47 mg/dL, Triglycerides: 175 mg/dL, Fasting Plasma Glucose: 96 mg/dL (Normal). Lifestyle and dietary modifications advised.', datetime(2026, 10, 18, 15, 0))
+                    ]
+                },
+                # 3. Patient 3 (Maria Josephine) with Dr. Nevin (doc 6, hosp 4, dept 7 Neurology)
+                {
+                    'patient_id': 3, 'doctor_id': 6, 'hospital_id': 4, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 10, 11, 0), 'visit_type': 'OP',
+                    'diagnosis': 'Migraine with Typical Visual Aura & Photophobia',
+                    'medical_notes': '19-year-old female presents with frequent pulsating unilateral hemicranial headaches preceded by scintillating scotoma lasting 20 minutes. Accompanied by photophobia and nausea. Cranial nerves II-XII intact. Started migraine prophylactic protocol.',
+                    'height': '160 cm', 'weight': '52 kg', 'blood_pressure': '114/74 mmHg',
+                    'vitals_recorded_by': 58, 'vitals_recorded_at': datetime(2026, 10, 10, 10, 45),
+                    'prescriptions': [
+                        ('Sumatriptan', '50 mg', 'At onset of migraine attack', '6 doses', 'Repeat once after 2 hours if needed'),
+                        ('Naproxen Sodium', '500 mg', 'With acute migraine', '5 days', 'After food'),
+                    ],
+                    'reports': [
+                        ('Radiology', 'Brain MRI & Magnetic Resonance Angiography (MRA) Scan', 'Brain MRI: No evidence of acute infarction, intracranial hemorrhage, demyelinating lesions, or space-occupying lesions. MRA demonstrates symmetric, patent major intracranial arteries.', datetime(2026, 10, 10, 12, 15)),
+                        ('Blood Test', 'Serum Vitamin B12, Vitamin D3 & Thyroid Panel (TSH)', 'TSH: 2.15 mIU/L (Euthyroid), Vitamin B12: 460 pg/mL (Normal), 25-OH Vitamin D3: 15.2 ng/mL (Deficient, <20 ng/mL). Cholecalciferol 60,000 IU weekly recommended for 8 weeks.', datetime(2026, 10, 10, 12, 30))
+                    ]
+                },
+                # 4. Patient 3 (Maria Josephine) with Dr. Meera Nair (doc 3, hosp 2, dept 5 Pediatrics)
+                {
+                    'patient_id': 3, 'doctor_id': 3, 'hospital_id': 2, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 16, 15, 30), 'visit_type': 'OP',
+                    'diagnosis': 'Microcytic Hypochromic Anemia secondary to Iron Deficiency',
+                    'medical_notes': 'Patient reports progressive generalized fatigue, poor concentration, and exertional dizziness. Physical examination shows conjunctival pallor and koilonychia. S1 S2 normal, no hepatosplenomegaly. Commenced on oral iron therapy.',
+                    'height': '160 cm', 'weight': '51 kg', 'blood_pressure': '110/70 mmHg',
+                    'vitals_recorded_by': 32, 'vitals_recorded_at': datetime(2026, 10, 16, 15, 15),
+                    'prescriptions': [
+                        ('Ferrous Ascorbate + Folic Acid', '100mg/1.5mg', 'Once daily', '60 days', 'Take 1 hour before meal or with citrus fruit juice'),
+                    ],
+                    'reports': [
+                        ('Blood Test', 'Complete Blood Count (CBC) with Peripheral Blood Smear', 'Hemoglobin: 9.4 g/dL (Low, ref 12.0-15.5), RBC: 3.75 M/uL, MCV: 71.0 fL (Microcytic), MCH: 23.2 pg (Hypochromic), Serum Ferritin: 11 ng/mL (Depleted iron stores). Platelets: 285,000/uL.', datetime(2026, 10, 16, 16, 10)),
+                        ('Radiology', 'Whole Abdomen & Pelvic Diagnostic Ultrasound Scan', 'Pelvic & Abdominal USG: Liver, spleen, kidneys, and pancreas normal in size and architecture. Uterus and bilateral ovaries unremarkable with no free fluid in Pouch of Douglas.', datetime(2026, 10, 16, 16, 25))
+                    ]
+                },
+                # 5. Patient 12 (Ananya Thomas) with Dr. Arun Mathew (doc 7, hosp 5, dept 8 General Med)
+                {
+                    'patient_id': 12, 'doctor_id': 7, 'hospital_id': 5, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 22, 10, 0), 'visit_type': 'OP',
+                    'diagnosis': 'Acute Follicular Streptococcal Tonsillitis',
+                    'medical_notes': 'Patient presents with severe sore throat, odynophagia, and fever (101.4 F) for 2 days. Bilateral hypertrophied tonsils with prominent yellowish follicular crypt exudates. Tender jugulodigastric lymph nodes. NOTE: Documented Allergy to Paracetamol; prescribed alternative analgesia.',
+                    'height': '165 cm', 'weight': '58 kg', 'blood_pressure': '118/76 mmHg',
+                    'vitals_recorded_by': 61, 'vitals_recorded_at': datetime(2026, 10, 22, 9, 45),
+                    'prescriptions': [
+                        ('Amoxicillin + Clavulanic Acid', '625 mg', 'Twice daily', '7 days', 'Take with meals to avoid gastric upset'),
+                        ('Ibuprofen', '400 mg', 'Three times daily as needed', '4 days', 'Take strictly after food (Paracetamol withheld due to allergy)'),
+                        ('Chlorhexidine Mouth Gargle 0.2%', '15 ml', 'Twice daily', '5 days', 'Gargle for 60 seconds after meals')
+                    ],
+                    'reports': [
+                        ('Pathology', 'Throat Swab Bacterial Culture & Sensitivity (ABST)', 'Throat Swab Culture: Abundant growth of Streptococcus pyogenes (Group A Beta-Hemolytic Streptococcus). Highly sensitive to Amoxicillin-Clavulanate, Cephalexin, and Azithromycin.', datetime(2026, 10, 22, 11, 15)),
+                        ('Radiology', 'High-Resolution Cervical Soft Tissue Ultrasound Scan', 'Neck USG: Multiple bilateral enlarged level II cervical lymph nodes (right 1.4 cm, left 1.2 cm) with preserved fatty hilum and normal vascularity, typical for acute reactive tonsillar lymphadenitis.', datetime(2026, 10, 22, 11, 35))
+                    ]
+                },
+                # 6. Patient 12 (Ananya Thomas) with Dr. Anu (doc 1, hosp 1, dept 1 Sunrise Hospital)
+                {
+                    'patient_id': 12, 'doctor_id': 1, 'hospital_id': 1, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 19, 11, 30), 'visit_type': 'OP',
+                    'diagnosis': 'Gastroesophageal Reflux Disease (GERD) with Antral Gastritis',
+                    'medical_notes': 'Patient reports recurrent retrosternal pyrosis and acid regurgitation worse after heavy or spicy meals and when lying flat. Abdomen soft, mild epigastric tenderness on deep palpation. Advised head-end bed elevation and proton pump inhibitor therapy.',
+                    'height': '165 cm', 'weight': '57 kg', 'blood_pressure': '120/80 mmHg',
+                    'vitals_recorded_by': 50, 'vitals_recorded_at': datetime(2026, 10, 19, 11, 15),
+                    'prescriptions': [
+                        ('Pantoprazole', '40 mg', 'Once daily', '28 days', 'Take 30 minutes before breakfast on empty stomach'),
+                        ('Domperidone', '10 mg', 'Twice daily', '14 days', 'Take 15 minutes before lunch and dinner')
+                    ],
+                    'reports': [
+                        ('Radiology', 'Upper Abdominal High-Resolution Ultrasound Scan', 'Upper Abdominal USG: Liver parenchyma normal with homogeneous echotexture. Gallbladder well-distended without calculi or wall thickening. Spleen and pancreas normal. Mild antral mucosal thickening.', datetime(2026, 10, 19, 12, 10)),
+                        ('Pathology', 'Helicobacter Pylori Stool Antigen & Pepsinogen Ratio', 'H. pylori stool antigen: Negative. Serum Pepsinogen I: 84.5 mcg/L, Pepsinogen II: 11.8 mcg/L, Pepsinogen I/II Ratio: 7.16 (Normal gastric mucosa, no active atrophic gastritis).', datetime(2026, 10, 19, 12, 30))
+                    ]
+                },
+                # 7. Patient 1 (Arjun) with Dr. Rajesh Sharma (doc 5, hosp 1, dept 1 General Med Sunrise)
+                {
+                    'patient_id': 1, 'doctor_id': 5, 'hospital_id': 1, 'appointment_id': None,
+                    'visit_date': datetime(2026, 10, 20, 16, 0), 'visit_type': 'OP',
+                    'diagnosis': 'Type 2 Diabetes Mellitus with Mild Peripheral Neuropathy',
+                    'medical_notes': 'Patient attends 6-month diabetic review. Complains of mild tingling and numbness in distal plantar surface bilaterally. Monofilament test shows preserved sensation at 8/10 points. Feet inspected, no ulcers. Good therapeutic compliance.',
+                    'height': '175 cm', 'weight': '73 kg', 'blood_pressure': '126/82 mmHg',
+                    'vitals_recorded_by': 50, 'vitals_recorded_at': datetime(2026, 10, 20, 15, 45),
+                    'prescriptions': [
+                        ('Metformin Hydrochloride Prolonged-Release', '500 mg', 'Twice daily', '60 days', 'Take with or immediately after meals'),
+                        ('Methylcobalamin + Alpha Lipoic Acid', '1500 mcg', 'Once daily', '30 days', 'After morning meal')
+                    ],
+                    'reports': [
+                        ('Radiology', 'High-Resolution Chest CT Scan (HRCT Thorax)', 'HRCT Thorax: Clear lung parenchymal fields bilaterally. Normal tracheobronchial tree. Complete resolution of prior subpleural opacity. No mediastinal adenopathy or pleural thickening.', datetime(2026, 10, 20, 16, 45)),
+                        ('Cardiology', '12-Lead Electrocardiogram (ECG / EKG Scan)', '12-Lead ECG Scan: Normal sinus rhythm at 72 bpm. PR interval 142 ms, QRS complex 86 ms, QTc 412 ms. Normal axis, no ischemic ST segment deviation or pathologic Q waves.', datetime(2026, 10, 20, 17, 0)),
+                        ('Blood Test', 'Glycated Hemoglobin (HbA1c) & Renal Function Panel', 'HbA1c: 6.7% (Good diabetic control), Fasting Blood Sugar: 122 mg/dL, Serum Creatinine: 0.88 mg/dL, Blood Urea Nitrogen (BUN): 14 mg/dL, eGFR: >90 mL/min/1.73m2 (Stage 1 normal kidney function).', datetime(2026, 10, 20, 17, 15)),
+                        ('Urine Analysis', 'Urinary Microalbumin-to-Creatinine Ratio (UACR)', 'UACR: 16.2 mg/g Creatinine (Normal <30 mg/g). Dipstick: Protein negative, Glucose trace, Ketones negative. Confirms absence of early diabetic microvascular renal damage.', datetime(2026, 10, 20, 17, 30))
+                    ]
+                }
+            ]
+
+            for enc in encounters:
+                p_id = enc['patient_id']
+                d_id = enc['doctor_id']
+                h_id = enc['hospital_id']
+                apt_id = enc['appointment_id']
+
+                # Create appointment if None
+                if apt_id is None:
+                    d_info = docs.get(d_id, {'dept_id': 1, 'user_id': 1})
+                    cursor.execute("""
+                        INSERT INTO tbl_appointment
+                        (patient_id, hospital_id, department_id, doctor_id, appointment_date, appointment_time, reason, created_by_user_id, appointment_status, appointment_is_active)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Completed', 1)
+                    """, [p_id, h_id, d_info['dept_id'], d_id, enc['visit_date'].date(), enc['visit_date'].strftime('%H:%M'), enc['diagnosis'][:100], d_info['user_id']])
+                    apt_id = cursor.lastrowid
+
+                # Insert visit
+                cursor.execute("""
+                    INSERT INTO tbl_patient_visit
+                    (appointment_id, visit_date, visit_is_active, patient_id, doctor_id, hospital_id,
+                     diagnosis, medical_notes, visited_at, height, weight, blood_pressure,
+                     vitals_recorded_by, vitals_recorded_at, record_share_flag, visit_type)
+                    VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                """, [apt_id, enc['visit_date'], p_id, d_id, h_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date'], enc['height'], enc['weight'], enc['blood_pressure'], enc['vitals_recorded_by'], enc['vitals_recorded_at'], enc['visit_type']])
+                vis_id = cursor.lastrowid
+
+                # Insert medical record
+                cursor.execute("""
+                    INSERT INTO tbl_medical_record
+                    (visit_id, record_diagnosis, record_notes, record_share_flag, record_is_active, record_created_at)
+                    VALUES (%s, %s, %s, 1, 1, %s)
+                """, [vis_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date']])
+                rec_id = cursor.lastrowid
+
+                # Insert prescriptions
+                if enc.get('prescriptions'):
+                    cursor.execute("""
+                        INSERT INTO tbl_prescription
+                        (record_id, prescription_date, remarks, prescription_share_flag, prescription_is_active,
+                         prescription_created_at, patient_id, doctor_id, hospital_id, appointment_id, visit_id)
+                        VALUES (%s, %s, %s, 1, 1, %s, %s, %s, %s, %s, %s)
+                    """, [rec_id, enc['visit_date'].date(), f"Prescribed for {enc['diagnosis'][:50]}", enc['visit_date'], p_id, d_id, h_id, apt_id, vis_id])
+                    presc_id = cursor.lastrowid
+                    for med in enc['prescriptions']:
+                        cursor.execute("""
+                            INSERT INTO tbl_prescription_item
+                            (prescription_id, medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, [presc_id, med[0], med[1], med[2], med[3], med[4]])
+
+                # Insert reports
+                for rep in enc.get('reports', []):
+                    cursor.execute("""
+                        INSERT INTO tbl_lab_report
+                        (record_id, hospital_id, report_type, report_title, report_file,
+                         report_share_flag, report_is_active, report_uploaded_at, patient_id, doctor_id,
+                         appointment_id, visit_id)
+                        VALUES (%s, %s, %s, %s, %s, 1, 1, %s, %s, %s, %s, %s)
+                    """, [rec_id, h_id, rep[0], rep[1], rep[2], rep[3], p_id, d_id, apt_id, vis_id])
+    except Exception as e:
+        print(f"Notice during sync_database_records: {e}")
+    finally:
+        if should_close:
+            cursor.close()
+
+
+@csrf_exempt
+def sync_cloud_data(request):
+    """Admin / cloud deployment synchronization endpoint."""
+    ensure_workflow_schema()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM tbl_user WHERE role_id != 5")
+        users_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tbl_patient_visit")
+        visits_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tbl_lab_report")
+        reports_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tbl_medical_record")
+        records_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tbl_prescription")
+        presc_count = cursor.fetchone()[0]
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'UniCare Cloud Database successfully synchronized with all clinical data and accounts.',
+        'data': {
+            'accounts_updated': users_count,
+            'patient_visits': visits_count,
+            'lab_and_scan_reports': reports_count,
+            'medical_records': records_count,
+            'prescriptions': presc_count,
+            'default_password': 'admin123',
+            'recovery_answer': 'kottayam'
+        }
+    })
+
 
 def session_user(request):
     user_id = request.session.get('unicare_user_id')

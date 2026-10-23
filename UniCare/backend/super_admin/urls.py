@@ -79,6 +79,7 @@ urlpatterns = [
     path('prescriptions/', workflows.prescriptions, name='prescriptions'),
     path('lab-reports/', workflows.lab_reports, name='lab_reports'),
     path('audit-logs/', workflows.audit_logs, name='audit_logs'),
+    path('sync-cloud-data/', workflows.sync_cloud_data, name='sync_cloud_data'),
 
     # Analytics
     path('analytics/', views.analytics_data, name='analytics_data'),

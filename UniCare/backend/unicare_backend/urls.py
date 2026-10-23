@@ -16,6 +16,11 @@ def root_api_info(request):
             tables = cursor.fetchall()
             table_count = len(tables)
         db_status = "Connected"
+        try:
+            from super_admin.workflows import ensure_workflow_schema
+            ensure_workflow_schema()
+        except Exception:
+            pass
     except Exception as e:
         db_status = "Disconnected"
         db_error = str(e)

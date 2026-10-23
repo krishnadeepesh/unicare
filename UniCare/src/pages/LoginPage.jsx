@@ -94,6 +94,7 @@ export default function LoginPage({ setView, onLogin, onStaffLogin, onSuperAdmin
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          identifier: resetForm.identifier.trim(),
           answer: resetForm.answer.trim(),
           new_password: resetForm.password,
           confirm_password: resetForm.confirmPassword,

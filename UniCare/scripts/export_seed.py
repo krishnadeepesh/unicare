@@ -22,7 +22,13 @@ seed_tables = [
     'tbl_nurse',
     'tbl_receptionist',
     'tbl_patient',
-    'tbl_patient_profile'
+    'tbl_patient_profile',
+    'tbl_appointment',
+    'tbl_patient_visit',
+    'tbl_medical_record',
+    'tbl_prescription',
+    'tbl_prescription_item',
+    'tbl_lab_report'
 ]
 
 cursor = connection.cursor()
