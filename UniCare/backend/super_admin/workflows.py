@@ -62,8 +62,16 @@ def _ensure_columns(cursor, table, columns):
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
 
 
-def ensure_workflow_schema():
+_WORKFLOW_SCHEMA_INITIALIZED = False
+
+
+def ensure_workflow_schema(force=False):
     """Ensure the patient_profile, patient_visit, audit_log, and support tables exist with required columns."""
+    global _WORKFLOW_SCHEMA_INITIALIZED
+    if _WORKFLOW_SCHEMA_INITIALIZED and not force:
+        return
+    _WORKFLOW_SCHEMA_INITIALIZED = True
+
     with connection.cursor() as cursor:
         cursor.execute("""CREATE TABLE IF NOT EXISTS tbl_patient_profile (
             patient_id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL UNIQUE,
@@ -291,7 +299,7 @@ def ensure_workflow_schema():
         sync_database_records(cursor)
 
 
-def sync_database_records(cursor=None):
+def sync_database_records(cursor=None, force=False):
     """Ensure all non-superadmin accounts have password 'admin123', default recovery questions, and full clinical visits/reports."""
     should_close = False
     if cursor is None:
@@ -320,17 +328,23 @@ def sync_database_records(cursor=None):
         cursor.execute("SELECT COUNT(*) FROM tbl_lab_report WHERE lab_report_id >= 10")
         has_reports = (cursor.fetchone()[0] >= 10)
 
-        if not has_reports:
+        if not has_reports or force:
             # Complete appointment 5 if present
-            cursor.execute("UPDATE tbl_appointment SET appointment_status='Completed' WHERE appointment_id=5")
+            try:
+                cursor.execute("UPDATE tbl_appointment SET appointment_status='Completed' WHERE appointment_id=5")
+            except Exception:
+                pass
 
             # Update existing empty visit 6 if present
-            cursor.execute("""
-                UPDATE tbl_patient_visit
-                SET diagnosis = 'Tension-Type Headache & Academic Stress',
-                    medical_notes = 'Patient reports bilateral dull, non-pulsatile mild tension headaches related to exam fatigue. Neurological examination normal. Advised adequate hydration and sleep hygiene.'
-                WHERE visit_id = 6 AND (diagnosis IS NULL OR diagnosis = '')
-            """)
+            try:
+                cursor.execute("""
+                    UPDATE tbl_patient_visit
+                    SET diagnosis = 'Tension-Type Headache & Academic Stress',
+                        medical_notes = 'Patient reports bilateral dull, non-pulsatile mild tension headaches related to exam fatigue. Neurological examination normal. Advised adequate hydration and sleep hygiene.'
+                    WHERE visit_id = 6 AND (diagnosis IS NULL OR diagnosis = '')
+                """)
+            except Exception:
+                pass
 
             cursor.execute("SELECT doctor_id, user_id, hospital_id, department_id FROM tbl_doctor")
             docs = {d[0]: {'user_id': d[1], 'hospital_id': d[2], 'dept_id': d[3]} for d in cursor.fetchall()}
@@ -338,7 +352,7 @@ def sync_database_records(cursor=None):
             encounters = [
                 # 1. Patient 2 (Anjali Ramesh) with Dr. Sneha Varghese (doc 4, hosp 2, dept 6 Ortho)
                 {
-                    'patient_id': 2, 'doctor_id': 4, 'hospital_id': 2, 'appointment_id': 5,
+                    'patient_id': 2, 'doctor_id': 4, 'hospital_id': 2, 'appointment_id': None,
                     'visit_date': datetime(2026, 10, 15, 10, 30), 'visit_type': 'OP',
                     'diagnosis': 'Lumbar Disc Herniation (L4-L5) with Left Sciatic Radiculopathy',
                     'medical_notes': 'Patient reports 3-week history of sharp lower back pain radiating down the left posterolateral leg to the ankle. Positive straight leg raise test at 40 degrees. Neurological exam reveals mild sensory diminution at left L5 dermatome. Prescribed short-term analgesics, physical rehabilitation, and ordered confirmatory MRI.',
@@ -464,7 +478,16 @@ def sync_database_records(cursor=None):
                 h_id = enc['hospital_id']
                 apt_id = enc['appointment_id']
 
-                # Create appointment if None
+                # Validate or create appointment dynamically
+                if apt_id is not None:
+                    cursor.execute("SELECT appointment_id FROM tbl_appointment WHERE appointment_id=%s", [apt_id])
+                    if not cursor.fetchone():
+                        apt_id = None
+                    else:
+                        cursor.execute("SELECT visit_id FROM tbl_patient_visit WHERE appointment_id=%s", [apt_id])
+                        if cursor.fetchone():
+                            apt_id = None
+
                 if apt_id is None:
                     d_info = docs.get(d_id, {'dept_id': 1, 'user_id': 1})
                     cursor.execute("""
@@ -474,49 +497,76 @@ def sync_database_records(cursor=None):
                     """, [p_id, h_id, d_info['dept_id'], d_id, enc['visit_date'].date(), enc['visit_date'].strftime('%H:%M'), enc['diagnosis'][:100], d_info['user_id']])
                     apt_id = cursor.lastrowid
 
-                # Insert visit
+                # Check if visit already exists
                 cursor.execute("""
-                    INSERT INTO tbl_patient_visit
-                    (appointment_id, visit_date, visit_is_active, patient_id, doctor_id, hospital_id,
-                     diagnosis, medical_notes, visited_at, height, weight, blood_pressure,
-                     vitals_recorded_by, vitals_recorded_at, record_share_flag, visit_type)
-                    VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
-                """, [apt_id, enc['visit_date'], p_id, d_id, h_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date'], enc['height'], enc['weight'], enc['blood_pressure'], enc['vitals_recorded_by'], enc['vitals_recorded_at'], enc['visit_type']])
-                vis_id = cursor.lastrowid
+                    SELECT visit_id FROM tbl_patient_visit
+                    WHERE patient_id=%s AND doctor_id=%s AND diagnosis=%s
+                    LIMIT 1
+                """, [p_id, d_id, enc['diagnosis']])
+                existing_v = cursor.fetchone()
+                if existing_v:
+                    vis_id = existing_v[0]
+                else:
+                    cursor.execute("""
+                        INSERT INTO tbl_patient_visit
+                        (appointment_id, visit_date, visit_is_active, patient_id, doctor_id, hospital_id,
+                         diagnosis, medical_notes, visited_at, height, weight, blood_pressure,
+                         vitals_recorded_by, vitals_recorded_at, record_share_flag, visit_type)
+                        VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                    """, [apt_id, enc['visit_date'], p_id, d_id, h_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date'], enc['height'], enc['weight'], enc['blood_pressure'], enc['vitals_recorded_by'], enc['vitals_recorded_at'], enc['visit_type']])
+                    vis_id = cursor.lastrowid
 
-                # Insert medical record
+                # Check if medical record already exists
                 cursor.execute("""
-                    INSERT INTO tbl_medical_record
-                    (visit_id, record_diagnosis, record_notes, record_share_flag, record_is_active, record_created_at)
-                    VALUES (%s, %s, %s, 1, 1, %s)
-                """, [vis_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date']])
-                rec_id = cursor.lastrowid
+                    SELECT record_id FROM tbl_medical_record WHERE visit_id=%s LIMIT 1
+                """, [vis_id])
+                existing_mr = cursor.fetchone()
+                if existing_mr:
+                    rec_id = existing_mr[0]
+                else:
+                    cursor.execute("""
+                        INSERT INTO tbl_medical_record
+                        (visit_id, record_diagnosis, record_notes, record_share_flag, record_is_active, record_created_at)
+                        VALUES (%s, %s, %s, 1, 1, %s)
+                    """, [vis_id, enc['diagnosis'], enc['medical_notes'], enc['visit_date']])
+                    rec_id = cursor.lastrowid
 
                 # Insert prescriptions
                 if enc.get('prescriptions'):
                     cursor.execute("""
-                        INSERT INTO tbl_prescription
-                        (record_id, prescription_date, remarks, prescription_share_flag, prescription_is_active,
-                         prescription_created_at, patient_id, doctor_id, hospital_id, appointment_id, visit_id)
-                        VALUES (%s, %s, %s, 1, 1, %s, %s, %s, %s, %s, %s)
-                    """, [rec_id, enc['visit_date'].date(), f"Prescribed for {enc['diagnosis'][:50]}", enc['visit_date'], p_id, d_id, h_id, apt_id, vis_id])
-                    presc_id = cursor.lastrowid
-                    for med in enc['prescriptions']:
+                        SELECT prescription_id FROM tbl_prescription WHERE visit_id=%s LIMIT 1
+                    """, [vis_id])
+                    existing_pr = cursor.fetchone()
+                    if not existing_pr:
                         cursor.execute("""
-                            INSERT INTO tbl_prescription_item
-                            (prescription_id, medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                        """, [presc_id, med[0], med[1], med[2], med[3], med[4]])
+                            INSERT INTO tbl_prescription
+                            (record_id, prescription_date, remarks, prescription_share_flag, prescription_is_active,
+                             prescription_created_at, patient_id, doctor_id, hospital_id, appointment_id, visit_id)
+                            VALUES (%s, %s, %s, 1, 1, %s, %s, %s, %s, %s, %s)
+                        """, [rec_id, enc['visit_date'].date(), f"Prescribed for {enc['diagnosis'][:50]}", enc['visit_date'], p_id, d_id, h_id, apt_id, vis_id])
+                        presc_id = cursor.lastrowid
+                        for med in enc['prescriptions']:
+                            cursor.execute("""
+                                INSERT INTO tbl_prescription_item
+                                (prescription_id, medicine_name, medicine_dosage, medicine_frequency, medicine_duration, medicine_instruction)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """, [presc_id, med[0], med[1], med[2], med[3], med[4]])
 
-                # Insert reports
+                # Insert reports if not already inserted
                 for rep in enc.get('reports', []):
                     cursor.execute("""
-                        INSERT INTO tbl_lab_report
-                        (record_id, hospital_id, report_type, report_title, report_file,
-                         report_share_flag, report_is_active, report_uploaded_at, patient_id, doctor_id,
-                         appointment_id, visit_id)
-                        VALUES (%s, %s, %s, %s, %s, 1, 1, %s, %s, %s, %s, %s)
-                    """, [rec_id, h_id, rep[0], rep[1], rep[2], rep[3], p_id, d_id, apt_id, vis_id])
+                        SELECT lab_report_id FROM tbl_lab_report
+                        WHERE patient_id=%s AND report_title=%s
+                        LIMIT 1
+                    """, [p_id, rep[1]])
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            INSERT INTO tbl_lab_report
+                            (record_id, hospital_id, report_type, report_title, report_file,
+                             report_share_flag, report_is_active, report_uploaded_at, patient_id, doctor_id,
+                             appointment_id, visit_id)
+                            VALUES (%s, %s, %s, %s, %s, 1, 1, %s, %s, %s, %s, %s)
+                        """, [rec_id, h_id, rep[0], rep[1], rep[2], rep[3], p_id, d_id, apt_id, vis_id])
     except Exception as e:
         print(f"Notice during sync_database_records: {e}")
     finally:
@@ -527,8 +577,9 @@ def sync_database_records(cursor=None):
 @csrf_exempt
 def sync_cloud_data(request):
     """Admin / cloud deployment synchronization endpoint."""
-    ensure_workflow_schema()
+    ensure_workflow_schema(force=True)
     with connection.cursor() as cursor:
+        sync_database_records(cursor, force=True)
         cursor.execute("SELECT COUNT(*) FROM tbl_user WHERE role_id != 5")
         users_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM tbl_patient_visit")
