@@ -14,7 +14,7 @@ import StaffDashboardPage from './pages/StaffDashboardPage';
 import DoctorDashboardPage from './pages/DoctorDashboardPage';
 import NurseDashboardPage from './pages/NurseDashboardPage';
 import PatientPortalPage from './pages/PatientPortalPage';
-import { API_BASE_URL } from './apiConfig';
+import { API_BASE_URL, BACKEND_URL } from './apiConfig';
 
 function App() {
   const getInitialView = () => {
@@ -89,6 +89,11 @@ function App() {
   useEffect(() => {
     currentViewRef.current = currentView;
   }, [currentView]);
+
+  // Silent background pre-warming of the cloud backend (Render) to eliminate cold start lag
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/`, { method: 'HEAD', mode: 'no-cors' }).catch(() => {});
+  }, []);
 
   // Sync scroll & sessionStorage view state on view changes
   useEffect(() => {
